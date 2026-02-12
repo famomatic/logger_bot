@@ -8,12 +8,6 @@ import pool, { logEvent, isGuildAuthorized } from '../db/database.js';
 import type { LegacyCommand } from '../types/commands.js';
 import type { ErrorWithCode } from '../types/errors.js';
 
-logger.debug('messageCreate.ts: Attempting to import query from database.js...');
-// import { query } from '../db/database.js'; // Remove query import
-logger.debug('messageCreate.ts: Successfully imported logEvent from database.js.');
-
-logger.debug('Executing messageCreate.ts module');
-
 // 첨부파일 다운로드 재시도 로직
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     let lastError: unknown = null;

@@ -1,5 +1,6 @@
 import pkg from 'pg';
 const { Pool } = pkg;
+import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger.js';
 import dotenv from 'dotenv';
 import { config } from '../config/config.js';
@@ -121,167 +122,227 @@ export async function fetchAlertSubscriptions(): Promise<AlertSubscriptionRow[]>
     }
 }
 
-/**
- * Logs an event to the database, preventing duplicates based on (guild_id, event_type, target_id).
- * @param eventType Type of the event (e.g., 'messageDelete', 'voiceChannelJoin').
- * @param guildId ID of the guild where the event occurred.
- * @param userId ID of the user who initiated the event (nullable).
- * @param channelId ID of the channel related to the event (nullable).
- * @param targetId ID of the primary target of the event (e.g., message ID, affected user ID). Crucial for duplicate prevention.
- * @param data JSON object containing event-specific details.
- * @param timestamp Timestamp of when the event occurred.
- * @param isRetry Flag to prevent infinite retry loops
- * @returns {Promise<boolean>} True if the log was newly inserted, false if it was a duplicate (or an error occurred, or targetId was missing).
- */
-export async function logEvent(
+export interface LogEventRecord {
+    eventType: string;
+    guildId: string;
+    userId: string | null;
+    channelId: string | null;
+    targetId: string;
+    data: Record<string, unknown>;
+    timestamp: Date;
+}
+
+type LogEventDispatcher = (event: LogEventRecord) => Promise<boolean>;
+
+let logEventDispatcher: LogEventDispatcher | null = null;
+
+export function setLogEventDispatcher(dispatcher: LogEventDispatcher | null): void {
+    logEventDispatcher = dispatcher;
+}
+
+function createSyntheticTargetId(
     eventType: string,
     guildId: string,
     userId: string | null,
     channelId: string | null,
-    targetId: string | null, // Crucial for ON CONFLICT
+    timestamp: Date,
+): string {
+    const stamp = timestamp.getTime().toString(36);
+    const uid = userId ?? 'system';
+    const cid = channelId ?? 'none';
+    return `auto_${eventType}_${guildId}_${cid}_${uid}_${stamp}_${randomUUID().slice(0, 8)}`;
+}
+
+function normalizeLogEvent(
+    eventType: string,
+    guildId: string,
+    userId: string | null,
+    channelId: string | null,
+    targetId: string | null,
     data: Record<string, unknown>,
     timestamp: Date,
-    isRetry = false, // Added to prevent infinite retry loops
-): Promise<boolean> {
-    // Skip logging for unauthorized guilds
-    if (!isGuildAuthorized(guildId)) {
-        logger.debug(`Skipping logEvent for unauthorized guild ${guildId}`);
-        return false;
-    }
-    // target_id는 UNIQUE 제약 조건의 일부이므로 필수입니다.
-    //これがnullの場合、ON CONFLICTは機能しません (制約にNULLが含まれていない限り)。
-    if (!targetId) {
-        logger.warn(
-            `Attempted to log event ${eventType} for guild ${guildId} without a targetId. Skipping log.`,
-        );
-        return false; // targetId 없이는 중복 방지 및 로깅 불가
-    }
+): LogEventRecord {
+    return {
+        eventType,
+        guildId,
+        userId,
+        channelId,
+        targetId:
+            targetId ?? createSyntheticTargetId(eventType, guildId, userId, channelId, timestamp),
+        data,
+        timestamp,
+    };
+}
 
+async function ensureGuildPartition(guildId: string): Promise<void> {
+    const partitionTableName = `event_logs_guild_${guildId}`;
+    try {
+        const createPartitionQuery = `CREATE TABLE IF NOT EXISTS "${partitionTableName}" PARTITION OF event_logs FOR VALUES IN ('${guildId}');`;
+        await pool.query(createPartitionQuery);
+    } catch (error: unknown) {
+        const pgErr = error as PgError;
+        if (pgErr.code === '42P07') {
+            const attachQuery = `ALTER TABLE event_logs ATTACH PARTITION "${partitionTableName}" FOR VALUES IN ('${guildId}');`;
+            await pool.query(attachQuery);
+        } else if (pgErr.code !== '42710' && pgErr.code !== '42809') {
+            throw error;
+        }
+    }
+}
+
+async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Promise<boolean> {
     const insertQuery = `
     INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
     VALUES ($1, $2, $3, $4, $5, $6, $7)
     ON CONFLICT (guild_id, event_type, target_id) DO NOTHING
-    RETURNING id; -- 삽입 성공 시 id 반환, 실패(중복) 시 아무것도 반환 안함
+    RETURNING id;
   `;
-    const sanitizedData = sanitizeObjectStrings(data);
-    const values = [eventType, guildId, userId, channelId, targetId, sanitizedData, timestamp];
+    const sanitizedData = sanitizeObjectStrings(event.data);
+    const values = [
+        event.eventType,
+        event.guildId,
+        event.userId,
+        event.channelId,
+        event.targetId,
+        sanitizedData,
+        event.timestamp,
+    ];
 
     try {
         const result = await pool.query(insertQuery, values);
-        // result.rowCount가 1이면 새 행이 삽입되었음을 의미합니다.
-        // result.rowCount가 0이면 ON CONFLICT로 인해 삽입이 건너뛰어졌음을 의미합니다.
-        // logger.debug(`logEvent result for ${eventType} target ${targetId}: rowCount=${result.rowCount}`);
-        // 수정: rowCount가 null일 경우 0으로 처리
         const inserted = (result.rowCount ?? 0) > 0;
         if (inserted) {
             void dispatchAlert(
-                eventType,
-                guildId,
-                userId,
-                channelId,
-                targetId,
-                data,
-                timestamp,
+                event.eventType,
+                event.guildId,
+                event.userId,
+                event.channelId,
+                event.targetId,
+                event.data,
+                event.timestamp,
                 discordClient,
             );
         }
         return inserted;
     } catch (error: unknown) {
         const pgErr = error as PgError;
-        // Check if the error is "no partition found" (code 23514) and if it's not already a retry
         if (pgErr.code === '23514' && !isRetry) {
             logger.warn(
-                `Partition not found for guild ${guildId} (error code ${pgErr.code}). Attempting to create it.`,
+                `Partition not found for guild ${event.guildId} while logging ${event.eventType}. Creating partition and retrying.`,
             );
-            // Use a descriptive and safe partition name that can be referenced in both
-            // the creation attempt and the potential attachment if the table already
-            // exists.
-            const partitionTableName = `event_logs_guild_${guildId}`;
             try {
-                // Quoting the table name ensures it's valid even if guildId had unusual characters (though unlikely for guild IDs).
-                // Use CREATE TABLE IF NOT EXISTS to handle concurrent attempts gracefully.
-                // guildId in FOR VALUES IN ('${guildId}') must be correctly quoted if it's not purely numeric,
-                // but since guildId comes from Discord, it's a numeric string, so simple quoting is fine.
-                const createPartitionQuery = `CREATE TABLE IF NOT EXISTS "${partitionTableName}" PARTITION OF event_logs FOR VALUES IN ('${guildId}');`;
-
-                await pool.query(createPartitionQuery);
-                logger.info(
-                    `Successfully created partition "${partitionTableName}" for guild ${guildId}. Retrying logEvent.`,
-                );
-                // Retry the original logEvent call, marking it as a retry
-                return await logEvent(
-                    eventType,
-                    guildId,
-                    userId,
-                    channelId,
-                    targetId,
-                    data,
-                    timestamp,
-                    true,
-                );
-            } catch (partitionCreateError: unknown) {
-                const pcErr = partitionCreateError as PgError;
-                // If the table already exists (error 42P07), attempt to attach it as a partition
-                if (pcErr.code === '42P07') {
-                    try {
-                        const attachQuery = `ALTER TABLE event_logs ATTACH PARTITION "${partitionTableName}" FOR VALUES IN ('${guildId}');`;
-                        await pool.query(attachQuery);
-                        logger.info(
-                            `Attached existing partition "${partitionTableName}" for guild ${guildId}. Retrying logEvent.`,
-                        );
-                        return await logEvent(
-                            eventType,
-                            guildId,
-                            userId,
-                            channelId,
-                            targetId,
-                            data,
-                            timestamp,
-                            true,
-                        );
-                    } catch (attachError: unknown) {
-                        const aErr = attachError as PgError;
-                        if (aErr.code === '42710' || aErr.code === '42809') {
-                            logger.warn(
-                                `Partition "${partitionTableName}" already attached for guild ${guildId}. Continuing.`,
-                            );
-                            return await logEvent(
-                                eventType,
-                                guildId,
-                                userId,
-                                channelId,
-                                targetId,
-                                data,
-                                timestamp,
-                                true,
-                            );
-                        }
-                        logger.error(
-                            `Failed to attach existing partition for guild ${guildId}:`,
-                            attachError,
-                        );
-                    }
-                }
+                await ensureGuildPartition(event.guildId);
+                return await insertLogEventDirect(event, true);
+            } catch (partitionError) {
                 logger.error(
-                    `Failed to create partition for guild ${guildId} after error ${pgErr.code}. Partition creation error:`,
-                    partitionCreateError,
+                    `Failed to create partition for guild ${event.guildId}:`,
+                    partitionError,
                 );
-                // Log the original error details as well for context
-                logOriginalError(error, eventType, targetId, guildId);
+                logOriginalError(error, event.eventType, event.targetId, event.guildId);
                 return false;
             }
-        } else {
-            // Log other errors or if it's already a retry that failed
-            if (isRetry && pgErr.code === '23514') {
-                logger.error(
-                    `Still failed to insert into partition for guild ${guildId} even after attempting to create it. Original error:`,
-                    error,
-                );
-            }
-            logOriginalError(error, eventType, targetId, guildId);
-            return false;
         }
+        logOriginalError(error, event.eventType, event.targetId, event.guildId);
+        return false;
     }
+}
+
+export async function insertLogEventDirectNow(event: LogEventRecord): Promise<boolean> {
+    return await insertLogEventDirect(event);
+}
+
+export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<number> {
+    if (events.length === 0) {
+        return 0;
+    }
+
+    const uniqueGuildIds = [...new Set(events.map((event) => event.guildId))];
+    await Promise.all(uniqueGuildIds.map((guildId) => ensureGuildPartition(guildId)));
+
+    const values: unknown[] = [];
+    const rows = events.map((event, index) => {
+        const base = index * 7;
+        values.push(
+            event.eventType,
+            event.guildId,
+            event.userId,
+            event.channelId,
+            event.targetId,
+            sanitizeObjectStrings(event.data),
+            event.timestamp,
+        );
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
+    });
+
+    const insertQuery = `
+      INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
+      VALUES ${rows.join(', ')}
+      ON CONFLICT (guild_id, event_type, target_id) DO NOTHING
+      RETURNING event_type, guild_id, user_id, channel_id, target_id, data, "timestamp"
+    `;
+
+    try {
+        const result = await pool.query<{
+            event_type: string;
+            guild_id: string;
+            user_id: string | null;
+            channel_id: string | null;
+            target_id: string;
+            data: Record<string, unknown>;
+            timestamp: Date;
+        }>(insertQuery, values);
+
+        for (const row of result.rows) {
+            void dispatchAlert(
+                row.event_type,
+                row.guild_id,
+                row.user_id,
+                row.channel_id,
+                row.target_id,
+                row.data,
+                row.timestamp,
+                discordClient,
+            );
+        }
+
+        return result.rowCount ?? 0;
+    } catch (error) {
+        logger.error('Bulk log insert failed:', error);
+        throw error;
+    }
+}
+
+/**
+ * Logs an event to the database. If a dispatcher is registered, it forwards to the dispatcher first.
+ */
+export async function logEvent(
+    eventType: string,
+    guildId: string,
+    userId: string | null,
+    channelId: string | null,
+    targetId: string | null,
+    data: Record<string, unknown>,
+    timestamp: Date,
+): Promise<boolean> {
+    if (!isGuildAuthorized(guildId)) {
+        logger.debug(`Skipping logEvent for unauthorized guild ${guildId}`);
+        return false;
+    }
+
+    const event = normalizeLogEvent(
+        eventType,
+        guildId,
+        userId,
+        channelId,
+        targetId,
+        data,
+        timestamp,
+    );
+    if (logEventDispatcher) {
+        return await logEventDispatcher(event);
+    }
+
+    return await insertLogEventDirect(event);
 }
 
 // Helper function to avoid duplicating the original error logging logic

@@ -1,12 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import {
-    Client,
-    Collection,
-    REST,
-    Routes,
-    SlashCommandBuilder,
-} from 'discord.js';
+import { Client, Collection, REST, Routes, SlashCommandBuilder } from 'discord.js';
 import { fileURLToPath, URL } from 'url';
 import { logger } from './logger.js';
 import { config } from '../config/config.js';

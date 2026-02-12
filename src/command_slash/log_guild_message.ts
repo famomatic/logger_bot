@@ -51,10 +51,7 @@ export const command: SlashCommand = {
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setDMPermission(false),
 
-    async execute(
-        interaction: CommandInteraction,
-        client: Client,
-    ) {
+    async execute(interaction: CommandInteraction, client: Client) {
         if (!interaction.isChatInputCommand()) return;
         if (!interaction.inGuild()) {
             await interaction.reply({

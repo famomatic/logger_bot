@@ -3,6 +3,7 @@ import { config } from './config/config.js';
 import { logger } from './utils/logger.js';
 import discordClient, { destroyDiscordClient } from './utils/discordClient.js';
 import { destroyDatabase, loadAuthorizedGuildIds } from './db/database.js';
+import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
 
 import { loadAlertSubscriptions } from './utils/alertManager.js';
 import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
@@ -32,16 +33,18 @@ async function initializeBot() {
         // 5. 알림 구독 정보 로드
         await loadAlertSubscriptions();
 
-        // 6. InteractionCreate 리스너 직접 등록 (슬래시 커맨드 실행 로직)
+        // 6. 로그 큐 초기화 (설정 비활성화 시 direct DB write로 동작)
+        await initializeLogQueue();
+
+        // 7. InteractionCreate 리스너 직접 등록 (슬래시 커맨드 실행 로직)
         discordClient.on(Events.InteractionCreate, (interaction) => {
             void handleInteraction(interaction);
         });
         logger.info('InteractionCreate listener registered.');
 
-        // 5. ClientReady 이벤트 등록 (간단 로그)
+        // 8. ClientReady 이벤트 등록 (간단 로그)
         discordClient.once(Events.ClientReady, (readyClient) => {
             void (async () => {
-                logger.info(`Ready! Logged in as ${readyClient.user.tag}`);
                 // 슬래시 커맨드 등록 로그는 loadSlashCommands 에서 출력됨
                 await checkAndLeaveUnauthorizedGuilds(readyClient);
             })();
@@ -97,6 +100,7 @@ function setupGracefulShutdown() {
     const shutdown = async (signal: NodeJS.Signals) => {
         logger.info(`Received ${signal}. Shutting down gracefully...`);
         try {
+            await shutdownLogQueue();
             destroyDiscordClient();
             await destroyDatabase();
             destroyDiscordClient();

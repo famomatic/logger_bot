@@ -33,6 +33,12 @@ function parseDurationToMs(input?: string | null): number | undefined {
     return Math.round(value * multiplier);
 }
 
+function parseInteger(input: string | undefined, fallback: number): number {
+    if (!input) return fallback;
+    const parsed = parseInt(input, 10);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function loadConfig() {
     const requiredEnvVars = [
         'DISCORD_BOT_TOKEN',
@@ -86,6 +92,17 @@ function loadConfig() {
         dbPassword: process.env.BOT_DB_PASSWORD!,
         dbHost: process.env.PG_HOST ?? 'localhost',
         dbPort: parseInt(process.env.PG_PORT ?? '5432', 10),
+        redis: {
+            enabled: process.env.REDIS_ENABLED?.toLowerCase() === 'true',
+            host: process.env.REDIS_HOST ?? '127.0.0.1',
+            port: parseInteger(process.env.REDIS_PORT, 6379),
+            db: parseInteger(process.env.REDIS_DB, 0),
+            password: process.env.REDIS_PASSWORD,
+            queueName: process.env.REDIS_QUEUE_NAME ?? 'logger:events',
+            batchSize: parseInteger(process.env.LOG_QUEUE_BATCH_SIZE, 100),
+            flushIntervalMs: parseInteger(process.env.LOG_QUEUE_FLUSH_INTERVAL_MS, 1000),
+            maxRetries: parseInteger(process.env.LOG_QUEUE_MAX_RETRIES, 3),
+        },
         sentryDsn: process.env.SENTRY_DSN,
         nodeEnv: process.env.NODE_ENV ?? 'development',
         devLevels: {
@@ -143,27 +160,48 @@ export let config = loadConfig();
 export function reloadConfig(): void {
     config = loadConfig();
     console.log(chalk.green('Configuration reloaded.'));
-    if (config.storage.webdav.enabled && config.storage.webdav.url) {
-        console.log(
-            chalk.green(
-                `WebDAV storage enabled: ${config.storage.webdav.url}${config.storage.webdav.basePath}`,
-            ),
-        );
-    } else {
-        console.log(chalk.yellow('WebDAV storage disabled (WEBDAV_HOST not set).'));
-    }
+    logStorageConfig();
 }
 
-// 설정 로드 확인 로그 (WebDAV 정보 포함)
-console.log(chalk.green('Configuration loaded.'));
-if (config.storage.webdav.enabled && config.storage.webdav.url) {
-    console.log(
-        chalk.green(
-            `WebDAV storage enabled: ${config.storage.webdav.url}${config.storage.webdav.basePath}`,
-        ),
-    );
-} else {
-    console.log(chalk.yellow('WebDAV storage disabled (WEBDAV_HOST not set).'));
+function logStorageConfig(): void {
+    const storageType = config.storage.type;
+    console.log(chalk.cyan(`Storage type: ${storageType}`));
+
+    if (storageType === 'webdav') {
+        if (config.storage.webdav.enabled && config.storage.webdav.url) {
+            console.log(
+                chalk.green(
+                    `WebDAV storage enabled: ${config.storage.webdav.url}${config.storage.webdav.basePath}`,
+                ),
+            );
+            return;
+        }
+        console.log(chalk.yellow('WebDAV selected but not configured (WEBDAV_HOST not set).'));
+        return;
+    }
+
+    if (storageType === 's3') {
+        if (config.storage.s3.bucket && config.storage.s3.region) {
+            console.log(chalk.green(`S3 storage enabled: s3://${config.storage.s3.bucket}`));
+            return;
+        }
+        console.log(chalk.yellow('S3 selected but not fully configured (S3_BUCKET / S3_REGION).'));
+        return;
+    }
+
+    if (storageType === 'smb') {
+        if (config.storage.smb.url) {
+            console.log(chalk.green(`SMB storage enabled: ${config.storage.smb.url}`));
+            return;
+        }
+        console.log(chalk.yellow('SMB selected but not configured (SMB_SHARE_URL not set).'));
+        return;
+    }
+
+    console.log(chalk.green(`Local storage enabled: ${config.storage.local.path}`));
 }
+
+console.log(chalk.green('Configuration loaded.'));
+logStorageConfig();
 
 export default config;

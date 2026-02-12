@@ -12,6 +12,7 @@ import { loadSlashCommands, unloadSlashCommands } from '../utils/loadSlashComman
 import { loadEvents, unloadEvents } from '../utils/loadEvents.js';
 import { logger } from '../utils/logger.js';
 import { config, reloadConfig } from '../config/config.js';
+import { restartLogQueue } from '../queue/logEventQueue.js';
 import type { SlashCommand } from '../types/commands.js';
 
 export const command: SlashCommand = {
@@ -46,6 +47,7 @@ export const command: SlashCommand = {
             await loadSlashCommands(client);
             unloadEvents(client);
             await loadEvents(client);
+            await restartLogQueue();
             client.on(Events.InteractionCreate, (i) => {
                 void (async () => {
                     if (!i.isChatInputCommand()) return;

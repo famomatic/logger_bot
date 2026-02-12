@@ -33,20 +33,14 @@ import type { JsonData, JsonValue } from '../types/json.js';
 
 const PAGE_SIZE = 5; // 페이지당 로그 수
 
-function str(
-    val: JsonValue | undefined,
-    fallback = '',
-): string {
+function str(val: JsonValue | undefined, fallback = ''): string {
     if (val == null) return fallback;
     if (typeof val === 'string') return val;
     if (typeof val === 'number' || typeof val === 'boolean') return String(val);
     return JSON.stringify(val);
 }
 
-function num(
-    val: JsonValue | undefined,
-    fallback = 0,
-): number {
+function num(val: JsonValue | undefined, fallback = 0): number {
     if (typeof val === 'number') return val;
     if (typeof val === 'string') {
         const n = Number(val);

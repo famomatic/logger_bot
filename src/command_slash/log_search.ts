@@ -35,10 +35,7 @@ import type { JsonData, JsonValue } from '../types/json.js';
 import type { AttachmentLogData } from '../types/logs.js';
 
 /** Safely converts an unknown/JsonData value to a string. Returns fallback if nullish. */
-function str(
-    val: JsonValue | undefined,
-    fallback = '',
-): string {
+function str(val: JsonValue | undefined, fallback = ''): string {
     if (val == null) return fallback;
     if (typeof val === 'string') return val;
     if (typeof val === 'number' || typeof val === 'boolean') return String(val);
@@ -46,10 +43,7 @@ function str(
 }
 
 /** Safely converts a value to a number. Returns fallback if not a valid number. */
-function num(
-    val: JsonValue | undefined,
-    fallback = 0,
-): number {
+function num(val: JsonValue | undefined, fallback = 0): number {
     if (typeof val === 'number') return val;
     if (typeof val === 'string') {
         const n = Number(val);
@@ -74,9 +68,7 @@ function formatStickerSummary(sticker: JsonValue | undefined, index: number): st
 
     const parts: string[] = [];
     const name =
-        typeof sticker.name === 'string' && sticker.name.length > 0
-            ? sticker.name
-            : '이름 없음';
+        typeof sticker.name === 'string' && sticker.name.length > 0 ? sticker.name : '이름 없음';
     parts.push(`${index + 1}. ${name}`);
 
     const metadata: string[] = [];
@@ -88,8 +80,7 @@ function formatStickerSummary(sticker: JsonValue | undefined, index: number): st
     if (typeof sticker.format === 'number') {
         formatLabel = STICKER_FORMAT_LABELS[sticker.format] ?? `형식 ${sticker.format}`;
     } else if (typeof sticker.format_type === 'number') {
-        formatLabel =
-            STICKER_FORMAT_LABELS[sticker.format_type] ?? `형식 ${sticker.format_type}`;
+        formatLabel = STICKER_FORMAT_LABELS[sticker.format_type] ?? `형식 ${sticker.format_type}`;
     } else if (typeof sticker.format === 'string') {
         formatLabel = sticker.format;
     }
