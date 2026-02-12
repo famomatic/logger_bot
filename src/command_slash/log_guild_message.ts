@@ -8,7 +8,6 @@ import {
     Client,
     SlashCommandOptionsOnlyBuilder,
     MessageFlags,
-    Attachment,
     Guild,
 } from 'discord.js';
 import axios from 'axios';
@@ -16,7 +15,7 @@ import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import { logEvent } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
-import { sanitizeFilename } from '../utils/sanitize.js';
+import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 
 // --- 타입 정의 수정 ---
 interface LegacyCommand {
@@ -35,7 +34,7 @@ interface SlashCommand {
 }
 interface AttachmentData {
     id: string;
-    webdavPath: string | null;
+    storagePath: string | null;
     downloadError: string | null;
     filename: string;
     size: number;
@@ -44,16 +43,6 @@ interface AttachmentData {
 }
 
 // --- ------------ ---
-
-function createWebDAVPath(
-    guildId: string,
-    channelId: string,
-    messageId: string,
-    attachment: Attachment,
-): string {
-    const safeName = sanitizeFilename(attachment.name ?? 'file');
-    return `${guildId}/${channelId}/${messageId}/${attachment.id}_${safeName}`;
-}
 
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     let lastError: unknown = null;
@@ -249,7 +238,7 @@ export const command: SlashCommand = {
                                         const processedAttachments: AttachmentData[] = [];
                                         if (message.attachments.size > 0) {
                                             for (const attachment of message.attachments.values()) {
-                                                let webdavPath: string | null = null;
+                                                let storagePath: string | null = null;
                                                 let downloadError: string | null = null;
                                                 if (config.storage.type) {
                                                     try {
@@ -257,13 +246,15 @@ export const command: SlashCommand = {
                                                             attachment.url,
                                                             3,
                                                         );
-                                                        const relativePath = createWebDAVPath(
-                                                            guild.id,
-                                                            message.channel.id,
-                                                            message.id,
-                                                            attachment,
-                                                        );
-                                                        webdavPath = await storageManager.upload(
+                                                        const relativePath =
+                                                            createAttachmentStoragePath(
+                                                                guild.id,
+                                                                message.channel.id,
+                                                                message.id,
+                                                                attachment.id,
+                                                                attachment.name,
+                                                            );
+                                                        storagePath = await storageManager.upload(
                                                             relativePath,
                                                             fileBuffer,
                                                         );
@@ -280,7 +271,7 @@ export const command: SlashCommand = {
                                                 }
                                                 processedAttachments.push({
                                                     id: attachment.id,
-                                                    webdavPath,
+                                                    storagePath,
                                                     downloadError,
                                                     filename: attachment.name,
                                                     size: attachment.size,

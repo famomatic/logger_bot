@@ -1,27 +1,16 @@
-import { Events, Message, Client, Attachment, Collection, MessageReference } from 'discord.js';
+import { Events, Message, Client, Collection, MessageReference } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import axios, { AxiosError } from 'axios';
 import { storageManager } from '../storage/StorageManager.js';
+import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import { config } from '../config/config.js';
 import pool, { logEvent, isGuildAuthorized } from '../db/database.js';
-import { sanitizeFilename } from '../utils/sanitize.js';
 
 logger.debug('messageCreate.ts: Attempting to import query from database.js...');
 // import { query } from '../db/database.js'; // Remove query import
 logger.debug('messageCreate.ts: Successfully imported logEvent from database.js.');
 
 logger.debug('Executing messageCreate.ts module');
-
-// WebDAV 저장 경로 생성 함수
-function createWebDAVPath(
-    guildId: string,
-    channelId: string,
-    messageId: string,
-    attachment: Attachment,
-): string {
-    const safeName = sanitizeFilename(attachment.name ?? 'file');
-    return `${guildId}/${channelId}/${messageId}/${attachment.id}_${safeName}`;
-}
 
 // 첨부파일 다운로드 재시도 로직
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
@@ -206,7 +195,7 @@ const event = {
                 `Processing ${message.attachments.size} attachments for message ${messageId}`,
             );
             for (const attachment of message.attachments.values()) {
-                let webdavPath: string | null = null;
+                let storagePath: string | null = null;
                 let downloadError: string | null = null;
 
                 if (config.storage.type) {
@@ -217,14 +206,14 @@ const event = {
                             `Downloaded ${attachment.name ?? 'unnamed'} (${fileBuffer.length} bytes)`,
                         );
 
-                        const relativePath = createWebDAVPath(
+                        const relativePath = createAttachmentStoragePath(
                             guildId,
                             channelId,
                             messageId,
-                            attachment,
+                            attachment.id,
+                            attachment.name,
                         );
-                        // Use storageManager to upload
-                        webdavPath = await storageManager.upload(relativePath, fileBuffer);
+                        storagePath = await storageManager.upload(relativePath, fileBuffer);
                     } catch (error: unknown) {
                         downloadError =
                             error instanceof Error
@@ -239,8 +228,8 @@ const event = {
 
                 processedAttachments.push({
                     id: attachment.id,
-                    webdavPath: webdavPath,
-                    downloadError: downloadError,
+                    storagePath,
+                    downloadError,
                     filename: attachment.name,
                     contentType: attachment.contentType,
                     size: attachment.size,

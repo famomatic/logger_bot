@@ -2252,15 +2252,14 @@ async function fetchAndDisplayLogs(
             if (eventData && Array.isArray(eventData.attachments)) {
                 for (const item of eventData.attachments) {
                     const attachmentData = item;
-                    if (attachmentData.webdavPath && attachmentData.filename) {
+                    const storagePath = str(attachmentData.storagePath);
+                    if (storagePath && attachmentData.filename) {
                         let nasFileBuffer: Buffer | null = null;
                         try {
-                            nasFileBuffer = await storageManager.download(
-                                str(attachmentData.webdavPath),
-                            );
+                            nasFileBuffer = await storageManager.download(storagePath);
                         } catch {
                             // Suppress error if file not found or download failed, similar to previous behavior
-                            // logger.warn(`Failed to download attachment: ${attachmentData.webdavPath}`, error);
+                            // logger.warn(`Failed to download attachment: ${attachmentData.storagePath}`, error);
                         }
                         if (nasFileBuffer) {
                             const uniqueAttachmentFilename =

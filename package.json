@@ -14,7 +14,8 @@
         "lint:log": "npm run lint > eslint.log",
         "lint:count": "npx eslint \"src/**/*.ts\" --format json | jq -r '.[] | select(.errorCount > 0) | \"\\(.errorCount) \\(.filePath)\"' | sort -rn | awk '{print $0; sum += $1} END {print \"----------------------\\nTotal Errors: \" sum}'",
         "db:setup": "node scripts/generate_db.cjs",
-        "db:migrate": "node scripts/migrate.cjs"
+        "db:migrate": "node scripts/migrate.cjs",
+        "db:migrate:storage-path": "node scripts/migrate_attachment_storage_path.cjs"
     },
     "keywords": [
         "discord",

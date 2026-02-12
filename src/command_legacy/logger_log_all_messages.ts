@@ -4,7 +4,6 @@ import {
     GuildTextBasedChannel,
     Collection,
     Client,
-    Attachment,
     Sticker,
     Guild,
 } from 'discord.js';
@@ -14,26 +13,16 @@ import { logger } from '../utils/logger.js';
 import { logEvent } from '../db/database.js';
 import { LegacyCommand } from '../utils/loadLegacyCommands.js';
 import { storageManager } from '../storage/StorageManager.js';
-import { sanitizeFilename } from '../utils/sanitize.js';
+import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 
 interface AttachmentData {
     id: string;
-    webdavPath: string | null;
+    storagePath: string | null;
     downloadError: string | null;
     filename: string;
     size: number;
     contentType: string | null;
     discordUrl: string;
-}
-
-function createWebDAVPath(
-    guildId: string,
-    channelId: string,
-    messageId: string,
-    attachment: Attachment,
-): string {
-    const safeName = sanitizeFilename(attachment.name ?? 'file');
-    return `${guildId}/${channelId}/${messageId}/${attachment.id}_${safeName}`;
 }
 
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
@@ -172,7 +161,7 @@ const command: LegacyCommand = {
                                         const processedAttachments: AttachmentData[] = [];
                                         if (msg.attachments.size > 0) {
                                             for (const attachment of msg.attachments.values()) {
-                                                let webdavPath: string | null = null;
+                                                let storagePath: string | null = null;
                                                 let downloadError: string | null = null;
                                                 if (config.storage.type) {
                                                     try {
@@ -180,13 +169,15 @@ const command: LegacyCommand = {
                                                             attachment.url,
                                                             3,
                                                         );
-                                                        const relativePath = createWebDAVPath(
-                                                            guild.id,
-                                                            msg.channel.id,
-                                                            msg.id,
-                                                            attachment,
-                                                        );
-                                                        webdavPath = await storageManager.upload(
+                                                        const relativePath =
+                                                            createAttachmentStoragePath(
+                                                                guild.id,
+                                                                msg.channel.id,
+                                                                msg.id,
+                                                                attachment.id,
+                                                                attachment.name,
+                                                            );
+                                                        storagePath = await storageManager.upload(
                                                             relativePath,
                                                             fileBuffer,
                                                         );
@@ -203,7 +194,7 @@ const command: LegacyCommand = {
                                                 }
                                                 processedAttachments.push({
                                                     id: attachment.id,
-                                                    webdavPath,
+                                                    storagePath,
                                                     downloadError,
                                                     filename: attachment.name,
                                                     size: attachment.size,

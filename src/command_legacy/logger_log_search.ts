@@ -29,7 +29,7 @@ import { eventConfigurations } from '../config/eventsConfig.js';
 interface AttachmentLogData {
     id: string;
     filename: string;
-    webdavPath?: string;
+    storagePath?: string;
     discordUrl?: string;
 }
 import { searchLogs } from '../db/database.js';
@@ -2030,11 +2030,11 @@ async function fetchAndDisplayLogs(
             const eventData = log.event_data as { attachments?: AttachmentLogData[] };
             if (eventData && Array.isArray(eventData.attachments)) {
                 for (const attachmentData of eventData.attachments) {
-                    if (attachmentData.webdavPath && attachmentData.filename) {
+                    if (attachmentData.storagePath && attachmentData.filename) {
                         let nasFileBuffer: Buffer | null = null;
                         try {
                             nasFileBuffer = await storageManager.download(
-                                attachmentData.webdavPath,
+                                attachmentData.storagePath,
                             );
                         } catch {
                             // Suppress error if file not found or download failed
