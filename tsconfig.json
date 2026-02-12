@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    /* 기본 옵션 */
+    "target": "ES2022", // 최신 LTS Node.js 버전에서 지원하는 최신 문법 사용
+    "module": "NodeNext", // Node.js의 ES 모듈 방식 지정
+    "moduleResolution": "NodeNext", // Node.js의 ES 모듈 해석 방식 사용
+    "outDir": "./dist", // 컴파일된 JS 파일 출력 디렉토리
+    "rootDir": "./src", // TypeScript 소스 파일 루트 디렉토리
+    "strict": true, // 모든 엄격한 타입-검사 옵션 활성화
+    "esModuleInterop": true, // CommonJS 모듈을 ES 모듈처럼 import 가능하게 함 (require 사용 시에도 호환성 도움)
+    "skipLibCheck": true, // 모든 선언 파일(*.d.ts)의 타입 검사 스킵 (빌드 속도 향상)
+    "forceConsistentCasingInFileNames": true, // 파일 이름의 대소문자 일관성 강제
+
+    /* 추가 옵션 */
+    "sourceMap": true, // 디버깅을 위한 소스맵 파일 생성
+    "resolveJsonModule": true // JSON 파일을 모듈처럼 불러올 수 있게 함
+  },
+  "include": ["src/**/*", "scripts/migrate.cjs"], // 컴파일할 파일 범위
+  "exclude": ["node_modules", "**/*.spec.ts", "dist", "scripts"] // 컴파일 제외 대상
+} 
