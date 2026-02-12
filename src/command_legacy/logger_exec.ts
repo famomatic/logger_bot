@@ -2,7 +2,7 @@ import { Message } from 'discord.js';
 import { spawn as spawnChildProcess } from 'child_process';
 import { spawn as spawnPty } from 'node-pty';
 import type { IPty } from 'node-pty';
-import { LegacyCommand } from '../utils/loadLegacyCommands.js';
+import type { LegacyCommand } from '../types/commands.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 

@@ -5,7 +5,7 @@ import {
     MessageFlags,
     SeparatorBuilder,
 } from 'discord.js';
-import { LegacyCommand } from '../utils/loadLegacyCommands.js'; // LegacyCommand 인터페이스 임포트
+import type { LegacyCommand } from '../types/commands.js'; // LegacyCommand 인터페이스 임포트
 import { config } from '../config/config.js'; // config 임포트
 
 // const developerIds = ['YOUR_USER_ID']; // 이 줄은 삭제

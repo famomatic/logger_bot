@@ -6,18 +6,11 @@ import {
     GuildTextBasedChannel,
     Collection,
     Message,
-    SlashCommandOptionsOnlyBuilder,
     MessageFlags,
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
-
-interface SlashCommand {
-    data:
-        | SlashCommandOptionsOnlyBuilder
-        | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>;
-    execute: (interaction: CommandInteraction, client: Client) => Promise<void>;
-}
+import type { SlashCommand } from '../types/commands.js';
 
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()

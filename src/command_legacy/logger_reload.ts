@@ -1,12 +1,8 @@
-import { Message, PermissionsBitField, Client, Events, Collection } from 'discord.js';
+import { Message, PermissionsBitField, Client, Events } from 'discord.js';
 import dotenv from 'dotenv';
-import { LegacyCommand } from '../utils/loadLegacyCommands.js';
+import type { LegacyCommand } from '../types/commands.js';
 import { loadLegacyCommands, unloadLegacyCommands } from '../utils/loadLegacyCommands.js';
-import {
-    loadSlashCommands,
-    unloadSlashCommands,
-    SlashCommand,
-} from '../utils/loadSlashCommands.js';
+import { loadSlashCommands, unloadSlashCommands } from '../utils/loadSlashCommands.js';
 import { loadEvents, unloadEvents } from '../utils/loadEvents.js';
 import { config, reloadConfig } from '../config/config.js';
 import { logger } from '../utils/logger.js';
@@ -35,10 +31,7 @@ const command: LegacyCommand = {
             message.client.on(Events.InteractionCreate, (i) => {
                 void (async () => {
                     if (!i.isChatInputCommand()) return;
-                    const clientWithCommands = message.client as Client & {
-                        commands?: Collection<string, SlashCommand>;
-                    };
-                    const cmd = clientWithCommands.commands?.get(i.commandName);
+                    const cmd = message.client.commands?.get(i.commandName);
                     if (!cmd) return;
                     try {
                         await cmd.execute(i, message.client);

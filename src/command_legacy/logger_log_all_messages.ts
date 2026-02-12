@@ -3,7 +3,6 @@ import {
     PermissionsBitField,
     GuildTextBasedChannel,
     Collection,
-    Client,
     Sticker,
     Guild,
 } from 'discord.js';
@@ -11,19 +10,10 @@ import axios from 'axios';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import { logEvent } from '../db/database.js';
-import { LegacyCommand } from '../utils/loadLegacyCommands.js';
+import type { AttachmentData, ClientWithLegacyCommands, LegacyCommand } from '../types/commands.js';
+import type { ErrorWithCode } from '../types/errors.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
-
-interface AttachmentData {
-    id: string;
-    storagePath: string | null;
-    downloadError: string | null;
-    filename: string;
-    size: number;
-    contentType: string | null;
-    discordUrl: string;
-}
 
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     let lastError: unknown = null;
@@ -64,9 +54,7 @@ const command: LegacyCommand = {
 
         const reply = await message.reply(`길드 ${targetGuildId}의 모든 메시지를 기록합니다...`);
 
-        const client = message.client as Client & {
-            legacyCommands?: Collection<string, LegacyCommand>;
-        };
+        const client = message.client as ClientWithLegacyCommands;
         logger.info(
             `Initiating bulk message logging for guild ${targetGuildId} by ${message.author.tag} (${message.author.id})`,
         );
@@ -248,7 +236,7 @@ const command: LegacyCommand = {
                         }
                         if (messages.size < 100) fetchMore = false;
                     } catch (error) {
-                        const fetchError = error as { code?: number; message?: string };
+                        const fetchError = error as ErrorWithCode;
                         // 50013: Missing Access
                         if (
                             fetchError.code === 50013 ||

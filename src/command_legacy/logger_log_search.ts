@@ -1,4 +1,4 @@
-import { LegacyCommand } from '../utils/loadLegacyCommands.js';
+import type { LegacyCommand } from '../types/commands.js';
 import {
     Message,
     PermissionsBitField,
@@ -25,24 +25,16 @@ import {
 import { logger } from '../utils/logger.js';
 import { config } from '../config/config.js';
 import { eventConfigurations } from '../config/eventsConfig.js';
-
-interface AttachmentLogData {
-    id: string;
-    filename: string;
-    storagePath?: string;
-    discordUrl?: string;
-}
 import { searchLogs } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { escapeCodeBlockContent } from '../utils/sanitize.js';
+import type { AttachmentLogData } from '../types/logs.js';
+import type { JsonData, JsonValue } from '../types/json.js';
 
 const PAGE_SIZE = 5; // 페이지당 로그 수
-interface JsonData {
-    [key: string]: JsonData | string | number | boolean | null | undefined | JsonData[];
-}
 
 function str(
-    val: JsonData | string | number | boolean | null | undefined | JsonData[],
+    val: JsonValue | undefined,
     fallback = '',
 ): string {
     if (val == null) return fallback;
@@ -52,7 +44,7 @@ function str(
 }
 
 function num(
-    val: JsonData | string | number | boolean | null | undefined | JsonData[],
+    val: JsonValue | undefined,
     fallback = 0,
 ): number {
     if (typeof val === 'number') return val;
@@ -70,8 +62,8 @@ const STICKER_FORMAT_LABELS: Record<number, string> = {
     4: 'GIF',
 };
 
-function formatStickerSummary(sticker: JsonData, index: number): string {
-    if (!sticker || typeof sticker !== 'object') {
+function formatStickerSummary(sticker: JsonValue | undefined, index: number): string {
+    if (!sticker || typeof sticker !== 'object' || Array.isArray(sticker)) {
         return `${index + 1}. 알 수 없는 스티커`;
     }
 
@@ -2027,7 +2019,7 @@ async function fetchAndDisplayLogs(
             displayableComponents.push(sectionComponent);
             logsDisplayed++;
 
-            const eventData = log.event_data as { attachments?: AttachmentLogData[] };
+            const eventData = log.event_data as JsonData & { attachments?: AttachmentLogData[] };
             if (eventData && Array.isArray(eventData.attachments)) {
                 for (const attachmentData of eventData.attachments) {
                     if (attachmentData.storagePath && attachmentData.filename) {

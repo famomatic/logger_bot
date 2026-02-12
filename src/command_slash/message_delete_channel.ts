@@ -7,7 +7,6 @@ import {
     Message,
     Client,
     ChannelType,
-    SlashCommandOptionsOnlyBuilder,
     ButtonBuilder,
     ButtonStyle,
     ActionRowBuilder,
@@ -16,12 +15,7 @@ import {
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
-
-// 타입 정의
-interface SlashCommand {
-    data: SlashCommandOptionsOnlyBuilder;
-    execute: (interaction: CommandInteraction, client: Client) => Promise<void>;
-}
+import type { SlashCommand } from '../types/commands.js';
 
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()

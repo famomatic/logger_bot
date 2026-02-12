@@ -31,18 +31,12 @@ import {
 import { searchLogs } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { escapeCodeBlockContent } from '../utils/sanitize.js';
-
-/**
- * Recursive type for JSONB data from the database. Allows type-safe nested property access
- * on deserialized JSON objects without using `any`.
- */
-interface JsonData {
-    [key: string]: JsonData | string | number | boolean | null | undefined | JsonData[];
-}
+import type { JsonData, JsonValue } from '../types/json.js';
+import type { AttachmentLogData } from '../types/logs.js';
 
 /** Safely converts an unknown/JsonData value to a string. Returns fallback if nullish. */
 function str(
-    val: JsonData | string | number | boolean | null | undefined | JsonData[],
+    val: JsonValue | undefined,
     fallback = '',
 ): string {
     if (val == null) return fallback;
@@ -53,7 +47,7 @@ function str(
 
 /** Safely converts a value to a number. Returns fallback if not a valid number. */
 function num(
-    val: JsonData | string | number | boolean | null | undefined | JsonData[],
+    val: JsonValue | undefined,
     fallback = 0,
 ): number {
     if (typeof val === 'number') return val;
@@ -73,14 +67,16 @@ const STICKER_FORMAT_LABELS: Record<number, string> = {
     4: 'GIF',
 };
 
-function formatStickerSummary(sticker: JsonData, index: number): string {
-    if (!sticker || typeof sticker !== 'object') {
+function formatStickerSummary(sticker: JsonValue | undefined, index: number): string {
+    if (!sticker || typeof sticker !== 'object' || Array.isArray(sticker)) {
         return `${index + 1}. 알 수 없는 스티커`;
     }
 
     const parts: string[] = [];
     const name =
-        typeof sticker.name === 'string' && sticker.name.length > 0 ? sticker.name : '이름 없음';
+        typeof sticker.name === 'string' && sticker.name.length > 0
+            ? sticker.name
+            : '이름 없음';
     parts.push(`${index + 1}. ${name}`);
 
     const metadata: string[] = [];
@@ -92,7 +88,8 @@ function formatStickerSummary(sticker: JsonData, index: number): string {
     if (typeof sticker.format === 'number') {
         formatLabel = STICKER_FORMAT_LABELS[sticker.format] ?? `형식 ${sticker.format}`;
     } else if (typeof sticker.format_type === 'number') {
-        formatLabel = STICKER_FORMAT_LABELS[sticker.format_type] ?? `형식 ${sticker.format_type}`;
+        formatLabel =
+            STICKER_FORMAT_LABELS[sticker.format_type] ?? `형식 ${sticker.format_type}`;
     } else if (typeof sticker.format === 'string') {
         formatLabel = sticker.format;
     }
@@ -400,14 +397,7 @@ async function fetchAndDisplayLogs(
                         // If event_data.oldMember.roles or .newMember.roles is logged, it might be a serialized version.
 
                         const getRoleMap = (
-                            rolesData:
-                                | JsonData
-                                | JsonData[]
-                                | string
-                                | number
-                                | boolean
-                                | null
-                                | undefined,
+                            rolesData: JsonValue | undefined,
                         ): Map<string, string | undefined> => {
                             const map = new Map<string, string | undefined>();
                             if (
@@ -2248,7 +2238,7 @@ async function fetchAndDisplayLogs(
             displayableComponents.push(sectionComponent);
             logsDisplayed++;
 
-            const eventData = log.event_data as JsonData;
+            const eventData = log.event_data as JsonData & { attachments?: AttachmentLogData[] };
             if (eventData && Array.isArray(eventData.attachments)) {
                 for (const item of eventData.attachments) {
                     const attachmentData = item;

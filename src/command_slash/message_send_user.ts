@@ -4,17 +4,12 @@ import {
     PermissionsBitField,
     Client,
     User,
-    SlashCommandOptionsOnlyBuilder,
     MessageFlags,
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
-
-// 타입 정의
-interface SlashCommand {
-    data: SlashCommandOptionsOnlyBuilder;
-    execute: (interaction: CommandInteraction, client: Client) => Promise<void>;
-}
+import type { SlashCommand } from '../types/commands.js';
+import type { ErrorWithCode } from '../types/errors.js';
 
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()
@@ -94,7 +89,7 @@ export const command: SlashCommand = {
                 content: `✅ 사용자 ${targetUser.tag} (${targetUserId})에게 메시지를 성공적으로 전송했습니다.`,
             });
         } catch (error) {
-            const err = error as { code?: number; message: string };
+            const err = error as ErrorWithCode;
             logger.error(
                 `${logPrefix} Failed to send DM to ${targetUser.tag} (${targetUserId}):`,
                 err,
@@ -106,7 +101,7 @@ export const command: SlashCommand = {
                 });
             } else {
                 await interaction.editReply({
-                    content: `❌ 오류: ${targetUser.tag} (${targetUserId})님에게 메시지를 보내는 중 오류가 발생했습니다: ${err.message}`,
+                    content: `❌ 오류: ${targetUser.tag} (${targetUserId})님에게 메시지를 보내는 중 오류가 발생했습니다: ${err.message ?? 'Unknown error'}`,
                 });
             }
         }

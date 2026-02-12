@@ -1,6 +1,6 @@
 import {
     SlashCommandBuilder,
-    ChatInputCommandInteraction,
+    CommandInteraction,
     Client,
     Events,
     PermissionsBitField,
@@ -8,22 +8,20 @@ import {
 } from 'discord.js';
 import dotenv from 'dotenv';
 import { loadLegacyCommands, unloadLegacyCommands } from '../utils/loadLegacyCommands.js';
-import {
-    loadSlashCommands,
-    unloadSlashCommands,
-    SlashCommand,
-} from '../utils/loadSlashCommands.js';
+import { loadSlashCommands, unloadSlashCommands } from '../utils/loadSlashCommands.js';
 import { loadEvents, unloadEvents } from '../utils/loadEvents.js';
 import { logger } from '../utils/logger.js';
 import { config, reloadConfig } from '../config/config.js';
+import type { SlashCommand } from '../types/commands.js';
 
-export const command = {
+export const command: SlashCommand = {
     data: new SlashCommandBuilder()
         .setName('reload')
         .setDescription('봇의 명령어 및 이벤트를 다시 로드합니다.')
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator), // 관리자만 사용 가능하도록 설정
 
-    async execute(interaction: ChatInputCommandInteraction, client: Client) {
+    async execute(interaction: CommandInteraction, client: Client) {
+        if (!interaction.isChatInputCommand()) return;
         // 개발자 또는 관리자 권한 확인
         const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
         const devLevel = config.getDevLevel(interaction.user.id);
@@ -51,10 +49,7 @@ export const command = {
             client.on(Events.InteractionCreate, (i) => {
                 void (async () => {
                     if (!i.isChatInputCommand()) return;
-                    const commandClient = client as Client & {
-                        commands?: Map<string, SlashCommand>;
-                    };
-                    const cmd = commandClient.commands?.get(i.commandName);
+                    const cmd = client.commands?.get(i.commandName);
                     if (!cmd) return;
                     try {
                         await cmd.execute(i, client);

@@ -6,18 +6,11 @@ import {
     Collection,
     Message,
     Client,
-    SlashCommandOptionsOnlyBuilder,
     MessageFlags,
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
-
-// --- 타입 정의 (최종 수정) ---
-interface SlashCommand {
-    data: SlashCommandOptionsOnlyBuilder; // <--- 여기를 다시 SlashCommandOptionsOnlyBuilder 로 수정
-    execute: (interaction: CommandInteraction, client: Client) => Promise<void>;
-}
-// --- ------------ ---
+import type { SlashCommand } from '../types/commands.js';
 
 // 슬래시 커맨드 정의 및 실행 로직
 export const command: SlashCommand = {

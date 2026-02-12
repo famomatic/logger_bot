@@ -6,7 +6,6 @@ import {
     Collection,
     Message,
     Client,
-    SlashCommandOptionsOnlyBuilder,
     MessageFlags,
 } from 'discord.js';
 import axios from 'axios';
@@ -15,23 +14,7 @@ import { logger } from '../utils/logger.js';
 import { logEvent } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
-
-interface SlashCommand {
-    data:
-        | SlashCommandOptionsOnlyBuilder
-        | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>;
-    execute: (interaction: CommandInteraction, client: Client) => Promise<void>;
-}
-
-interface AttachmentData {
-    id: string;
-    storagePath: string | null;
-    downloadError: string | null;
-    filename: string;
-    size: number;
-    contentType: string | null;
-    discordUrl: string;
-}
+import type { AttachmentData, SlashCommand } from '../types/commands.js';
 
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     let lastError: unknown = null;

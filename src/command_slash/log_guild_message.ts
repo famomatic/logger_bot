@@ -6,7 +6,6 @@ import {
     Collection,
     Message,
     Client,
-    SlashCommandOptionsOnlyBuilder,
     MessageFlags,
     Guild,
 } from 'discord.js';
@@ -16,33 +15,8 @@ import { logger } from '../utils/logger.js';
 import { logEvent } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
-
-// --- 타입 정의 수정 ---
-interface LegacyCommand {
-    // 레거시 커맨드 타입 정의가 여기에 필요할 수 있음
-    name: string;
-    execute: (message: Message) => Promise<void>;
-}
-interface SlashCommand {
-    data:
-        | SlashCommandOptionsOnlyBuilder
-        | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>;
-    execute: (
-        interaction: CommandInteraction,
-        client: Client & { legacyCommands?: Collection<string, LegacyCommand> },
-    ) => Promise<void>; // client 타입에 legacyCommands 추가
-}
-interface AttachmentData {
-    id: string;
-    storagePath: string | null;
-    downloadError: string | null;
-    filename: string;
-    size: number;
-    contentType: string | null;
-    discordUrl: string;
-}
-
-// --- ------------ ---
+import type { AttachmentData, SlashCommand } from '../types/commands.js';
+import type { ErrorWithCode } from '../types/errors.js';
 
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     let lastError: unknown = null;
@@ -79,7 +53,7 @@ export const command: SlashCommand = {
 
     async execute(
         interaction: CommandInteraction,
-        client: Client & { legacyCommands?: Collection<string, LegacyCommand> },
+        client: Client,
     ) {
         if (!interaction.isChatInputCommand()) return;
         if (!interaction.inGuild()) {
@@ -333,7 +307,7 @@ export const command: SlashCommand = {
                             fetchMore = false;
                         }
                     } catch (error) {
-                        const fetchError = error as { code?: number; message?: string };
+                        const fetchError = error as ErrorWithCode;
                         // 50013: Missing Access
                         if (
                             fetchError.code === 50013 ||

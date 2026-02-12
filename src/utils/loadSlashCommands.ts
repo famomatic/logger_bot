@@ -6,27 +6,11 @@ import {
     REST,
     Routes,
     SlashCommandBuilder,
-    CommandInteraction,
-    SlashCommandOptionsOnlyBuilder,
 } from 'discord.js';
 import { fileURLToPath, URL } from 'url';
 import { logger } from './logger.js';
 import { config } from '../config/config.js';
-
-// 슬래시 커맨드 타입 정의
-export interface SlashCommand {
-    data:
-        | SlashCommandOptionsOnlyBuilder
-        | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>;
-    execute: (interaction: CommandInteraction, client: Client) => Promise<void>;
-}
-
-// 클라이언트 타입 확장
-declare module 'discord.js' {
-    interface Client {
-        commands?: Collection<string, SlashCommand>;
-    }
-}
+import type { SlashCommand } from '../types/commands.js';
 
 export async function loadSlashCommands(client: Client): Promise<void> {
     client.commands = new Collection<string, SlashCommand>();

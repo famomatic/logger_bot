@@ -1,21 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { Collection, Client, Message } from 'discord.js';
+import { Collection, Client } from 'discord.js';
 import { fileURLToPath, URL } from 'url';
 import { logger } from './logger.js';
-
-// 레거시 명령어 타입 정의
-export interface LegacyCommand {
-    name: string;
-    execute: (message: Message) => Promise<void>;
-}
-
-// 클라이언트 타입 확장
-declare module 'discord.js' {
-    interface Client {
-        legacyCommands?: Collection<string, LegacyCommand>;
-    }
-}
+import type { LegacyCommand } from '../types/commands.js';
 
 export async function loadLegacyCommands(client: Client): Promise<void> {
     client.legacyCommands = new Collection<string, LegacyCommand>();

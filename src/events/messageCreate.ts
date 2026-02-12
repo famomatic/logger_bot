@@ -5,6 +5,8 @@ import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import { config } from '../config/config.js';
 import pool, { logEvent, isGuildAuthorized } from '../db/database.js';
+import type { LegacyCommand } from '../types/commands.js';
+import type { ErrorWithCode } from '../types/errors.js';
 
 logger.debug('messageCreate.ts: Attempting to import query from database.js...');
 // import { query } from '../db/database.js'; // Remove query import
@@ -31,14 +33,6 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     }
     throw lastError;
 }
-
-// --- 레거시 명령어 타입 임포트 ---
-// 파일 내에 정의되어 있으므로 외부 임포트 불필요
-interface LegacyCommand {
-    name: string;
-    execute: (message: Message) => Promise<void>;
-}
-// --- ---------------------------------------------- ---
 
 // Forward message types (Discord's internal structure for forwarded messages)
 interface ForwardedMessageAuthor {
@@ -454,7 +448,7 @@ const event = {
                         error instanceof AxiosError
                             ? error.code
                             : error instanceof Error
-                              ? (error as { code?: string }).code
+                              ? (error as ErrorWithCode).code
                               : undefined;
                     logger.warn(`Failed to fetch referenced message ${refId}: ${errMsg}`);
                     referencedMessageData = {

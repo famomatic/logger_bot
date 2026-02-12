@@ -3,14 +3,8 @@ import path from 'path';
 import { Client, Collection, Events } from 'discord.js'; // 필요한 타입 추가
 import { fileURLToPath, URL } from 'url';
 import { logger } from './logger.js';
-import { LegacyCommand } from './loadLegacyCommands.js'; // LegacyCommand 타입 필요
-
-// 이벤트 핸들러 타입 정의
-interface EventHandler {
-    name: string;
-    once?: boolean;
-    execute: (...args: unknown[]) => Promise<void>;
-}
+import type { LegacyCommand } from '../types/commands.js';
+import type { EventHandler } from '../types/events.js';
 
 export async function loadEvents(client: Client): Promise<void> {
     const __filename = fileURLToPath(import.meta.url);
