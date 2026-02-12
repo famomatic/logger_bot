@@ -20,26 +20,26 @@ A TypeScript Discord bot that logs server activity to PostgreSQL. The bot can st
 ## Getting Started
 
 1. Install dependencies:
-   ```bash
-   npm install
-   ```
+    ```bash
+    npm install
+    ```
 2. Build the project:
-   ```bash
-   npm run build
-   ```
+    ```bash
+    npm run build
+    ```
 3. Configure environment variables based on `.env.example`.
 4. Run database migrations:
-   ```bash
-   npm run db:migrate
-   ```
+    ```bash
+    npm run db:migrate
+    ```
 5. Start the bot:
-   ```bash
-   npm start
-   ```
+    ```bash
+    npm start
+    ```
 6. The bot automatically handles sharding when started:
-   ```bash
-   npm start
-   ```
+    ```bash
+    npm start
+    ```
 
 ## Environment Variables
 

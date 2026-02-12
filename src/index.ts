@@ -40,23 +40,20 @@ async function initializeBot() {
 
         // 5. ClientReady 이벤트 등록 (간단 로그)
         discordClient.once(Events.ClientReady, (readyClient) => {
-             void (async () => {
+            void (async () => {
                 logger.info(`Ready! Logged in as ${readyClient.user.tag}`);
                 // 슬래시 커맨드 등록 로그는 loadSlashCommands 에서 출력됨
                 await checkAndLeaveUnauthorizedGuilds(readyClient);
-             })();
+            })();
         });
-
 
         // 6. 봇 로그인
         logger.info('Logging in to Discord...');
         await discordClient.login(config.discordBotToken);
-
     } catch (error) {
         logger.error('Critical error during bot initialization:', error);
         process.exit(1);
     }
-
 }
 
 async function handleInteraction(interaction: Interaction) {
@@ -65,7 +62,11 @@ async function handleInteraction(interaction: Interaction) {
     const command = discordClient.commands!.get(interaction.commandName);
     if (!command) {
         logger.warn(`Unknown slash command received: ${interaction.commandName}`);
-        try { await interaction.reply({ content: '알 수 없는 명령어입니다.', ephemeral: true }); } catch { /* empty */ }
+        try {
+            await interaction.reply({ content: '알 수 없는 명령어입니다.', ephemeral: true });
+        } catch {
+            /* empty */
+        }
         return;
     }
     try {
@@ -73,12 +74,20 @@ async function handleInteraction(interaction: Interaction) {
     } catch (error) {
         logger.error(`Error executing slash command ${interaction.commandName}:`, error);
         try {
-                if (interaction.deferred || interaction.replied) {
-                    await interaction.followUp({ content: '명령어 실행 중 오류가 발생했습니다.', ephemeral: true });
-                } else {
-                    await interaction.reply({ content: '명령어 실행 중 오류가 발생했습니다.', ephemeral: true });
-                }
-        } catch { /* empty */ } // 오류 응답 실패는 무시
+            if (interaction.deferred || interaction.replied) {
+                await interaction.followUp({
+                    content: '명령어 실행 중 오류가 발생했습니다.',
+                    ephemeral: true,
+                });
+            } else {
+                await interaction.reply({
+                    content: '명령어 실행 중 오류가 발생했습니다.',
+                    ephemeral: true,
+                });
+            }
+        } catch {
+            /* empty */
+        } // 오류 응답 실패는 무시
     }
 }
 
@@ -101,8 +110,12 @@ function setupGracefulShutdown() {
             process.exit(0);
         }
     };
-    process.once('SIGINT', () => { void shutdown('SIGINT'); });
-    process.once('SIGTERM', () => { void shutdown('SIGTERM'); });
+    process.once('SIGINT', () => {
+        void shutdown('SIGINT');
+    });
+    process.once('SIGTERM', () => {
+        void shutdown('SIGTERM');
+    });
 }
 
 setupGracefulShutdown();

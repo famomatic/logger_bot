@@ -26,11 +26,11 @@ export async function loadLegacyCommands(client: Client): Promise<void> {
 
     try {
         if (!fs.existsSync(commandsPath) || !fs.lstatSync(commandsPath).isDirectory()) {
-             logger.warn(`Legacy command directory not found: ${commandsPath}`);
-             return;
+            logger.warn(`Legacy command directory not found: ${commandsPath}`);
+            return;
         }
 
-        const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+        const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith('.js'));
         logger.info(`Loading ${commandFiles.length} legacy commands...`);
 
         for (const file of commandFiles) {
@@ -38,7 +38,7 @@ export async function loadLegacyCommands(client: Client): Promise<void> {
             try {
                 const resolvedPath = path.resolve(filePath);
                 const fileUrl = new URL(`file:///${resolvedPath.replace(/\\/g, '/')}`);
-                const commandModule = await import(fileUrl.href) as { command: LegacyCommand };
+                const commandModule = (await import(fileUrl.href)) as { command: LegacyCommand };
                 const command = commandModule.command;
 
                 if (command?.name && typeof command.execute === 'function') {
@@ -48,14 +48,14 @@ export async function loadLegacyCommands(client: Client): Promise<void> {
                     logger.warn(`The command at ${filePath} is missing required properties.`);
                 }
             } catch (fileLoadError) {
-                 logger.error(`Error loading legacy command file ${filePath}:`, fileLoadError);
+                logger.error(`Error loading legacy command file ${filePath}:`, fileLoadError);
             }
         }
         logger.success(`Successfully loaded ${client.legacyCommands.size} legacy commands.`);
     } catch (error) {
-        logger.error("Error reading legacy commands directory:", error);
+        logger.error('Error reading legacy commands directory:', error);
     }
-} 
+}
 export function unloadLegacyCommands(client: Client): void {
     client.legacyCommands?.clear?.();
 }

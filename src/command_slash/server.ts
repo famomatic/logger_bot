@@ -1,4 +1,10 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, Colors, GuildPremiumTier } from 'discord.js';
+import {
+    SlashCommandBuilder,
+    ChatInputCommandInteraction,
+    EmbedBuilder,
+    Colors,
+    GuildPremiumTier,
+} from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/config.js';
 import { getGuildLogStats, isGuildAuthorized } from '../db/database.js';
@@ -7,13 +13,16 @@ function formatNumber(value: number): string {
     return value.toLocaleString('ko-KR');
 }
 
-async function formatDevLevelList(interaction: ChatInputCommandInteraction, ids: string[] | undefined): Promise<string> {
+async function formatDevLevelList(
+    interaction: ChatInputCommandInteraction,
+    ids: string[] | undefined,
+): Promise<string> {
     if (!ids || ids.length === 0) {
         return '없음';
     }
 
     const formatted = await Promise.all(
-        ids.map(async id => {
+        ids.map(async (id) => {
             const cached = interaction.client.users.cache.get(id);
             if (cached) {
                 return `${cached.tag} (${id})`;
@@ -24,7 +33,7 @@ async function formatDevLevelList(interaction: ChatInputCommandInteraction, ids:
             } catch {
                 return `ID: ${id}`;
             }
-        })
+        }),
     );
 
     return formatted.join('\n');
@@ -39,7 +48,10 @@ export const command = {
         logger.info(`/server command executed by ${interaction.user.tag}`);
 
         if (!interaction.inGuild()) {
-            await interaction.reply({ content: '이 명령어는 서버에서만 사용할 수 있습니다.', ephemeral: true });
+            await interaction.reply({
+                content: '이 명령어는 서버에서만 사용할 수 있습니다.',
+                ephemeral: true,
+            });
             return;
         }
 
@@ -102,9 +114,16 @@ export const command = {
             logger.error('Error executing /server command:', err);
             const errorMessage = err.message || '알 수 없는 오류';
             if (interaction.deferred || interaction.replied) {
-                await interaction.editReply({ content: `서버 정보를 불러오지 못했습니다: ${errorMessage}`, embeds: [], components: [] });
+                await interaction.editReply({
+                    content: `서버 정보를 불러오지 못했습니다: ${errorMessage}`,
+                    embeds: [],
+                    components: [],
+                });
             } else {
-                await interaction.reply({ content: `서버 정보를 불러오지 못했습니다: ${errorMessage}`, ephemeral: true });
+                await interaction.reply({
+                    content: `서버 정보를 불러오지 못했습니다: ${errorMessage}`,
+                    ephemeral: true,
+                });
             }
         }
     },

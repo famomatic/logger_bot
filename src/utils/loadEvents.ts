@@ -24,7 +24,7 @@ export async function loadEvents(client: Client): Promise<void> {
             return;
         }
 
-        const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
+        const eventFiles = fs.readdirSync(eventsPath).filter((file) => file.endsWith('.js'));
         let loadedCount = 0;
 
         logger.info(`Loading ${eventFiles.length} events...`);
@@ -34,13 +34,15 @@ export async function loadEvents(client: Client): Promise<void> {
             try {
                 const resolvedPath = path.resolve(filePath);
                 const fileUrl = new URL(`file:///${resolvedPath.replace(/\\/g, '/')}`);
-                const eventModule = await import(fileUrl.href) as { default: EventHandler };
+                const eventModule = (await import(fileUrl.href)) as { default: EventHandler };
                 const event = eventModule.default;
 
                 if (event?.name && typeof event.execute === 'function') {
                     // InteractionCreate는 로더에서 등록하지 않음 (index.ts에서 직접 처리)
                     if (event.name === (Events.InteractionCreate as string)) {
-                        logger.debug(`Skipping dynamic loading for ${Events.InteractionCreate}, handled in index.ts.`);
+                        logger.debug(
+                            `Skipping dynamic loading for ${Events.InteractionCreate}, handled in index.ts.`,
+                        );
                         continue;
                     }
 
@@ -49,19 +51,28 @@ export async function loadEvents(client: Client): Promise<void> {
                             // messageCreate 특별 처리: legacyCommands 전달
                             if (event.name === (Events.MessageCreate as string)) {
                                 const [message] = args;
-                                await event.execute(message, client, client.legacyCommands ?? new Collection<string, LegacyCommand>());
+                                await event.execute(
+                                    message,
+                                    client,
+                                    client.legacyCommands ??
+                                        new Collection<string, LegacyCommand>(),
+                                );
                             } else {
                                 await event.execute(...args, client);
                             }
                         } catch (error) {
-                             logger.error(`Error executing event ${event.name}:`, error);
+                            logger.error(`Error executing event ${event.name}:`, error);
                         }
                     };
 
                     if (event.once) {
-                        client.once(event.name, (...args: unknown[]) => { void executeWrapper(...args); });
+                        client.once(event.name, (...args: unknown[]) => {
+                            void executeWrapper(...args);
+                        });
                     } else {
-                        client.on(event.name, (...args: unknown[]) => { void executeWrapper(...args); });
+                        client.on(event.name, (...args: unknown[]) => {
+                            void executeWrapper(...args);
+                        });
                     }
 
                     logger.debug(`Loaded event: ${event.name}`);
@@ -70,16 +81,17 @@ export async function loadEvents(client: Client): Promise<void> {
                     logger.warn(`The event at ${filePath} is missing required properties.`);
                 }
             } catch (fileLoadError: unknown) {
-                const errMsg = fileLoadError instanceof Error ? fileLoadError.message : String(fileLoadError);
+                const errMsg =
+                    fileLoadError instanceof Error ? fileLoadError.message : String(fileLoadError);
                 const errStack = fileLoadError instanceof Error ? fileLoadError.stack : undefined;
                 logger.error(`Error loading event file ${filePath}:`, errMsg, errStack);
             }
         }
         logger.success(`Successfully loaded ${loadedCount} events dynamically.`);
     } catch (error) {
-        logger.error("Error reading events directory:", error);
+        logger.error('Error reading events directory:', error);
     }
-} 
+}
 export function unloadEvents(client: Client): void {
     client.removeAllListeners();
 }

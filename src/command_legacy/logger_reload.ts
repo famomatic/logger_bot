@@ -2,7 +2,11 @@ import { Message, PermissionsBitField, Client, Events, Collection } from 'discor
 import dotenv from 'dotenv';
 import { LegacyCommand } from '../utils/loadLegacyCommands.js';
 import { loadLegacyCommands, unloadLegacyCommands } from '../utils/loadLegacyCommands.js';
-import { loadSlashCommands, unloadSlashCommands, SlashCommand } from '../utils/loadSlashCommands.js';
+import {
+    loadSlashCommands,
+    unloadSlashCommands,
+    SlashCommand,
+} from '../utils/loadSlashCommands.js';
 import { loadEvents, unloadEvents } from '../utils/loadEvents.js';
 import { config, reloadConfig } from '../config/config.js';
 import { logger } from '../utils/logger.js';
@@ -31,10 +35,19 @@ const command: LegacyCommand = {
             message.client.on(Events.InteractionCreate, (i) => {
                 void (async () => {
                     if (!i.isChatInputCommand()) return;
-                    const clientWithCommands = message.client as Client & { commands?: Collection<string, SlashCommand> };
+                    const clientWithCommands = message.client as Client & {
+                        commands?: Collection<string, SlashCommand>;
+                    };
                     const cmd = clientWithCommands.commands?.get(i.commandName);
                     if (!cmd) return;
-                    try { await cmd.execute(i, message.client); } catch (err) { logger.error(`Error executing command ${i.commandName}:`, err instanceof Error ? err : new Error(String(err))); }
+                    try {
+                        await cmd.execute(i, message.client);
+                    } catch (err) {
+                        logger.error(
+                            `Error executing command ${i.commandName}:`,
+                            err instanceof Error ? err : new Error(String(err)),
+                        );
+                    }
                 })();
             });
             await reply.edit('🔄 봇이 성공적으로 리로드되었습니다.');

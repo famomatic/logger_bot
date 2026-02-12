@@ -11,86 +11,114 @@ function formatStickerChange(change: AuditLogChange): string {
         // asset: '파일' (변경 감지 어려움), available: '사용 가능 여부' 등
     };
     const keyName = keyMap[change.key] ?? change.key;
-    const oldStr = typeof change.old === 'object' && change.old !== null ? JSON.stringify(change.old) : String(change.old ?? '');
-    const newStr = typeof change.new === 'object' && change.new !== null ? JSON.stringify(change.new) : String(change.new ?? '');
+    const oldStr =
+        typeof change.old === 'object' && change.old !== null
+            ? JSON.stringify(change.old)
+            : String(change.old ?? '');
+    const newStr =
+        typeof change.new === 'object' && change.new !== null
+            ? JSON.stringify(change.new)
+            : String(change.new ?? '');
     return `${keyName}: '${oldStr}' -> '${newStr}'`;
 }
 
 const event = {
-  name: Events.GuildStickerUpdate,
-  async execute(oldSticker: Sticker, newSticker: Sticker) {
-    // 변경 사항 직접 비교 (Audit Log 전에 기본 확인)
-    if (oldSticker.name === newSticker.name &&
-        oldSticker.description === newSticker.description &&
-        oldSticker.tags === newSticker.tags) {
-        return; // 주요 속성 변경 없으면 종료
-    }
-    if (!newSticker.guild) return; // 길드 정보 없으면 종료
+    name: Events.GuildStickerUpdate,
+    async execute(oldSticker: Sticker, newSticker: Sticker) {
+        // 변경 사항 직접 비교 (Audit Log 전에 기본 확인)
+        if (
+            oldSticker.name === newSticker.name &&
+            oldSticker.description === newSticker.description &&
+            oldSticker.tags === newSticker.tags
+        ) {
+            return; // 주요 속성 변경 없으면 종료
+        }
+        if (!newSticker.guild) return; // 길드 정보 없으면 종료
 
-    const eventType = 'stickerUpdate';
-    const guild = newSticker.guild;
-    const guildId = guild.id;
-    const targetId = newSticker.id; // 변경된 스티커 ID
-    const timestamp = new Date();
-    let executorId: string | null = null;
-    let changesDescription = '';
+        const eventType = 'stickerUpdate';
+        const guild = newSticker.guild;
+        const guildId = guild.id;
+        const targetId = newSticker.id; // 변경된 스티커 ID
+        const timestamp = new Date();
+        let executorId: string | null = null;
+        let changesDescription = '';
 
-    // Audit Log 조회 시도
-    try {
-        const fetchedLogs = await guild.fetchAuditLogs({
-            limit: 5,
-            type: AuditLogEvent.StickerUpdate, // 91
-        });
-        const updateLog = fetchedLogs.entries.find(entry =>
-            entry.target?.id === targetId &&
-            Math.abs(Date.now() - entry.createdTimestamp) < 5000
-        );
+        // Audit Log 조회 시도
+        try {
+            const fetchedLogs = await guild.fetchAuditLogs({
+                limit: 5,
+                type: AuditLogEvent.StickerUpdate, // 91
+            });
+            const updateLog = fetchedLogs.entries.find(
+                (entry) =>
+                    entry.target?.id === targetId &&
+                    Math.abs(Date.now() - entry.createdTimestamp) < 5000,
+            );
 
-        if (updateLog) {
-            executorId = updateLog.executor?.id ?? null;
-            changesDescription = updateLog.changes?.map(formatStickerChange).join('\n') ?? '변경 내역을 Audit Log에서 찾을 수 없음';
-        } else {
-            logger.warn(`Could not find exact Audit Log entry for ${eventType} (sticker ${targetId}) in guild ${guildId}. Executor and precise changes might be missing.`);
-            // Audit Log 못 찾으면 직접 비교 결과 사용
+            if (updateLog) {
+                executorId = updateLog.executor?.id ?? null;
+                changesDescription =
+                    updateLog.changes?.map(formatStickerChange).join('\n') ??
+                    '변경 내역을 Audit Log에서 찾을 수 없음';
+            } else {
+                logger.warn(
+                    `Could not find exact Audit Log entry for ${eventType} (sticker ${targetId}) in guild ${guildId}. Executor and precise changes might be missing.`,
+                );
+                // Audit Log 못 찾으면 직접 비교 결과 사용
+                const detectedChanges: string[] = [];
+                if (oldSticker.name !== newSticker.name)
+                    detectedChanges.push(`이름: '${oldSticker.name}' -> '${newSticker.name}'`);
+                if (oldSticker.description !== newSticker.description)
+                    detectedChanges.push(
+                        `설명: '${oldSticker.description}' -> '${newSticker.description}'`,
+                    );
+                if (oldSticker.tags !== newSticker.tags)
+                    detectedChanges.push(`태그: '${oldSticker.tags}' -> '${newSticker.tags}'`);
+                changesDescription = detectedChanges.join('\n');
+            }
+        } catch (error) {
+            logger.error(`Failed to fetch Audit Logs for ${eventType} in guild ${guildId}:`, error);
+            // 에러 시 직접 비교 결과 사용
             const detectedChanges: string[] = [];
-            if (oldSticker.name !== newSticker.name) detectedChanges.push(`이름: '${oldSticker.name}' -> '${newSticker.name}'`);
-            if (oldSticker.description !== newSticker.description) detectedChanges.push(`설명: '${oldSticker.description}' -> '${newSticker.description}'`);
-            if (oldSticker.tags !== newSticker.tags) detectedChanges.push(`태그: '${oldSticker.tags}' -> '${newSticker.tags}'`);
+            if (oldSticker.name !== newSticker.name)
+                detectedChanges.push(`이름: '${oldSticker.name}' -> '${newSticker.name}'`);
+            if (oldSticker.description !== newSticker.description)
+                detectedChanges.push(
+                    `설명: '${oldSticker.description}' -> '${newSticker.description}'`,
+                );
+            if (oldSticker.tags !== newSticker.tags)
+                detectedChanges.push(`태그: '${oldSticker.tags}' -> '${newSticker.tags}'`);
             changesDescription = detectedChanges.join('\n');
         }
-    } catch (error) {
-        logger.error(`Failed to fetch Audit Logs for ${eventType} in guild ${guildId}:`, error);
-        // 에러 시 직접 비교 결과 사용
-        const detectedChanges: string[] = [];
-        if (oldSticker.name !== newSticker.name) detectedChanges.push(`이름: '${oldSticker.name}' -> '${newSticker.name}'`);
-        if (oldSticker.description !== newSticker.description) detectedChanges.push(`설명: '${oldSticker.description}' -> '${newSticker.description}'`);
-        if (oldSticker.tags !== newSticker.tags) detectedChanges.push(`태그: '${oldSticker.tags}' -> '${newSticker.tags}'`);
-        changesDescription = detectedChanges.join('\n');
-    }
 
-    // 위에서 return되지 않았다면 변경사항이 있는 것
-    const dataToStore = {
-      stickerId: targetId,
-      stickerName: newSticker.name,
-      changes: changesDescription,
-      executorUserId: executorId,
-    };
+        // 위에서 return되지 않았다면 변경사항이 있는 것
+        const dataToStore = {
+            stickerId: targetId,
+            stickerName: newSticker.name,
+            changes: changesDescription,
+            executorUserId: executorId,
+        };
 
-    try {
-      await logEvent(
-        eventType,
-        guildId,
-        executorId,
-        null, // channel_id is null for this event
-        targetId, // target_id: 변경된 스티커 ID
-        dataToStore,
-        timestamp
-      );
-      logger.debug(`Logged ${eventType} event for sticker ${newSticker.name} (${targetId}) in guild ${guildId}`);
-    } catch (error) {
-      logger.error(`Error occurred while trying to log ${eventType} event for sticker ${targetId}:`, error);
-    }
-  },
+        try {
+            await logEvent(
+                eventType,
+                guildId,
+                executorId,
+                null, // channel_id is null for this event
+                targetId, // target_id: 변경된 스티커 ID
+                dataToStore,
+                timestamp,
+            );
+            logger.debug(
+                `Logged ${eventType} event for sticker ${newSticker.name} (${targetId}) in guild ${guildId}`,
+            );
+        } catch (error) {
+            logger.error(
+                `Error occurred while trying to log ${eventType} event for sticker ${targetId}:`,
+                error,
+            );
+        }
+    },
 } as const;
 
-export default event; 
+export default event;

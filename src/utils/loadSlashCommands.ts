@@ -1,13 +1,23 @@
 import fs from 'fs';
 import path from 'path';
-import { Client, Collection, REST, Routes, SlashCommandBuilder, CommandInteraction, SlashCommandOptionsOnlyBuilder } from 'discord.js';
+import {
+    Client,
+    Collection,
+    REST,
+    Routes,
+    SlashCommandBuilder,
+    CommandInteraction,
+    SlashCommandOptionsOnlyBuilder,
+} from 'discord.js';
 import { fileURLToPath, URL } from 'url';
 import { logger } from './logger.js';
 import { config } from '../config/config.js';
 
 // 슬래시 커맨드 타입 정의
 export interface SlashCommand {
-    data: SlashCommandOptionsOnlyBuilder | Omit<SlashCommandBuilder, "addSubcommand" | "addSubcommandGroup">;
+    data:
+        | SlashCommandOptionsOnlyBuilder
+        | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>;
     execute: (interaction: CommandInteraction, client: Client) => Promise<void>;
 }
 
@@ -27,11 +37,11 @@ export async function loadSlashCommands(client: Client): Promise<void> {
 
     try {
         if (!fs.existsSync(commandsPath) || !fs.lstatSync(commandsPath).isDirectory()) {
-             logger.warn(`Slash command directory not found: ${commandsPath}`);
-             return;
+            logger.warn(`Slash command directory not found: ${commandsPath}`);
+            return;
         }
 
-        const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+        const commandFiles = fs.readdirSync(commandsPath).filter((file) => file.endsWith('.js'));
         logger.info(`Loading ${commandFiles.length} slash commands...`);
 
         for (const file of commandFiles) {
@@ -41,7 +51,7 @@ export async function loadSlashCommands(client: Client): Promise<void> {
                 // 고유 쿼리 파라미터 추가로 캐시 무효화
                 const fileUrl = new URL(`file:///${resolvedPath.replace(/\\/g, '/')}`);
                 fileUrl.searchParams.set('update', Date.now().toString());
-                const commandModule = await import(fileUrl.href) as { command: SlashCommand };
+                const commandModule = (await import(fileUrl.href)) as { command: SlashCommand };
                 const command = commandModule.command;
 
                 if (command?.data && typeof command.execute === 'function') {
@@ -52,7 +62,7 @@ export async function loadSlashCommands(client: Client): Promise<void> {
                     logger.warn(`The slash command at ${filePath} is missing required properties.`);
                 }
             } catch (fileLoadError) {
-                 logger.error(`Error loading slash command file ${filePath}:`, fileLoadError);
+                logger.error(`Error loading slash command file ${filePath}:`, fileLoadError);
             }
         }
 
@@ -60,33 +70,37 @@ export async function loadSlashCommands(client: Client): Promise<void> {
         if (commandDataToRegister.length > 0) {
             // clientId 존재 확인
             if (!config.clientId || !config.discordBotToken) {
-                logger.error('clientId or discordBotToken missing in config. Cannot register slash commands.');
+                logger.error(
+                    'clientId or discordBotToken missing in config. Cannot register slash commands.',
+                );
                 return;
             }
             const rest = new REST({ version: '10' }).setToken(config.discordBotToken);
-            logger.info(`Registering ${commandDataToRegister.length} application (/) commands globally.`);
+            logger.info(
+                `Registering ${commandDataToRegister.length} application (/) commands globally.`,
+            );
 
             try {
                 // 전역 등록 실행 (devGuildId 체크 제거)
-                await rest.put(
-                    Routes.applicationCommands(config.clientId),
-                    { body: commandDataToRegister },
+                await rest.put(Routes.applicationCommands(config.clientId), {
+                    body: commandDataToRegister,
+                });
+                logger.success(
+                    `Successfully registered ${commandDataToRegister.length} application commands globally.`,
                 );
-                logger.success(`Successfully registered ${commandDataToRegister.length} application commands globally.`);
-
             } catch (error) {
                 logger.error('Error registering global application commands:', error);
             }
         } else {
-             logger.info('No application commands found to register.');
+            logger.info('No application commands found to register.');
         }
         // ---------------------------------
 
         logger.success(`Successfully loaded ${client.commands.size} slash commands locally.`);
     } catch (error) {
-        logger.error("Error reading slash commands directory:", error);
+        logger.error('Error reading slash commands directory:', error);
     }
-} 
+}
 export function unloadSlashCommands(client: Client): void {
     client.commands?.clear?.();
 }

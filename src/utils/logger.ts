@@ -10,40 +10,40 @@ import { nodeProfilingIntegration } from '@sentry/profiling-node';
 import { getDefaultIntegrations } from '@sentry/node';
 
 // Sentry 초기화 (DSN이 설정된 경우에만)
-// --- Sentry 재활성화 --- 
+// --- Sentry 재활성화 ---
 if (config.sentryDsn) {
-  try {
-    const integrations = getDefaultIntegrations({}).filter(
-        (integration: { name: string }) => integration.name !== 'Pg'
-    );
-    integrations.push(nodeProfilingIntegration());
+    try {
+        const integrations = getDefaultIntegrations({}).filter(
+            (integration: { name: string }) => integration.name !== 'Pg',
+        );
+        integrations.push(nodeProfilingIntegration());
 
-    Sentry.init({
-      dsn: config.sentryDsn,
-      integrations: integrations,
-      tracesSampleRate: 1.0,
-      profilesSampleRate: 1.0,
-      environment: config.nodeEnv,
-    });
-    console.log(chalk.green('Sentry initialized (Pg integration disabled).'));
-  } catch (error) {
-      console.error(chalk.red('Failed to initialize Sentry:'), error);
-      console.log(chalk.yellow('Sentry integration disabled due to initialization error.'));
-      config.sentryDsn = undefined;
-  }
+        Sentry.init({
+            dsn: config.sentryDsn,
+            integrations: integrations,
+            tracesSampleRate: 1.0,
+            profilesSampleRate: 1.0,
+            environment: config.nodeEnv,
+        });
+        console.log(chalk.green('Sentry initialized (Pg integration disabled).'));
+    } catch (error) {
+        console.error(chalk.red('Failed to initialize Sentry:'), error);
+        console.log(chalk.yellow('Sentry integration disabled due to initialization error.'));
+        config.sentryDsn = undefined;
+    }
 } else {
-  console.log(chalk.yellow('Sentry DSN not found, Sentry integration disabled.'));
+    console.log(chalk.yellow('Sentry DSN not found, Sentry integration disabled.'));
 }
-// --- -------------- --- 
+// --- -------------- ---
 // console.log(chalk.yellow('Sentry integration is temporarily disabled for debugging purposes.'));
 
 // 로그 레벨별 색상 정의
 const levelColors = {
-  info: chalk.blueBright,
-  warn: chalk.yellowBright,
-  error: chalk.redBright,
-  debug: chalk.gray,
-  success: chalk.greenBright,
+    info: chalk.blueBright,
+    warn: chalk.yellowBright,
+    error: chalk.redBright,
+    debug: chalk.gray,
+    success: chalk.greenBright,
 };
 
 // 타임스탬프 포맷 함수
@@ -51,68 +51,72 @@ const getTimestamp = () => new Date().toISOString();
 
 // 기본 로거 함수
 const log = (level: keyof typeof levelColors, ...args: unknown[]) => {
-  const color = levelColors[level] ?? chalk.white;
-  const timestamp = chalk.cyan(`[${getTimestamp()}]`);
-  const levelTag = color(`[${level.toUpperCase()}]`);
+    const color = levelColors[level] ?? chalk.white;
+    const timestamp = chalk.cyan(`[${getTimestamp()}]`);
+    const levelTag = color(`[${level.toUpperCase()}]`);
 
-  // 객체나 배열을 보기 좋게 출력
-  const formattedArgs = args.map(arg =>
-    typeof arg === 'object' && arg !== null ? JSON.stringify(arg, null, 2) : arg
-  );
+    // 객체나 배열을 보기 좋게 출력
+    const formattedArgs = args.map((arg) =>
+        typeof arg === 'object' && arg !== null ? JSON.stringify(arg, null, 2) : arg,
+    );
 
-  console.log(timestamp, levelTag, ...formattedArgs);
+    console.log(timestamp, levelTag, ...formattedArgs);
 };
 
 // 공개할 로그 함수들
 export const logger = {
-  info: (...args: unknown[]) => log('info', ...args),
-  warn: (...args: unknown[]) => log('warn', ...args),
-  error: (message: string, error?: unknown, ...args: unknown[]) => {
-    log('error', message, error ?? '', ...args);
-    // Sentry 재활성화
-    if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
-      const errorToCapture = error instanceof Error ? error : new Error(String(message));
-      Sentry.captureException(errorToCapture, {
-        extra: { details: args },
-      });
-    }
-  },
-  debug: (...args: unknown[]) => {
-    if (config.nodeEnv === 'development') {
-      log('debug', ...args);
-    }
-  },
-  success: (...args: unknown[]) => log('success', ...args),
+    info: (...args: unknown[]) => log('info', ...args),
+    warn: (...args: unknown[]) => log('warn', ...args),
+    error: (message: string, error?: unknown, ...args: unknown[]) => {
+        log('error', message, error ?? '', ...args);
+        // Sentry 재활성화
+        if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
+            const errorToCapture = error instanceof Error ? error : new Error(String(message));
+            Sentry.captureException(errorToCapture, {
+                extra: { details: args },
+            });
+        }
+    },
+    debug: (...args: unknown[]) => {
+        if (config.nodeEnv === 'development') {
+            log('debug', ...args);
+        }
+    },
+    success: (...args: unknown[]) => log('success', ...args),
 };
 
 // 예기치 않은 에러 및 처리되지 않은 거부 처리
 process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
-  // Sentry 재활성화
-  if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
-    Sentry.captureException(err, (scope: Sentry.Scope) => {
-        scope.setLevel('fatal');
-        return scope;
-    });
-    Promise.resolve(Sentry.close(2000))
-        .catch(closeErr => console.error(chalk.red('Sentry close error on uncaughtException:'), closeErr))
-        .finally(() => process.exit(1));
-  } else {
-    process.exit(1);
-  }
+    logger.error('Uncaught Exception:', err);
+    // Sentry 재활성화
+    if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
+        Sentry.captureException(err, (scope: Sentry.Scope) => {
+            scope.setLevel('fatal');
+            return scope;
+        });
+        Promise.resolve(Sentry.close(2000))
+            .catch((closeErr) =>
+                console.error(chalk.red('Sentry close error on uncaughtException:'), closeErr),
+            )
+            .finally(() => process.exit(1));
+    } else {
+        process.exit(1);
+    }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  // Sentry 재활성화
-  if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
-    Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)), {
-        extra: { promiseDetails: promise },
-    });
-    Promise.resolve(Sentry.close(2000))
-        .catch(closeErr => console.error(chalk.red('Sentry close error on unhandledRejection:'), closeErr))
-        .finally(() => process.exit(1));
-  } else {
-    process.exit(1);
-  }
+    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Sentry 재활성화
+    if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
+        Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)), {
+            extra: { promiseDetails: promise },
+        });
+        Promise.resolve(Sentry.close(2000))
+            .catch((closeErr) =>
+                console.error(chalk.red('Sentry close error on unhandledRejection:'), closeErr),
+            )
+            .finally(() => process.exit(1));
+    } else {
+        process.exit(1);
+    }
 });

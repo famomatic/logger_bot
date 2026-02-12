@@ -1,4 +1,13 @@
-import { Message, PermissionsBitField, GuildTextBasedChannel, Collection, Client, Attachment, Sticker, Guild } from 'discord.js';
+import {
+    Message,
+    PermissionsBitField,
+    GuildTextBasedChannel,
+    Collection,
+    Client,
+    Attachment,
+    Sticker,
+    Guild,
+} from 'discord.js';
 import axios from 'axios';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
@@ -17,7 +26,12 @@ interface AttachmentData {
     discordUrl: string;
 }
 
-function createWebDAVPath(guildId: string, channelId: string, messageId: string, attachment: Attachment): string {
+function createWebDAVPath(
+    guildId: string,
+    channelId: string,
+    messageId: string,
+    attachment: Attachment,
+): string {
     const safeName = sanitizeFilename(attachment.name ?? 'file');
     return `${guildId}/${channelId}/${messageId}/${attachment.id}_${safeName}`;
 }
@@ -34,7 +48,7 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
             const errorMessage = err instanceof Error ? err.message : String(err);
             logger.warn(`Failed to download ${url} on attempt ${attempt}: ${errorMessage}`);
             if (attempt < maxRetries) {
-                await new Promise(r => setTimeout(r, 1000 * attempt));
+                await new Promise((r) => setTimeout(r, 1000 * attempt));
             }
         }
     }
@@ -61,17 +75,25 @@ const command: LegacyCommand = {
 
         const reply = await message.reply(`길드 ${targetGuildId}의 모든 메시지를 기록합니다...`);
 
-        const client = message.client as Client & { legacyCommands?: Collection<string, LegacyCommand> };
-        logger.info(`Initiating bulk message logging for guild ${targetGuildId} by ${message.author.tag} (${message.author.id})`);
+        const client = message.client as Client & {
+            legacyCommands?: Collection<string, LegacyCommand>;
+        };
+        logger.info(
+            `Initiating bulk message logging for guild ${targetGuildId} by ${message.author.tag} (${message.author.id})`,
+        );
 
-        const legacyCommandPrefixes = client.legacyCommands ? Array.from(client.legacyCommands.keys()) : [];
+        const legacyCommandPrefixes = client.legacyCommands
+            ? Array.from(client.legacyCommands.keys())
+            : [];
 
         let guild: Guild;
         try {
             guild = await client.guilds.fetch(targetGuildId);
         } catch (error) {
             logger.warn(`Could not fetch target guild ${targetGuildId}:`, error);
-            await reply.edit(`오류: 대상 서버 ID(${targetGuildId})를 찾을 수 없거나 봇이 해당 서버에 없습니다.`);
+            await reply.edit(
+                `오류: 대상 서버 ID(${targetGuildId})를 찾을 수 없거나 봇이 해당 서버에 없습니다.`,
+            );
             return;
         }
 
@@ -82,17 +104,30 @@ const command: LegacyCommand = {
         const startTime = Date.now();
 
         try {
-            const channels = guild.channels.cache.filter((ch): ch is GuildTextBasedChannel =>
-                ch.isTextBased() && !ch.isThread() && ch.viewable && (ch.permissionsFor(guild.members.me!)?.has(PermissionsBitField.Flags.ReadMessageHistory) ?? false)
+            const channels = guild.channels.cache.filter(
+                (ch): ch is GuildTextBasedChannel =>
+                    ch.isTextBased() &&
+                    !ch.isThread() &&
+                    ch.viewable &&
+                    (ch
+                        .permissionsFor(guild.members.me!)
+                        ?.has(PermissionsBitField.Flags.ReadMessageHistory) ??
+                        false),
             );
             const totalChannelsToProcess = channels.size;
             if (totalChannelsToProcess === 0) {
-                logger.warn(`No accessible channels with ReadMessageHistory perm found in guild ${targetGuildId}`);
-                await reply.edit('오류: 이 서버에서 메시지 기록을 읽을 수 있는 채널을 찾을 수 없습니다. (봇 권한 확인 필요)');
+                logger.warn(
+                    `No accessible channels with ReadMessageHistory perm found in guild ${targetGuildId}`,
+                );
+                await reply.edit(
+                    '오류: 이 서버에서 메시지 기록을 읽을 수 있는 채널을 찾을 수 없습니다. (봇 권한 확인 필요)',
+                );
                 return;
             }
 
-            await reply.edit(`길드 '${guild.name}' (${targetGuildId}) 내 ${totalChannelsToProcess}개 채널의 모든 메시지를 확인합니다...`);
+            await reply.edit(
+                `길드 '${guild.name}' (${targetGuildId}) 내 ${totalChannelsToProcess}개 채널의 모든 메시지를 확인합니다...`,
+            );
 
             for (const channel of channels.values()) {
                 logger.debug(`Processing channel ${channel.name} (${channel.id})`);
@@ -100,8 +135,14 @@ const command: LegacyCommand = {
                 let fetchMore = true;
                 while (fetchMore) {
                     try {
-                        const messages: Collection<string, Message> = await channel.messages.fetch({ limit: 100, before: lastMessageId });
-                        if (messages.size === 0) { fetchMore = false; continue; }
+                        const messages: Collection<string, Message> = await channel.messages.fetch({
+                            limit: 100,
+                            before: lastMessageId,
+                        });
+                        if (messages.size === 0) {
+                            fetchMore = false;
+                            continue;
+                        }
                         lastMessageId = messages.lastKey();
                         if (messages.size > 0) {
                             const tasks: Promise<void>[] = [];
@@ -111,10 +152,14 @@ const command: LegacyCommand = {
                                 const isAuthorDeveloper = config.getDevLevel(msg.author.id) >= 1;
                                 let isLegacyCommandByDev = false;
                                 if (isAuthorDeveloper && legacyCommandPrefixes.length > 0) {
-                                    const matchedPrefix = legacyCommandPrefixes.find(prefix => msg.content.startsWith(prefix));
+                                    const matchedPrefix = legacyCommandPrefixes.find((prefix) =>
+                                        msg.content.startsWith(prefix),
+                                    );
                                     if (matchedPrefix) {
                                         const isExactMatch = msg.content === matchedPrefix;
-                                        const isFollowedBySpace = msg.content.startsWith(`${matchedPrefix} `);
+                                        const isFollowedBySpace = msg.content.startsWith(
+                                            `${matchedPrefix} `,
+                                        );
                                         if (isExactMatch || isFollowedBySpace) {
                                             isLegacyCommandByDev = true;
                                         }
@@ -131,13 +176,29 @@ const command: LegacyCommand = {
                                                 let downloadError: string | null = null;
                                                 if (config.storage.type) {
                                                     try {
-                                                        const fileBuffer = await downloadWithRetry(attachment.url, 3);
-                                                        const relativePath = createWebDAVPath(guild.id, msg.channel.id, msg.id, attachment);
-                                                        webdavPath = await storageManager.upload(relativePath, fileBuffer);
+                                                        const fileBuffer = await downloadWithRetry(
+                                                            attachment.url,
+                                                            3,
+                                                        );
+                                                        const relativePath = createWebDAVPath(
+                                                            guild.id,
+                                                            msg.channel.id,
+                                                            msg.id,
+                                                            attachment,
+                                                        );
+                                                        webdavPath = await storageManager.upload(
+                                                            relativePath,
+                                                            fileBuffer,
+                                                        );
                                                     } catch (error) {
                                                         const err = error as Error;
-                                                        downloadError = err.message || 'Unknown download/upload error';
-                                                        logger.error(`Failed to download/upload attachment ${attachment.id} (${attachment.name}):`, err);
+                                                        downloadError =
+                                                            err.message ||
+                                                            'Unknown download/upload error';
+                                                        logger.error(
+                                                            `Failed to download/upload attachment ${attachment.id} (${attachment.name}):`,
+                                                            err,
+                                                        );
                                                     }
                                                 }
                                                 processedAttachments.push({
@@ -147,16 +208,16 @@ const command: LegacyCommand = {
                                                     filename: attachment.name,
                                                     size: attachment.size,
                                                     contentType: attachment.contentType,
-                                                    discordUrl: attachment.url
+                                                    discordUrl: attachment.url,
                                                 });
                                             }
                                         }
 
-                                        const reactions = msg.reactions.cache.map(r => ({
+                                        const reactions = msg.reactions.cache.map((r) => ({
                                             emojiName: r.emoji.name,
                                             emojiId: r.emoji.id,
                                             emojiAnimated: r.emoji.animated,
-                                            count: r.count
+                                            count: r.count,
                                         }));
 
                                         const dataToStore = {
@@ -165,13 +226,28 @@ const command: LegacyCommand = {
                                             authorTag: msg.author.tag,
                                             authorUsername: msg.author.username,
                                             attachments: processedAttachments,
-                                            stickers: msg.stickers.map((s: Sticker) => ({ id: s.id, name: s.name, format: s.format })),
-                                            reactions: reactions
+                                            stickers: msg.stickers.map((s: Sticker) => ({
+                                                id: s.id,
+                                                name: s.name,
+                                                format: s.format,
+                                            })),
+                                            reactions: reactions,
                                         };
-                                        const logged = await logEvent('messageCreate', guild.id, msg.author.id, msg.channel.id, msg.id, dataToStore, msg.createdAt);
+                                        const logged = await logEvent(
+                                            'messageCreate',
+                                            guild.id,
+                                            msg.author.id,
+                                            msg.channel.id,
+                                            msg.id,
+                                            dataToStore,
+                                            msg.createdAt,
+                                        );
                                         if (logged) newlyLoggedCount++;
                                     } catch (logError) {
-                                        logger.error(`Failed to log/check message ${msg.id} from channel ${channel.id}:`, logError);
+                                        logger.error(
+                                            `Failed to log/check message ${msg.id} from channel ${channel.id}:`,
+                                            logError,
+                                        );
                                         errorCount++;
                                     }
                                 })();
@@ -183,12 +259,19 @@ const command: LegacyCommand = {
                     } catch (error) {
                         const fetchError = error as { code?: number; message?: string };
                         // 50013: Missing Access
-                        if (fetchError.code === 50013 || fetchError.message?.includes('Missing Access')) {
-                           logger.warn(`Skipping channel ${channel.id} (${channel.name}) due to Missing Access permissions.`);
-                           fetchMore = false; // Stop fetching for this channel
-                           continue;
+                        if (
+                            fetchError.code === 50013 ||
+                            fetchError.message?.includes('Missing Access')
+                        ) {
+                            logger.warn(
+                                `Skipping channel ${channel.id} (${channel.name}) due to Missing Access permissions.`,
+                            );
+                            fetchMore = false; // Stop fetching for this channel
+                            continue;
                         }
-                        logger.error(`Failed to fetch messages in channel ${channel.id}: ${fetchError.message}`);
+                        logger.error(
+                            `Failed to fetch messages in channel ${channel.id}: ${fetchError.message}`,
+                        );
                         errorCount++;
                         fetchMore = false;
                     }
@@ -205,10 +288,15 @@ const command: LegacyCommand = {
             if (errorCount > 0) finalReply += `> - **오류 발생:** ⚠️ ${errorCount}개\n`;
             finalReply += `> - **총 소요 시간:** ${duration}초`;
             await reply.edit(finalReply);
-            logger.info(`Finished bulk message logging check for guild ${targetGuildId}. Processed ${processedCount} messages, newly logged ${newlyLoggedCount} with ${errorCount} errors in ${duration}s.`);
+            logger.info(
+                `Finished bulk message logging check for guild ${targetGuildId}. Processed ${processedCount} messages, newly logged ${newlyLoggedCount} with ${errorCount} errors in ${duration}s.`,
+            );
         } catch (error) {
             const err = error as Error;
-            logger.error(`Critical error during bulk message logging check for guild ${targetGuildId}:`, err);
+            logger.error(
+                `Critical error during bulk message logging check for guild ${targetGuildId}:`,
+                err,
+            );
             await reply.edit(`오류 발생: ${String(err.message || err).substring(0, 1800)}`);
         }
     },

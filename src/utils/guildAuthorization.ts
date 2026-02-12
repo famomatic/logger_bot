@@ -8,14 +8,16 @@ export async function leaveUnauthorizedGuild(guild: Guild): Promise<void> {
     let inviter = null;
     try {
         const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.BotAdd, limit: 5 });
-        const entry = logs.entries.find(e => e.target?.id === guild.client.user.id);
+        const entry = logs.entries.find((e) => e.target?.id === guild.client.user.id);
         inviter = entry?.executor ?? null;
     } catch (err) {
         logger.error('Failed to fetch BotAdd audit log:', err);
     }
     try {
         const user = inviter ?? (await guild.fetchOwner()).user;
-        await user.send(`해당 길드 (${guild.name})는 승인되지 않았습니다. 봇이 이 길드를 나갑니다.`);
+        await user.send(
+            `해당 길드 (${guild.name})는 승인되지 않았습니다. 봇이 이 길드를 나갑니다.`,
+        );
     } catch (err) {
         if (err instanceof DiscordAPIError && err.code === 50007) {
             logger.warn('Cannot send unauthorized guild DM: DM disabled or bot blocked.');

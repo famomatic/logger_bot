@@ -20,26 +20,26 @@
 ## 시작하기
 
 1. 의존성 설치
-   ```bash
-   npm install
-   ```
+    ```bash
+    npm install
+    ```
 2. 프로젝트 빌드
-   ```bash
-   npm run build
-   ```
+    ```bash
+    npm run build
+    ```
 3. `.env.example` 파일을 참고해 환경 변수를 설정
 4. 데이터베이스 마이그레이션 실행
-   ```bash
-   npm run db:migrate
-   ```
+    ```bash
+    npm run db:migrate
+    ```
 5. 봇 실행
-   ```bash
-   npm start
-   ```
+    ```bash
+    npm start
+    ```
 6. 봇을 실행하면 자동으로 샤딩이 관리됩니다.
-   ```bash
-   npm start
-   ```
+    ```bash
+    npm start
+    ```
 
 ## 환경 변수 예시
 

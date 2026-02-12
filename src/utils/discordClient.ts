@@ -25,4 +25,3 @@ export function destroyDiscordClient() {
 }
 
 export default discordClient;
-

@@ -14,8 +14,14 @@ function formatThreadChange(change: AuditLogChange): string {
     };
     const keyName = keyMap[change.key] ?? change.key;
 
-    let oldValue = typeof change.old === 'object' && change.old !== null ? JSON.stringify(change.old) : String(change.old ?? '');
-    let newValue = typeof change.new === 'object' && change.new !== null ? JSON.stringify(change.new) : String(change.new ?? '');
+    let oldValue =
+        typeof change.old === 'object' && change.old !== null
+            ? JSON.stringify(change.old)
+            : String(change.old ?? '');
+    let newValue =
+        typeof change.new === 'object' && change.new !== null
+            ? JSON.stringify(change.new)
+            : String(change.new ?? '');
 
     // 예시: auto_archive_duration 값 변환 (분 단위)
     if (change.key === 'auto_archive_duration') {
@@ -27,93 +33,123 @@ function formatThreadChange(change: AuditLogChange): string {
 }
 
 const event = {
-  name: Events.ThreadUpdate,
-  async execute(oldThread: ThreadChannel, newThread: ThreadChannel) {
-    // 주요 속성 변경 감지
-    if (oldThread.name === newThread.name &&
-        oldThread.archived === newThread.archived &&
-        oldThread.locked === newThread.locked &&
-        oldThread.autoArchiveDuration === newThread.autoArchiveDuration &&
-        oldThread.rateLimitPerUser === newThread.rateLimitPerUser) {
-        return; // 주요 변경 없으면 종료
-    }
+    name: Events.ThreadUpdate,
+    async execute(oldThread: ThreadChannel, newThread: ThreadChannel) {
+        // 주요 속성 변경 감지
+        if (
+            oldThread.name === newThread.name &&
+            oldThread.archived === newThread.archived &&
+            oldThread.locked === newThread.locked &&
+            oldThread.autoArchiveDuration === newThread.autoArchiveDuration &&
+            oldThread.rateLimitPerUser === newThread.rateLimitPerUser
+        ) {
+            return; // 주요 변경 없으면 종료
+        }
 
-    const eventType = 'threadUpdate';
-    const guild = newThread.guild;
-    const guildId = guild.id;
-    const targetId = newThread.id; // 변경된 스레드 ID
-    const parentChannelId = newThread.parentId;
-    const timestamp = new Date();
-    let executorId: string | null = null;
-    let changesDescription = '';
+        const eventType = 'threadUpdate';
+        const guild = newThread.guild;
+        const guildId = guild.id;
+        const targetId = newThread.id; // 변경된 스레드 ID
+        const parentChannelId = newThread.parentId;
+        const timestamp = new Date();
+        let executorId: string | null = null;
+        let changesDescription = '';
 
-    // Audit Log 조회 시도
-    try {
-        const fetchedLogs = await guild.fetchAuditLogs({
-            limit: 10,
-            type: AuditLogEvent.ThreadUpdate, // 111
-        });
-        const updateLog = fetchedLogs.entries.find(entry =>
-            entry.target?.id === targetId &&
-            Math.abs(Date.now() - entry.createdTimestamp) < 15000
-        );
+        // Audit Log 조회 시도
+        try {
+            const fetchedLogs = await guild.fetchAuditLogs({
+                limit: 10,
+                type: AuditLogEvent.ThreadUpdate, // 111
+            });
+            const updateLog = fetchedLogs.entries.find(
+                (entry) =>
+                    entry.target?.id === targetId &&
+                    Math.abs(Date.now() - entry.createdTimestamp) < 15000,
+            );
 
-        if (updateLog) {
-            executorId = updateLog.executor?.id ?? null;
-            changesDescription = updateLog.changes?.map(formatThreadChange).join('\n') ?? '변경 내역을 Audit Log에서 찾을 수 없음';
-        } else {
-            logger.warn(`Could not find exact Audit Log entry for ${eventType} (thread ${targetId}) in guild ${guildId}. Executor and precise changes might be missing.`);
-            // Audit Log 못 찾으면 직접 비교 결과 사용
+            if (updateLog) {
+                executorId = updateLog.executor?.id ?? null;
+                changesDescription =
+                    updateLog.changes?.map(formatThreadChange).join('\n') ??
+                    '변경 내역을 Audit Log에서 찾을 수 없음';
+            } else {
+                logger.warn(
+                    `Could not find exact Audit Log entry for ${eventType} (thread ${targetId}) in guild ${guildId}. Executor and precise changes might be missing.`,
+                );
+                // Audit Log 못 찾으면 직접 비교 결과 사용
+                const detectedChanges: string[] = [];
+                if (oldThread.name !== newThread.name)
+                    detectedChanges.push(`이름: '${oldThread.name}' -> '${newThread.name}'`);
+                if (oldThread.archived !== newThread.archived)
+                    detectedChanges.push(`보관됨: ${oldThread.archived} -> ${newThread.archived}`);
+                if (oldThread.locked !== newThread.locked)
+                    detectedChanges.push(`잠김: ${oldThread.locked} -> ${newThread.locked}`);
+                if (oldThread.autoArchiveDuration !== newThread.autoArchiveDuration)
+                    detectedChanges.push(
+                        `자동 보관 기간: ${oldThread.autoArchiveDuration}분 -> ${newThread.autoArchiveDuration}분`,
+                    );
+                if (oldThread.rateLimitPerUser !== newThread.rateLimitPerUser)
+                    detectedChanges.push(
+                        `슬로우 모드: ${oldThread.rateLimitPerUser}초 -> ${newThread.rateLimitPerUser}초`,
+                    );
+                changesDescription = detectedChanges.join('\n');
+            }
+        } catch (error) {
+            logger.error(`Failed to fetch Audit Logs for ${eventType} in guild ${guildId}:`, error);
+            // 에러 시 직접 비교 결과 사용
             const detectedChanges: string[] = [];
-            if (oldThread.name !== newThread.name) detectedChanges.push(`이름: '${oldThread.name}' -> '${newThread.name}'`);
-            if (oldThread.archived !== newThread.archived) detectedChanges.push(`보관됨: ${oldThread.archived} -> ${newThread.archived}`);
-            if (oldThread.locked !== newThread.locked) detectedChanges.push(`잠김: ${oldThread.locked} -> ${newThread.locked}`);
-            if (oldThread.autoArchiveDuration !== newThread.autoArchiveDuration) detectedChanges.push(`자동 보관 기간: ${oldThread.autoArchiveDuration}분 -> ${newThread.autoArchiveDuration}분`);
-            if (oldThread.rateLimitPerUser !== newThread.rateLimitPerUser) detectedChanges.push(`슬로우 모드: ${oldThread.rateLimitPerUser}초 -> ${newThread.rateLimitPerUser}초`);
+            if (oldThread.name !== newThread.name)
+                detectedChanges.push(`이름: '${oldThread.name}' -> '${newThread.name}'`);
+            if (oldThread.archived !== newThread.archived)
+                detectedChanges.push(`보관됨: ${oldThread.archived} -> ${newThread.archived}`);
+            if (oldThread.locked !== newThread.locked)
+                detectedChanges.push(`잠김: ${oldThread.locked} -> ${newThread.locked}`);
+            if (oldThread.autoArchiveDuration !== newThread.autoArchiveDuration)
+                detectedChanges.push(
+                    `자동 보관 기간: ${oldThread.autoArchiveDuration}분 -> ${newThread.autoArchiveDuration}분`,
+                );
+            if (oldThread.rateLimitPerUser !== newThread.rateLimitPerUser)
+                detectedChanges.push(
+                    `슬로우 모드: ${oldThread.rateLimitPerUser}초 -> ${newThread.rateLimitPerUser}초`,
+                );
             changesDescription = detectedChanges.join('\n');
         }
-    } catch (error) {
-        logger.error(`Failed to fetch Audit Logs for ${eventType} in guild ${guildId}:`, error);
-        // 에러 시 직접 비교 결과 사용
-        const detectedChanges: string[] = [];
-        if (oldThread.name !== newThread.name) detectedChanges.push(`이름: '${oldThread.name}' -> '${newThread.name}'`);
-        if (oldThread.archived !== newThread.archived) detectedChanges.push(`보관됨: ${oldThread.archived} -> ${newThread.archived}`);
-        if (oldThread.locked !== newThread.locked) detectedChanges.push(`잠김: ${oldThread.locked} -> ${newThread.locked}`);
-        if (oldThread.autoArchiveDuration !== newThread.autoArchiveDuration) detectedChanges.push(`자동 보관 기간: ${oldThread.autoArchiveDuration}분 -> ${newThread.autoArchiveDuration}분`);
-        if (oldThread.rateLimitPerUser !== newThread.rateLimitPerUser) detectedChanges.push(`슬로우 모드: ${oldThread.rateLimitPerUser}초 -> ${newThread.rateLimitPerUser}초`);
-        changesDescription = detectedChanges.join('\n');
-    }
 
-     // 변경 사항이 없으면 (오류 발생 후에도) 로깅하지 않음
-    if (!changesDescription) {
-        // logger.debug(`No detectable changes for ${eventType} (thread ${targetId})`);
-        return;
-    }
+        // 변경 사항이 없으면 (오류 발생 후에도) 로깅하지 않음
+        if (!changesDescription) {
+            // logger.debug(`No detectable changes for ${eventType} (thread ${targetId})`);
+            return;
+        }
 
-    const dataToStore = {
-      threadId: targetId,
-      threadName: newThread.name,
-      parentId: parentChannelId,
-      parentName: newThread.parent?.name,
-      changes: changesDescription,
-      executorUserId: executorId,
-    };
+        const dataToStore = {
+            threadId: targetId,
+            threadName: newThread.name,
+            parentId: parentChannelId,
+            parentName: newThread.parent?.name,
+            changes: changesDescription,
+            executorUserId: executorId,
+        };
 
-    try {
-      await logEvent(
-        eventType,
-        guildId,
-        executorId,
-        parentChannelId,
-        targetId,
-        dataToStore,
-        timestamp
-      );
-      logger.debug(`Logged ${eventType} event for thread ${newThread.name} (${targetId}) in guild ${guildId}`);
-    } catch (error) {
-      logger.error(`Error occurred while trying to log ${eventType} event for thread ${targetId}:`, error);
-    }
-  },
+        try {
+            await logEvent(
+                eventType,
+                guildId,
+                executorId,
+                parentChannelId,
+                targetId,
+                dataToStore,
+                timestamp,
+            );
+            logger.debug(
+                `Logged ${eventType} event for thread ${newThread.name} (${targetId}) in guild ${guildId}`,
+            );
+        } catch (error) {
+            logger.error(
+                `Error occurred while trying to log ${eventType} event for thread ${targetId}:`,
+                error,
+            );
+        }
+    },
 } as const;
 
-export default event; 
+export default event;

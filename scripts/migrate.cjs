@@ -25,7 +25,7 @@ CREATE INDEX IF NOT EXISTS idx_event_logs_user_id ON event_logs (user_id);
 CREATE INDEX IF NOT EXISTS idx_event_logs_target_id ON event_logs (target_id);
 `;
 
-// --- Added User Tokens Table and Trigger --- 
+// --- Added User Tokens Table and Trigger ---
 const createUserTokensTableQuery = `
 CREATE TABLE IF NOT EXISTS user_tokens (
     user_id VARCHAR(30) PRIMARY KEY,     -- Discord User ID
@@ -80,55 +80,54 @@ CREATE TABLE IF NOT EXISTS alert_subscriptions (
 // ---------------------------------------------
 
 (async () => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    logger.info('Creating event_logs table if it does not exist...');
-    await client.query(createEventLogsTableQuery);
-    logger.success('Table event_logs checked/created.');
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        logger.info('Creating event_logs table if it does not exist...');
+        await client.query(createEventLogsTableQuery);
+        logger.success('Table event_logs checked/created.');
 
-    logger.info('Creating event_logs indexes if they do not exist...');
-    await client.query(createIndexesQuery);
-    logger.success('Indexes for event_logs checked/created.');
+        logger.info('Creating event_logs indexes if they do not exist...');
+        await client.query(createIndexesQuery);
+        logger.success('Indexes for event_logs checked/created.');
 
-    // --- Add user_tokens table and trigger creation --- 
-    logger.info('Creating user_tokens table if it does not exist...');
-    await client.query(createUserTokensTableQuery);
-    logger.success('Table user_tokens checked/created.');
+        // --- Add user_tokens table and trigger creation ---
+        logger.info('Creating user_tokens table if it does not exist...');
+        await client.query(createUserTokensTableQuery);
+        logger.success('Table user_tokens checked/created.');
 
-    logger.info('Creating updated_at trigger function if it does not exist...');
-    await client.query(createUpdatedAtTriggerFunctionQuery);
-    logger.success('Function update_updated_at_column checked/created.');
+        logger.info('Creating updated_at trigger function if it does not exist...');
+        await client.query(createUpdatedAtTriggerFunctionQuery);
+        logger.success('Function update_updated_at_column checked/created.');
 
-    logger.info('Creating updated_at trigger for user_tokens if it does not exist...');
-    await client.query(createUserTokensUpdatedAtTriggerQuery);
-    logger.success('Trigger update_user_tokens_updated_at checked/created.');
+        logger.info('Creating updated_at trigger for user_tokens if it does not exist...');
+        await client.query(createUserTokensUpdatedAtTriggerQuery);
+        logger.success('Trigger update_user_tokens_updated_at checked/created.');
 
-    // --- Authorized guilds table creation ---
-    logger.info('Creating authorized_guilds table if it does not exist...');
-    await client.query(createAuthorizedGuildsTableQuery);
-    logger.success('Table authorized_guilds checked/created.');
+        // --- Authorized guilds table creation ---
+        logger.info('Creating authorized_guilds table if it does not exist...');
+        await client.query(createAuthorizedGuildsTableQuery);
+        logger.success('Table authorized_guilds checked/created.');
 
-    logger.info('Creating alert_subscriptions table if it does not exist...');
-    await client.query(createAlertSubscriptionsTableQuery);
-    logger.success('Table alert_subscriptions checked/created.');
-    // ---------------------------------------------------
+        logger.info('Creating alert_subscriptions table if it does not exist...');
+        await client.query(createAlertSubscriptionsTableQuery);
+        logger.success('Table alert_subscriptions checked/created.');
+        // ---------------------------------------------------
 
-    await client.query('COMMIT');
-    logger.success('Database migration completed successfully!');
-    // 마이그레이션 완료 후 프로세스 종료 (선택적)
-    // process.exit(0); // ts-node --esm 모드에서는 pool 연결 종료 전에 exit하면 문제가 될 수 있음
-    // Pool 명시적 종료 필요
-    await pool.end();
-    client.release();
-    logger.info('Database pool ended for migration script.')
-
-  } catch (error) {
-    await client.query('ROLLBACK');
-    client.release();
-    console.error('❌ Migration Error:', error);
-    console.error('❌ Error type:', typeof error);
-    console.error('❌ Error keys:', Object.getOwnPropertyNames(error));
-    process.exit(1);
-  }
+        await client.query('COMMIT');
+        logger.success('Database migration completed successfully!');
+        // 마이그레이션 완료 후 프로세스 종료 (선택적)
+        // process.exit(0); // ts-node --esm 모드에서는 pool 연결 종료 전에 exit하면 문제가 될 수 있음
+        // Pool 명시적 종료 필요
+        await pool.end();
+        client.release();
+        logger.info('Database pool ended for migration script.');
+    } catch (error) {
+        await client.query('ROLLBACK');
+        client.release();
+        console.error('❌ Migration Error:', error);
+        console.error('❌ Error type:', typeof error);
+        console.error('❌ Error keys:', Object.getOwnPropertyNames(error));
+        process.exit(1);
+    }
 })();
