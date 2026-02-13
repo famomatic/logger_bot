@@ -2,18 +2,12 @@ import {
     SlashCommandBuilder,
     CommandInteraction,
     Client,
-    Events,
     PermissionsBitField,
     MessageFlags,
 } from 'discord.js';
-import dotenv from 'dotenv';
-import { loadLegacyCommands, unloadLegacyCommands } from '../utils/loadLegacyCommands.js';
-import { loadSlashCommands, unloadSlashCommands } from '../utils/loadSlashCommands.js';
-import { loadEvents, unloadEvents } from '../utils/loadEvents.js';
 import { logger } from '../utils/logger.js';
-import { config, reloadConfig } from '../config/config.js';
-import { restartLogQueue } from '../queue/logEventQueue.js';
 import type { SlashCommand } from '../types/commands.js';
+import { canRunReload, executeReload } from '../commandShared/reloadCore.js';
 
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()
@@ -23,11 +17,9 @@ export const command: SlashCommand = {
 
     async execute(interaction: CommandInteraction, client: Client) {
         if (!interaction.isChatInputCommand()) return;
-        // 개발자 또는 관리자 권한 확인
         const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
-        const devLevel = config.getDevLevel(interaction.user.id);
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-        if (devLevel < 3 && !isAdmin) {
+        if (!canRunReload(interaction.user.id, Boolean(isAdmin))) {
             await interaction.reply({
                 content: '이 명령어는 관리자 또는 개발자만 사용할 수 있습니다.',
                 flags: MessageFlags.Ephemeral,
@@ -39,27 +31,7 @@ export const command: SlashCommand = {
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         try {
-            dotenv.config({ override: true });
-            reloadConfig();
-            unloadLegacyCommands(client);
-            await loadLegacyCommands(client);
-            unloadSlashCommands(client);
-            await loadSlashCommands(client);
-            unloadEvents(client);
-            await loadEvents(client);
-            await restartLogQueue();
-            client.on(Events.InteractionCreate, (i) => {
-                void (async () => {
-                    if (!i.isChatInputCommand()) return;
-                    const cmd = client.commands?.get(i.commandName);
-                    if (!cmd) return;
-                    try {
-                        await cmd.execute(i, client);
-                    } catch (err) {
-                        logger.error(`Error executing command ${i.commandName}:`, err);
-                    }
-                })();
-            });
+            await executeReload(client);
             await interaction.editReply('🔄 봇이 성공적으로 리로드되었습니다.');
         } catch (error) {
             logger.error('Reload failed:', error);
