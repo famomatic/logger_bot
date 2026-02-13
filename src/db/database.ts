@@ -1,6 +1,6 @@
 import pkg from 'pg';
 const { Pool } = pkg;
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { logger } from '../utils/logger.js';
 import dotenv from 'dotenv';
 import { config } from '../config/config.js';
@@ -136,6 +136,8 @@ type LogEventDispatcher = (event: LogEventRecord) => Promise<boolean>;
 
 let logEventDispatcher: LogEventDispatcher | null = null;
 
+const TARGET_ID_MAX_LENGTH = 30;
+
 export function setLogEventDispatcher(dispatcher: LogEventDispatcher | null): void {
     logEventDispatcher = dispatcher;
 }
@@ -148,9 +150,20 @@ function createSyntheticTargetId(
     timestamp: Date,
 ): string {
     const stamp = timestamp.getTime().toString(36);
-    const uid = userId ?? 'system';
-    const cid = channelId ?? 'none';
-    return `auto_${eventType}_${guildId}_${cid}_${uid}_${stamp}_${randomUUID().slice(0, 8)}`;
+    const entropy = randomUUID().replace(/-/g, '').slice(0, 12);
+    const source = `${eventType}|${guildId}|${userId ?? 'system'}|${channelId ?? 'none'}|${stamp}|${entropy}`;
+    const hash = createHash('sha1').update(source).digest('hex').slice(0, 24);
+    return `auto_${hash}`;
+}
+
+function normalizeTargetId(targetId: string): string {
+    if (targetId.length <= TARGET_ID_MAX_LENGTH) {
+        return targetId;
+    }
+
+    const hash = createHash('sha1').update(targetId).digest('hex').slice(0, 8);
+    const prefixLength = TARGET_ID_MAX_LENGTH - (hash.length + 1);
+    return `${targetId.slice(0, prefixLength)}_${hash}`;
 }
 
 function normalizeLogEvent(
@@ -167,8 +180,9 @@ function normalizeLogEvent(
         guildId,
         userId,
         channelId,
-        targetId:
+        targetId: normalizeTargetId(
             targetId ?? createSyntheticTargetId(eventType, guildId, userId, channelId, timestamp),
+        ),
         data,
         timestamp,
     };
@@ -198,12 +212,13 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
     RETURNING id;
   `;
     const sanitizedData = sanitizeObjectStrings(event.data);
+    const normalizedTargetId = normalizeTargetId(event.targetId);
     const values = [
         event.eventType,
         event.guildId,
         event.userId,
         event.channelId,
-        event.targetId,
+        normalizedTargetId,
         sanitizedData,
         event.timestamp,
     ];
@@ -262,12 +277,13 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
     const values: unknown[] = [];
     const rows = events.map((event, index) => {
         const base = index * 7;
+        const normalizedTargetId = normalizeTargetId(event.targetId);
         values.push(
             event.eventType,
             event.guildId,
             event.userId,
             event.channelId,
-            event.targetId,
+            normalizedTargetId,
             sanitizeObjectStrings(event.data),
             event.timestamp,
         );
