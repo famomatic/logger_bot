@@ -20,6 +20,11 @@ export const command = {
     data: new SlashCommandBuilder()
         .setName('report-guild')
         .setDescription('현재 서버의 로그 운영 리포트를 보여줍니다.')
+        .addBooleanOption((option) =>
+            option
+                .setName('ephemeral')
+                .setDescription('응답을 나만 보기로 표시할지 여부 (기본값: true)'),
+        )
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
         logger.info(`/report-guild command executed by ${interaction.user.tag}`);
@@ -33,8 +38,11 @@ export const command = {
         }
 
         try {
+            const ephemeral = interaction.options.getBoolean('ephemeral') ?? true;
             await interaction.deferReply({
-                flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+                flags: ephemeral
+                    ? MessageFlags.Ephemeral | MessageFlags.IsComponentsV2
+                    : MessageFlags.IsComponentsV2,
             });
 
             const guild = interaction.guild!;

@@ -25,6 +25,11 @@ export const command = {
                 .setDescription('리포트를 조회할 채널 ID')
                 .setRequired(true),
         )
+        .addBooleanOption((option) =>
+            option
+                .setName('ephemeral')
+                .setDescription('응답을 나만 보기로 표시할지 여부 (기본값: true)'),
+        )
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
         if (!interaction.inGuild()) {
@@ -59,8 +64,11 @@ export const command = {
             `/report-channel command executed by ${interaction.user.tag} for ${channelIdRaw}`,
         );
 
+        const ephemeral = interaction.options.getBoolean('ephemeral') ?? true;
         await interaction.deferReply({
-            flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+            flags: ephemeral
+                ? MessageFlags.Ephemeral | MessageFlags.IsComponentsV2
+                : MessageFlags.IsComponentsV2,
         });
 
         const report = await getChannelReport(interaction.guildId, channelIdRaw);

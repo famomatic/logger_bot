@@ -22,6 +22,11 @@ export const command = {
         .addUserOption((option) =>
             option.setName('user').setDescription('리포트를 조회할 사용자').setRequired(true),
         )
+        .addBooleanOption((option) =>
+            option
+                .setName('ephemeral')
+                .setDescription('응답을 나만 보기로 표시할지 여부 (기본값: true)'),
+        )
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
         if (!interaction.inGuild()) {
@@ -46,8 +51,11 @@ export const command = {
         const user = interaction.options.getUser('user', true);
         logger.info(`/report-user command executed by ${interaction.user.tag} for ${user.id}`);
 
+        const ephemeral = interaction.options.getBoolean('ephemeral') ?? true;
         await interaction.deferReply({
-            flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+            flags: ephemeral
+                ? MessageFlags.Ephemeral | MessageFlags.IsComponentsV2
+                : MessageFlags.IsComponentsV2,
         });
 
         const report = await getUserReport(interaction.guildId, user.id);
