@@ -67,7 +67,9 @@ export function buildStatusReply(client: Client, snapshot: StatusSnapshot, accen
 
     return buildContainerMessage({
         title: `${client.user?.username ?? '봇'} 상태 정보`,
-        description: botAvatar ? `아바타: ${botAvatar}` : undefined,
+        mediaGalleryItems: botAvatar
+            ? [{ url: botAvatar, description: `${client.user?.username ?? '봇'} 아바타` }]
+            : undefined,
         accentColor,
         sections: [
             {

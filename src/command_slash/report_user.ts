@@ -9,34 +9,11 @@ import { logger } from '../utils/logger.js';
 import { config } from '../config/config.js';
 import { getUserReport } from '../db/database.js';
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
-import type { ReportEventTypeCount, ReportIdCount } from '../types/report.js';
-
-function formatNumber(value: number): string {
-    return value.toLocaleString('ko-KR');
-}
-
-function formatEventTypeList(eventTypes: ReportEventTypeCount[]): string {
-    if (eventTypes.length === 0) {
-        return '없음';
-    }
-
-    return eventTypes
-        .map((item, index) => `${index + 1}. ${item.eventType} - ${formatNumber(item.count)}건`)
-        .join('\n');
-}
-
-function formatChannelList(channels: ReportIdCount[]): string {
-    if (channels.length === 0) {
-        return '없음';
-    }
-
-    return channels
-        .map(
-            (item, index) =>
-                `${index + 1}. <#${item.id}> (ID: \`${item.id}\`) - ${formatNumber(item.count)}건`,
-        )
-        .join('\n');
-}
+import {
+    formatEntityCountList,
+    formatEventTypeCountList,
+    formatLocalizedNumber,
+} from '../utils/reportFormatters.js';
 
 export const command = {
     data: new SlashCommandBuilder()
@@ -88,22 +65,22 @@ export const command = {
                     {
                         title: '핵심 지표',
                         body: [
-                            `총 로그 수: ${formatNumber(report.totalLogs)}건`,
-                            `메시지 생성/수정/삭제: ${formatNumber(report.messageCreateCount)} / ${formatNumber(report.messageUpdateCount)} / ${formatNumber(report.messageDeleteCount)}`,
-                            `운영 이벤트 수: ${formatNumber(report.moderationActionCount)}건`,
-                            `첨부파일 수: ${formatNumber(report.attachmentCount)}개`,
-                            `스티커 수: ${formatNumber(report.stickerCount)}개`,
+                            `총 로그 수: ${formatLocalizedNumber(report.totalLogs)}건`,
+                            `메시지 생성/수정/삭제: ${formatLocalizedNumber(report.messageCreateCount)} / ${formatLocalizedNumber(report.messageUpdateCount)} / ${formatLocalizedNumber(report.messageDeleteCount)}`,
+                            `운영 이벤트 수: ${formatLocalizedNumber(report.moderationActionCount)}건`,
+                            `첨부파일 수: ${formatLocalizedNumber(report.attachmentCount)}개`,
+                            `스티커 수: ${formatLocalizedNumber(report.stickerCount)}개`,
                             `최근 활동: ${report.lastActivityAt ? `<t:${Math.floor(report.lastActivityAt.getTime() / 1000)}:F>` : '기록 없음'}`,
                         ].join('\n'),
                     },
                     {
                         title: '추세/이상징후',
                         body: [
-                            `최근 24시간 로그: ${formatNumber(report.last24hCount)}건`,
-                            `그 이전 24시간 로그: ${formatNumber(report.prev24hCount)}건`,
+                            `최근 24시간 로그: ${formatLocalizedNumber(report.last24hCount)}건`,
+                            `그 이전 24시간 로그: ${formatLocalizedNumber(report.prev24hCount)}건`,
                             `변화율: ${trendText}`,
-                            `상위 이벤트 타입:\n${formatEventTypeList(report.topEventTypes)}`,
-                            `상위 채널:\n${formatChannelList(report.topChannels)}`,
+                            `상위 이벤트 타입:\n${formatEventTypeCountList(report.topEventTypes)}`,
+                            `상위 채널:\n${formatEntityCountList(report.topChannels, 'channel')}`,
                         ].join('\n'),
                     },
                 ],
