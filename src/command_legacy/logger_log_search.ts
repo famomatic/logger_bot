@@ -2264,7 +2264,7 @@ const command: LegacyCommand = {
             fetchReply: () => Promise.resolve(reply),
             editReply: (options: string | MessagePayload | InteractionEditReplyOptions) =>
                 reply.edit(options),
-        } as unknown as ChatInputCommandInteraction;
+        } as ChatInputCommandInteraction;
 
         const initialParams = {
             guildId: message.guildId,

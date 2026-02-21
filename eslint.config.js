@@ -3,7 +3,7 @@ import { defineConfig } from 'eslint/config';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
-import eslintComments from 'eslint-plugin-eslint-comments';
+import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 
 export default defineConfig(
     // 1. 무시 경로
@@ -54,6 +54,15 @@ export default defineConfig(
                 },
             ],
             'eslint-comments/no-use': 'error',
+            'no-restricted-syntax': [
+                'error',
+                {
+                    selector:
+                        "TSAsExpression[expression.type='TSAsExpression'][expression.typeAnnotation.type='TSUnknownKeyword']",
+                    message:
+                        'Avoid double assertion via `unknown`: `(x as unknown) as T`. Prefer runtime checks/type guards, or a single justified assertion.',
+                },
+        ],
         },
     },
 

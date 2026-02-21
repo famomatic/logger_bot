@@ -19,7 +19,7 @@ export function sanitizeStringForSQL(str: string): string {
 // 객체 내 모든 문자열 값을 재귀적으로 이스케이프합니다.
 export function sanitizeObjectStrings<T>(obj: T): T {
     if (Array.isArray(obj)) {
-        return obj.map((v: unknown) => sanitizeObjectStrings(v)) as unknown as T;
+        return obj.map((v: unknown) => sanitizeObjectStrings(v)) as T;
     }
     if (obj !== null && typeof obj === 'object') {
         const sanitized: Record<string, unknown> = {};
@@ -29,7 +29,7 @@ export function sanitizeObjectStrings<T>(obj: T): T {
         return sanitized as T;
     }
     if (typeof obj === 'string') {
-        return sanitizeStringForSQL(obj) as unknown as T;
+        return sanitizeStringForSQL(obj) as T;
     }
     return obj;
 }
