@@ -1,7 +1,6 @@
 import {
     ChatInputCommandInteraction,
     ChannelType,
-    EmbedBuilder,
     TextDisplayBuilder,
     ThumbnailBuilder,
     SectionBuilder,
@@ -23,6 +22,7 @@ import { eventConfigurations } from '../config/eventsConfig.js';
 import { searchLogs } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { escapeCodeBlockContent } from '../utils/sanitize.js';
+import { buildContainerMessage } from './componentsV2.js';
 import type { JsonData, JsonValue } from '../types/json.js';
 import type { AttachmentLogData } from '../types/logs.js';
 
@@ -156,27 +156,25 @@ export async function fetchAndDisplayLogs(
         });
 
         const editReplyOptions: InteractionEditReplyOptions = {
-            embeds: [],
             components: [],
             files: [],
             allowedMentions: { parse: [] }, // Disable all forms of parsing mentions
         };
 
         if (totalCount === 0) {
-            const embed = new EmbedBuilder()
-                .setColor(0xff0000)
-                .setTitle(
-                    noOptionsProvidedInitially && currentOffset === 0
-                        ? '최근 로그 없음'
-                        : '검색 결과 없음',
-                )
-                .setDescription(
-                    noOptionsProvidedInitially && currentOffset === 0
-                        ? '이 서버에 기록된 최근 로그가 없습니다.'
-                        : '지정된 조건으로 검색된 로그가 없습니다.',
-                );
-            editReplyOptions.embeds = [embed];
-            await interaction.editReply(editReplyOptions);
+            await interaction.editReply(
+                buildContainerMessage({
+                    title:
+                        noOptionsProvidedInitially && currentOffset === 0
+                            ? '최근 로그 없음'
+                            : '검색 결과 없음',
+                    description:
+                        noOptionsProvidedInitially && currentOffset === 0
+                            ? '이 서버에 기록된 최근 로그가 없습니다.'
+                            : '지정된 조건으로 검색된 로그가 없습니다.',
+                    accentColor: 0xed4245,
+                }),
+            );
             return;
         }
 
@@ -2334,16 +2332,13 @@ export async function fetchAndDisplayLogs(
         );
     } catch (error) {
         logger.error('Error during fetchAndDisplayLogs:', error);
-        const errorEmbed = new EmbedBuilder()
-            .setColor(0xff0000)
-            .setTitle('오류 발생')
-            .setDescription('로그 표시 중 오류가 발생했습니다.');
         const errorReplyOptions: InteractionEditReplyOptions = {
-            embeds: [errorEmbed],
-            components: [],
+            ...buildContainerMessage({
+                title: '오류 발생',
+                description: '로그 표시 중 오류가 발생했습니다.',
+                accentColor: 0xed4245,
+            }),
             files: [],
-            allowedMentions: { parse: [] }, // Also apply to error messages
-            flags: MessageFlags.IsComponentsV2,
         };
 
         if (interaction.replied || interaction.deferred) {
@@ -2358,9 +2353,8 @@ export async function fetchAndDisplayLogs(
         } else {
             try {
                 const replyOptionsForInitialError: InteractionReplyOptions = {
-                    embeds: errorReplyOptions.embeds,
                     components: errorReplyOptions.components,
-                    flags: MessageFlags.Ephemeral,
+                    flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
                     allowedMentions: { parse: [] }, // Also apply to initial error replies
                 };
                 if (errorReplyOptions.files && errorReplyOptions.files.length > 0) {

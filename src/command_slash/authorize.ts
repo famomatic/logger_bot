@@ -3,6 +3,7 @@ import {
     ChatInputCommandInteraction,
     PermissionsBitField,
     MessageFlags,
+    InteractionContextType,
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { authorizeGuildId } from '../db/database.js';
@@ -16,7 +17,7 @@ export const command = {
             o.setName('guild_id').setDescription('승인할 길드 ID').setRequired(true),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .setDMPermission(false),
+        .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
         if (!interaction.inGuild()) {
             await interaction.reply({

@@ -10,6 +10,7 @@ import {
     ActionRowBuilder,
     ComponentType,
     MessageFlags,
+    InteractionContextType,
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
@@ -26,7 +27,7 @@ export const command: SlashCommand = {
                 .setRequired(true),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .setDMPermission(false),
+        .setContexts(InteractionContextType.Guild),
 
     async execute(interaction: CommandInteraction) {
         if (!interaction.isChatInputCommand()) return;

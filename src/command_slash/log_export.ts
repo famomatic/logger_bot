@@ -4,6 +4,7 @@ import {
     MessageFlags,
     PermissionsBitField,
     AttachmentBuilder,
+    InteractionContextType,
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/config.js';
@@ -104,7 +105,7 @@ export const command = {
                 .setDescription('텍스트 키워드 (content/newContent/oldContent)')
                 .setRequired(false),
         )
-        .setDMPermission(false),
+        .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
         if (!interaction.guildId) {
             await interaction.reply({

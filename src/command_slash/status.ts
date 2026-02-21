@@ -1,6 +1,6 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, Colors } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { buildStatusEmbed, collectStatusSnapshot } from '../commandShared/statusCore.js';
+import { buildStatusReply, collectStatusSnapshot } from '../commandShared/statusCore.js';
 
 export const command = {
     data: new SlashCommandBuilder()
@@ -9,16 +9,13 @@ export const command = {
     async execute(interaction: ChatInputCommandInteraction) {
         logger.info(`/status command executed by ${interaction.user.tag}`);
         try {
-            await interaction.deferReply({ ephemeral: false });
+            await interaction.deferReply();
 
             const client = interaction.client;
             const snapshot = await collectStatusSnapshot(client, 'slash');
-            const embed = buildStatusEmbed(client, snapshot, Colors.Blue);
+            const replyOptions = buildStatusReply(client, snapshot, 0x3498db);
 
-            await interaction.editReply({
-                embeds: [embed],
-                allowedMentions: { parse: [] },
-            });
+            await interaction.editReply(replyOptions);
         } catch (error) {
             const err = error as Error;
             logger.error('Error executing slash status command:', err);
@@ -28,7 +25,10 @@ export const command = {
             );
             const errContent = `상태 정보를 가져오는 중 오류가 발생했습니다: ${err.message}`;
             if (interaction.deferred || interaction.replied) {
-                await interaction.editReply({ content: errContent, embeds: [], components: [] });
+                await interaction.editReply({
+                    content: errContent,
+                    components: [],
+                });
             } else {
                 await interaction.reply({ content: errContent, ephemeral: true });
             }

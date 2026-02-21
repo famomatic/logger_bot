@@ -5,6 +5,7 @@ import {
     ChannelType,
     MessageFlags,
     GuildTextBasedChannel,
+    InteractionContextType,
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { removeSubscription, categoryEventMap } from '../utils/alertManager.js';
@@ -37,7 +38,7 @@ export const command = {
                     ChannelType.PrivateThread,
                 ),
         )
-        .setDMPermission(false),
+        .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
         if (!interaction.inGuild()) {
             await interaction.reply({

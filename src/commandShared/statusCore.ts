@@ -1,12 +1,6 @@
-import {
-    Client,
-    Colors,
-    EmbedBuilder,
-    WebSocketShardStatus,
-    version as djsVersion,
-    type ColorResolvable,
-} from 'discord.js';
+import { Client, WebSocketShardStatus, version as djsVersion } from 'discord.js';
 import { logger } from '../utils/logger.js';
+import { buildContainerMessage } from './componentsV2.js';
 
 interface StatusSnapshot {
     uptime: string;
@@ -68,46 +62,39 @@ export async function collectStatusSnapshot(
     };
 }
 
-export function buildStatusEmbed(
-    client: Client,
-    snapshot: StatusSnapshot,
-    color: ColorResolvable = Colors.Blue,
-): EmbedBuilder {
+export function buildStatusReply(client: Client, snapshot: StatusSnapshot, accentColor = 0x3498db) {
     const botAvatar = client.user?.displayAvatarURL({ forceStatic: false, size: 128 });
 
-    return new EmbedBuilder()
-        .setColor(color)
-        .setTitle(`${client.user?.username ?? '봇'} 상태 정보`)
-        .setThumbnail(botAvatar ?? null)
-        .addFields(
+    return buildContainerMessage({
+        title: `${client.user?.username ?? '봇'} 상태 정보`,
+        description: botAvatar ? `아바타: ${botAvatar}` : undefined,
+        accentColor,
+        sections: [
             {
-                name: '기본 정보',
-                value:
-                    `**업타임:** ${snapshot.uptime}\n` +
-                    `**Discord API 지연시간:** ${snapshot.apiLatency}ms\n` +
-                    `**웹소켓 상태:** ${snapshot.wsStatus}\n` +
-                    `**Node.js 버전:** ${snapshot.nodeVersion}\n` +
-                    `**Discord.js 버전:** v${djsVersion}`,
-                inline: false,
+                title: '기본 정보',
+                body:
+                    `업타임: ${snapshot.uptime}\n` +
+                    `Discord API 지연시간: ${snapshot.apiLatency}ms\n` +
+                    `웹소켓 상태: ${snapshot.wsStatus}\n` +
+                    `Node.js 버전: ${snapshot.nodeVersion}\n` +
+                    `Discord.js 버전: v${djsVersion}`,
             },
             {
-                name: '메모리 사용량',
-                value:
-                    `**RSS:** ${snapshot.memoryRssMb} MB\n` +
-                    `**Heap Total:** ${snapshot.memoryHeapTotalMb} MB\n` +
-                    `**Heap Used:** ${snapshot.memoryHeapUsedMb} MB`,
-                inline: false,
+                title: '메모리 사용량',
+                body:
+                    `RSS: ${snapshot.memoryRssMb} MB\n` +
+                    `Heap Total: ${snapshot.memoryHeapTotalMb} MB\n` +
+                    `Heap Used: ${snapshot.memoryHeapUsedMb} MB`,
             },
             {
-                name: '서버 및 명령어 현황',
-                value:
-                    `**연결된 서버 수:** ${snapshot.guilds}개\n` +
-                    `**전체 사용자 수 (캐시 기준):** ${snapshot.users}명\n` +
-                    `**로드된 슬래시 명령어:** ${snapshot.slashCommandsCount}개\n` +
-                    `**로드된 레거시 명령어:** ${snapshot.legacyCommandsCount}개`,
-                inline: false,
+                title: '서버 및 명령어 현황',
+                body:
+                    `연결된 서버 수: ${snapshot.guilds}개\n` +
+                    `전체 사용자 수 (캐시 기준): ${snapshot.users}명\n` +
+                    `로드된 슬래시 명령어: ${snapshot.slashCommandsCount}개\n` +
+                    `로드된 레거시 명령어: ${snapshot.legacyCommandsCount}개`,
             },
-        )
-        .setTimestamp()
-        .setFooter({ text: '상태 정보' });
+        ],
+        footer: `상태 정보 • 생성 시각: <t:${Math.floor(Date.now() / 1000)}:F>`,
+    });
 }

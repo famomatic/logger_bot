@@ -7,6 +7,7 @@ import {
     Message,
     Client,
     MessageFlags,
+    InteractionContextType,
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
@@ -38,7 +39,7 @@ export const command: SlashCommand = {
                 .setRequired(false),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .setDMPermission(false),
+        .setContexts(InteractionContextType.Guild),
 
     async execute(interaction: CommandInteraction, client: Client) {
         // CommandInteraction 타입 가드 (ChatInputCommand으로 좁히기 위함)

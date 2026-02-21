@@ -5,6 +5,7 @@ import {
     Client,
     User,
     MessageFlags,
+    InteractionContextType,
 } from 'discord.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
@@ -22,7 +23,7 @@ export const command: SlashCommand = {
             option.setName('content').setDescription('전송할 메시지 내용').setRequired(true),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator) // 관리자만 사용 가능하도록 설정
-        .setDMPermission(false), // 서버 내에서만 사용 가능
+        .setContexts(InteractionContextType.Guild), // 서버 내에서만 사용 가능
 
     async execute(interaction: CommandInteraction, client: Client) {
         if (!interaction.isChatInputCommand()) return;

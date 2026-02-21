@@ -7,6 +7,7 @@ import {
     Message,
     Client,
     MessageFlags,
+    InteractionContextType,
 } from 'discord.js';
 import axios from 'axios';
 import { config } from '../config/config.js';
@@ -46,7 +47,7 @@ export const command: SlashCommand = {
                 .setRequired(true),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
-        .setDMPermission(false),
+        .setContexts(InteractionContextType.Guild),
 
     async execute(interaction: CommandInteraction, client: Client) {
         if (!interaction.isChatInputCommand()) return;

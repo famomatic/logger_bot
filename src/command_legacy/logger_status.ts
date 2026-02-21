@@ -1,8 +1,8 @@
-import { Colors, Message } from 'discord.js';
+import { Message } from 'discord.js';
 import type { LegacyCommand } from '../types/commands.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
-import { buildStatusEmbed, collectStatusSnapshot } from '../commandShared/statusCore.js';
+import { buildStatusReply, collectStatusSnapshot } from '../commandShared/statusCore.js';
 
 const command: LegacyCommand = {
     name: 'status',
@@ -14,9 +14,9 @@ const command: LegacyCommand = {
         try {
             const client = message.client;
             const snapshot = await collectStatusSnapshot(client, 'legacy');
-            const embed = buildStatusEmbed(client, snapshot, Colors.Aqua);
+            const replyOptions = buildStatusReply(client, snapshot, 0x1abc9c);
 
-            await message.reply({ embeds: [embed], allowedMentions: { parse: [] } });
+            await message.reply(replyOptions);
         } catch (error) {
             const err = error as Error;
             logger.error('Error executing legacy status command:', err);
