@@ -6,7 +6,7 @@
     "main": "dist/index.js",
     "scripts": {
         "start": "node dist/index.js",
-        "clean": "rm -rf dist node_modules && npm install",
+        "clean": "rm -rf dist node_modules package-lock.json && npm install",
         "dev": "tsx src/index.ts",
         "build": "tsc",
         "type": "tsc --noEmit",
