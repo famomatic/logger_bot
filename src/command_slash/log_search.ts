@@ -201,7 +201,13 @@ export const command = {
                         !isNaN(newOffset) &&
                         !isNaN(newPage)
                     ) {
-                        await fetchAndDisplayLogs(i, newOffset, initialSearchParams, false, newPage);
+                        await fetchAndDisplayLogs(
+                            i,
+                            newOffset,
+                            initialSearchParams,
+                            false,
+                            newPage,
+                        );
                     } else if (action !== 'pageinfo') {
                         logger.warn(`Unknown button action or invalid offset: ${i.customId}`);
                     }

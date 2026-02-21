@@ -7,7 +7,7 @@ import {
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/config.js';
-import { getGuildLogStats, isGuildAuthorized } from '../db/database.js';
+import { getGuildReport, isGuildAuthorized } from '../db/database.js';
 
 function formatNumber(value: number): string {
     return value.toLocaleString('ko-KR');
@@ -41,11 +41,11 @@ async function formatDevLevelList(
 
 export const command = {
     data: new SlashCommandBuilder()
-        .setName('server')
-        .setDescription('현재 서버의 로깅 및 설정 정보를 보여줍니다.')
+        .setName('report-guild')
+        .setDescription('현재 서버의 로그 운영 리포트를 보여줍니다.')
         .setDMPermission(false),
     async execute(interaction: ChatInputCommandInteraction) {
-        logger.info(`/server command executed by ${interaction.user.tag}`);
+        logger.info(`/report-guild command executed by ${interaction.user.tag}`);
 
         if (!interaction.inGuild()) {
             await interaction.reply({
@@ -60,7 +60,7 @@ export const command = {
 
             const guild = interaction.guild!;
             const authorized = isGuildAuthorized(guild.id);
-            const stats = await getGuildLogStats(guild.id);
+            const report = await getGuildReport(guild.id);
             const owner = await guild.fetchOwner().catch(() => null);
 
             const level3List = await formatDevLevelList(interaction, config.devLevels.level3);
@@ -79,12 +79,43 @@ export const command = {
 
             const statsLines = [
                 `**인증 상태:** ${authorized ? '✅ 인증됨' : '❌ 미인증'}`,
-                `**총 로그 수:** ${formatNumber(stats.totalLogs)}건`,
-                `**메시지 로그(생성):** ${formatNumber(stats.messageCreateCount)}건`,
-                `**텍스트 메시지 수:** ${formatNumber(stats.textMessageCount)}건`,
-                `**텍스트 총 글자 수:** ${formatNumber(stats.totalTextCharacters)}자`,
-                `**첨부파일 수:** ${formatNumber(stats.attachmentCount)}개`,
-                `**스티커 수:** ${formatNumber(stats.stickerCount)}개`,
+                `**총 로그 수:** ${formatNumber(report.totalLogs)}건`,
+                `**메시지 생성/수정/삭제:** ${formatNumber(report.messageCreateCount)} / ${formatNumber(report.messageUpdateCount)} / ${formatNumber(report.messageDeleteCount)}`,
+                `**운영 이벤트 수(밴/대량삭제/강퇴):** ${formatNumber(report.moderationActionCount)}건`,
+                `**첨부파일 수:** ${formatNumber(report.attachmentCount)}개`,
+                `**스티커 수:** ${formatNumber(report.stickerCount)}개`,
+                `**최근 활동:** ${report.lastActivityAt ? `<t:${Math.floor(report.lastActivityAt.getTime() / 1000)}:F>` : '기록 없음'}`,
+            ];
+
+            const trendText =
+                report.trendPercent === null
+                    ? '신규 급증(비교 기준 0)'
+                    : `${report.trendPercent > 0 ? '+' : ''}${report.trendPercent}%`;
+            const anomalyLines = [
+                `**최근 24시간 로그:** ${formatNumber(report.last24hCount)}건`,
+                `**그 이전 24시간 로그:** ${formatNumber(report.prev24hCount)}건`,
+                `**변화율:** ${trendText}`,
+                `**상위 이벤트 타입:** ${
+                    report.topEventTypes.length > 0
+                        ? report.topEventTypes
+                              .map((item) => `${item.eventType}(${formatNumber(item.count)})`)
+                              .join(', ')
+                        : '없음'
+                }`,
+                `**상위 채널:** ${
+                    report.topChannels.length > 0
+                        ? report.topChannels
+                              .map((item) => `<#${item.id}>(${formatNumber(item.count)})`)
+                              .join(', ')
+                        : '없음'
+                }`,
+                `**상위 사용자:** ${
+                    report.topUsers.length > 0
+                        ? report.topUsers
+                              .map((item) => `<@${item.id}>(${formatNumber(item.count)})`)
+                              .join(', ')
+                        : '없음'
+                }`,
             ];
 
             const devLevelLines = [
@@ -99,7 +130,8 @@ export const command = {
                 .setThumbnail(guild.iconURL({ size: 256, forceStatic: false }) ?? null)
                 .addFields(
                     { name: '기본 정보', value: infoLines.join('\n'), inline: false },
-                    { name: '인증 및 로그 현황', value: statsLines.join('\n'), inline: false },
+                    { name: '로그 요약', value: statsLines.join('\n'), inline: false },
+                    { name: '활동 추세/이상징후', value: anomalyLines.join('\n'), inline: false },
                     { name: '개발자 레벨', value: devLevelLines.join('\n'), inline: false },
                 )
                 .setTimestamp(new Date())
@@ -111,7 +143,7 @@ export const command = {
             });
         } catch (error) {
             const err = error instanceof Error ? error : new Error(String(error));
-            logger.error('Error executing /server command:', err);
+            logger.error('Error executing /report-guild command:', err);
             const errorMessage = err.message || '알 수 없는 오류';
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({

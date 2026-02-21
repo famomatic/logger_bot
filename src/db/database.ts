@@ -7,6 +7,11 @@ import { config } from '../config/config.js';
 import { sanitizeObjectStrings } from '../utils/sanitize.js';
 import discordClient from '../utils/discordClient.js';
 import { dispatchAlert } from '../utils/alertManager.js';
+import type { AlertSubscriptionRow } from '../types/alerts.js';
+import type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
+
+export type { AlertSubscriptionRow } from '../types/alerts.js';
+export type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
 
 dotenv.config();
 
@@ -74,11 +79,6 @@ export async function unauthorizeGuildId(guildId: string): Promise<void> {
 }
 
 // --- Alert Subscriptions ---
-export interface AlertSubscriptionRow {
-    guild_id: string;
-    channel_id: string;
-    category: string;
-}
 
 export async function addAlertSubscription(
     guildId: string,
@@ -120,16 +120,6 @@ export async function fetchAlertSubscriptions(): Promise<AlertSubscriptionRow[]>
         logger.error('Failed to fetch alert subscriptions:', error);
         return [];
     }
-}
-
-export interface LogEventRecord {
-    eventType: string;
-    guildId: string;
-    userId: string | null;
-    channelId: string | null;
-    targetId: string;
-    data: Record<string, unknown>;
-    timestamp: Date;
 }
 
 type LogEventDispatcher = (event: LogEventRecord) => Promise<boolean>;
@@ -639,6 +629,175 @@ export async function getGuildLogStats(guildId: string): Promise<GuildLogStats> 
     }
 }
 
+interface ScopeSummaryRow {
+    total_logs: string;
+    message_create_count: string;
+    message_update_count: string;
+    message_delete_count: string;
+    moderation_action_count: string;
+    attachment_count: string;
+    sticker_count: string;
+    last_activity_at: Date | null;
+    last_24h_count: string;
+    prev_24h_count: string;
+}
+
+interface RankedRow {
+    id: string | null;
+    count: string;
+}
+
+interface RankedEventTypeRow {
+    event_type: string;
+    count: string;
+}
+
+function toCount(value: string | null | undefined): number {
+    if (!value) return 0;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function computeTrendPercent(last24h: number, prev24h: number): number | null {
+    if (prev24h === 0) {
+        return last24h === 0 ? 0 : null;
+    }
+    return Math.round(((last24h - prev24h) / prev24h) * 100 * 10) / 10;
+}
+
+async function getLogScopeReport(
+    whereClause: string,
+    queryParams: string[],
+): Promise<LogScopeReport> {
+    const summaryQuery = `
+    SELECT
+      COUNT(*) AS total_logs,
+      COUNT(*) FILTER (WHERE event_type = 'messageCreate') AS message_create_count,
+      COUNT(*) FILTER (WHERE event_type = 'messageUpdate') AS message_update_count,
+      COUNT(*) FILTER (WHERE event_type = 'messageDelete') AS message_delete_count,
+      COUNT(*) FILTER (WHERE event_type IN ('guildBanAdd', 'guildBanRemove', 'guildMemberRemove', 'messageDeleteBulk')) AS moderation_action_count,
+      COALESCE(SUM(CASE WHEN event_type = 'messageCreate' THEN COALESCE(jsonb_array_length(data->'attachments'), 0) ELSE 0 END), 0) AS attachment_count,
+      COALESCE(SUM(CASE WHEN event_type = 'messageCreate' THEN COALESCE(jsonb_array_length(data->'stickers'), 0) ELSE 0 END), 0) AS sticker_count,
+      MAX("timestamp") AS last_activity_at,
+      COUNT(*) FILTER (WHERE "timestamp" >= NOW() - INTERVAL '24 hours') AS last_24h_count,
+      COUNT(*) FILTER (WHERE "timestamp" < NOW() - INTERVAL '24 hours' AND "timestamp" >= NOW() - INTERVAL '48 hours') AS prev_24h_count
+    FROM event_logs
+    WHERE ${whereClause};
+  `;
+    const topEventTypesQuery = `
+    SELECT event_type, COUNT(*)::text AS count
+    FROM event_logs
+    WHERE ${whereClause}
+    GROUP BY event_type
+    ORDER BY COUNT(*) DESC
+    LIMIT 5;
+  `;
+    const topChannelsQuery = `
+    SELECT channel_id AS id, COUNT(*)::text AS count
+    FROM event_logs
+    WHERE ${whereClause} AND channel_id IS NOT NULL
+    GROUP BY channel_id
+    ORDER BY COUNT(*) DESC
+    LIMIT 5;
+  `;
+    const topUsersQuery = `
+    SELECT user_id AS id, COUNT(*)::text AS count
+    FROM event_logs
+    WHERE ${whereClause} AND user_id IS NOT NULL
+    GROUP BY user_id
+    ORDER BY COUNT(*) DESC
+    LIMIT 5;
+  `;
+
+    try {
+        const [summaryResult, topEventTypesResult, topChannelsResult, topUsersResult] =
+            await Promise.all([
+                pool.query<ScopeSummaryRow>(summaryQuery, queryParams),
+                pool.query<RankedEventTypeRow>(topEventTypesQuery, queryParams),
+                pool.query<RankedRow>(topChannelsQuery, queryParams),
+                pool.query<RankedRow>(topUsersQuery, queryParams),
+            ]);
+
+        const summaryRow = summaryResult.rows[0];
+        const totalLogs = toCount(summaryRow?.total_logs);
+        const messageCreateCount = toCount(summaryRow?.message_create_count);
+        const messageUpdateCount = toCount(summaryRow?.message_update_count);
+        const messageDeleteCount = toCount(summaryRow?.message_delete_count);
+        const moderationActionCount = toCount(summaryRow?.moderation_action_count);
+        const attachmentCount = toCount(summaryRow?.attachment_count);
+        const stickerCount = toCount(summaryRow?.sticker_count);
+        const last24hCount = toCount(summaryRow?.last_24h_count);
+        const prev24hCount = toCount(summaryRow?.prev_24h_count);
+
+        return {
+            totalLogs,
+            messageCreateCount,
+            messageUpdateCount,
+            messageDeleteCount,
+            moderationActionCount,
+            attachmentCount,
+            stickerCount,
+            lastActivityAt: summaryRow?.last_activity_at ?? null,
+            last24hCount,
+            prev24hCount,
+            trendPercent: computeTrendPercent(last24hCount, prev24hCount),
+            topEventTypes: topEventTypesResult.rows.map((row) => ({
+                eventType: row.event_type,
+                count: toCount(row.count),
+            })),
+            topChannels: topChannelsResult.rows
+                .filter((row) => row.id)
+                .map((row) => ({
+                    id: row.id ?? '',
+                    count: toCount(row.count),
+                })),
+            topUsers: topUsersResult.rows
+                .filter((row) => row.id)
+                .map((row) => ({
+                    id: row.id ?? '',
+                    count: toCount(row.count),
+                })),
+        };
+    } catch (error) {
+        logger.error('Error building log scope report:', {
+            message: error instanceof Error ? error.message : String(error),
+            whereClause,
+            queryParams,
+        });
+        return {
+            totalLogs: 0,
+            messageCreateCount: 0,
+            messageUpdateCount: 0,
+            messageDeleteCount: 0,
+            moderationActionCount: 0,
+            attachmentCount: 0,
+            stickerCount: 0,
+            lastActivityAt: null,
+            last24hCount: 0,
+            prev24hCount: 0,
+            trendPercent: 0,
+            topEventTypes: [],
+            topChannels: [],
+            topUsers: [],
+        };
+    }
+}
+
+export async function getGuildReport(guildId: string): Promise<LogScopeReport> {
+    return await getLogScopeReport('guild_id = $1', [guildId]);
+}
+
+export async function getChannelReport(
+    guildId: string,
+    channelId: string,
+): Promise<LogScopeReport> {
+    return await getLogScopeReport('guild_id = $1 AND channel_id = $2', [guildId, channelId]);
+}
+
+export async function getUserReport(guildId: string, userId: string): Promise<LogScopeReport> {
+    return await getLogScopeReport('guild_id = $1 AND user_id = $2', [guildId, userId]);
+}
+
 // Graceful shutdown
 export async function destroyDatabase() {
     logger.info('Disconnecting database pool...');
@@ -659,35 +818,6 @@ export async function testDatabaseConnection() {
 }
 
 // --- Log Search Functionality ---
-
-/**
- * 검색 조건 인터페이스
- */
-export interface SearchLogsParams {
-    guildId: string;
-    keyword?: string;
-    userId?: string;
-    channelId?: string;
-    startDate?: Date;
-    endDate?: Date;
-    eventType?: string;
-    limit: number; // 페이지당 로그 수 (필수)
-    offset?: number; // 가져올 로그의 시작 위치 (페이지네이션용)
-}
-
-/**
- * 로그 항목 인터페이스 (searchLogs 반환 타입)
- */
-export interface LogEntry {
-    id: number;
-    event_type: string;
-    guild_id: string;
-    user_id: string | null;
-    channel_id: string | null;
-    target_id: string | null;
-    timestamp: Date;
-    event_data: Record<string, unknown>; // data 컬럼의 JSONB 내용을 파싱한 객체
-}
 
 /**
  * 데이터베이스에서 로그를 검색합니다.

@@ -5,30 +5,17 @@ import { logEvent } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import type { AttachmentData } from '../types/commands.js';
+import type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
 import type { ErrorWithCode } from '../types/errors.js';
 import { logger } from '../utils/logger.js';
+
+export type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
 
 export class NoAccessibleGuildChannelsError extends Error {
     constructor(guildId: string) {
         super(`No accessible channels found for guild ${guildId}`);
         this.name = 'NoAccessibleGuildChannelsError';
     }
-}
-
-export interface ChannelBackfillStat {
-    processed: number;
-    newlyLogged: number;
-    name: string;
-}
-
-export interface GuildBackfillResult {
-    totalChannels: number;
-    processedCount: number;
-    newlyLoggedCount: number;
-    errorCount: number;
-    uniqueUserCount: number;
-    durationSeconds: number;
-    channelStats: Record<string, ChannelBackfillStat>;
 }
 
 interface GuildBackfillParams {

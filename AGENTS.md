@@ -1,5 +1,11 @@
 # Repository Guidelines
 
+## Response Workflow
+
+- Before answering implementation/design/bug questions, inspect the relevant source files first, then respond.
+- Do not answer based on assumptions when code can be checked in-repo.
+- If context is unclear, locate related modules with search (`rg`) and verify current behavior before proposing changes.
+
 ## Project Structure
 
 - `src/index.ts`: bot bootstrap, command/event loading, slash interaction entrypoint.

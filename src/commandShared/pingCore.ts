@@ -5,12 +5,9 @@ import {
     TextDisplayBuilder,
     WebSocketShardStatus,
 } from 'discord.js';
+import type { PingMetrics } from '../types/ping.js';
 
-export interface PingMetrics {
-    latency: number;
-    apiLatency: number;
-    wsStatusString: string;
-}
+export type { PingMetrics } from '../types/ping.js';
 
 export function createPendingPingReply() {
     return {

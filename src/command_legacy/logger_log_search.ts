@@ -133,7 +133,8 @@ const command: LegacyCommand = {
 
         try {
             const collector = reply.createMessageComponentCollector({
-                filter: (i) => i.customId.startsWith('log_search_') && i.user.id === message.author.id,
+                filter: (i) =>
+                    i.customId.startsWith('log_search_') && i.user.id === message.author.id,
                 componentType: ComponentType.Button,
                 time: 15 * 60 * 1000,
             });
@@ -145,7 +146,9 @@ const command: LegacyCommand = {
                     if (i.customId === 'log_search_close') {
                         await i.update({
                             flags: MessageFlags.IsComponentsV2,
-                            components: [new TextDisplayBuilder().setContent('이 메시지는 곧 삭제됩니다.')],
+                            components: [
+                                new TextDisplayBuilder().setContent('이 메시지는 곧 삭제됩니다.'),
+                            ],
                             embeds: [],
                             files: [],
                         });

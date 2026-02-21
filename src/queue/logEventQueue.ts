@@ -4,8 +4,8 @@ import {
     insertLogEventDirectNow,
     insertLogEventsBatch,
     setLogEventDispatcher,
-    type LogEventRecord,
 } from '../db/database.js';
+import type { LogEventRecord } from '../types/logs.js';
 import { logger } from '../utils/logger.js';
 
 interface QueuedLogEvent {

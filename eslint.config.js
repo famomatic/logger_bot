@@ -62,7 +62,7 @@ export default defineConfig(
                     message:
                         'Avoid double assertion via `unknown`: `(x as unknown) as T`. Prefer runtime checks/type guards, or a single justified assertion.',
                 },
-        ],
+            ],
         },
     },
 

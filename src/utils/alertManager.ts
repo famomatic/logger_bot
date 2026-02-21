@@ -7,13 +7,7 @@ import {
     removeAlertSubscription,
     fetchAlertSubscriptions,
 } from '../db/database.js';
-
-export interface AlertSubscription {
-    guildId: string;
-    channelId: string;
-    category: string;
-    eventTypes: string[];
-}
+import type { AlertSubscription } from '../types/alerts.js';
 
 const subscriptions: AlertSubscription[] = [];
 
