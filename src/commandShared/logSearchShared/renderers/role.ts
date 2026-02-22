@@ -68,9 +68,7 @@ export async function renderEvent({
                 }
             }
             eventSpecificsText =
-                roleCreateDetails.length > 0
-                    ? roleCreateDetails.join('\n')
-                    : '역할 생성 정보 없음';
+                roleCreateDetails.length > 0 ? roleCreateDetails.join('\n') : '역할 생성 정보 없음';
 
             if (log.user_id) {
                 try {
@@ -207,9 +205,7 @@ export async function renderEvent({
                 }
             }
             eventSpecificsText =
-                roleDeleteDetails.length > 0
-                    ? roleDeleteDetails.join('\n')
-                    : '역할 삭제 정보 없음';
+                roleDeleteDetails.length > 0 ? roleDeleteDetails.join('\n') : '역할 삭제 정보 없음';
 
             if (log.user_id) {
                 try {

@@ -122,6 +122,37 @@ export async function fetchAlertSubscriptions(): Promise<AlertSubscriptionRow[]>
     }
 }
 
+interface LatestMessageCreateCheckpointRow {
+    channel_id: string;
+    target_id: string;
+}
+
+export async function fetchLatestMessageCreateTargetIdsByChannel(
+    guildId: string,
+): Promise<Map<string, string>> {
+    try {
+        const result = await pool.query<LatestMessageCreateCheckpointRow>(
+            `
+            SELECT DISTINCT ON (channel_id) channel_id, target_id
+            FROM event_logs
+            WHERE guild_id = $1
+              AND event_type = 'messageCreate'
+              AND channel_id IS NOT NULL
+            ORDER BY channel_id, "timestamp" DESC
+            `,
+            [guildId],
+        );
+
+        return new Map(result.rows.map((row) => [row.channel_id, row.target_id]));
+    } catch (error) {
+        logger.error(
+            `Failed to fetch latest messageCreate checkpoints for guild ${guildId}:`,
+            error,
+        );
+        return new Map();
+    }
+}
+
 type LogEventDispatcher = (event: LogEventRecord) => Promise<boolean>;
 
 let logEventDispatcher: LogEventDispatcher | null = null;

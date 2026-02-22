@@ -59,6 +59,7 @@ class RedisLogQueue {
 
     async start(): Promise<void> {
         await this.redis.ping();
+        await this.recoverProcessingQueue();
         this.running = true;
         this.workerPromise = this.runWorker();
         logger.info(
@@ -100,6 +101,28 @@ class RedisLogQueue {
         } catch (error) {
             logger.error('Failed to enqueue log event:', error);
             return false;
+        }
+    }
+
+    private async recoverProcessingQueue(): Promise<void> {
+        let recovered = 0;
+        while (true) {
+            const moved = await this.redis.lmove(
+                this.processingKey,
+                this.pendingKey,
+                'RIGHT',
+                'LEFT',
+            );
+            if (!moved) {
+                break;
+            }
+            recovered++;
+        }
+
+        if (recovered > 0) {
+            logger.warn(
+                `Recovered ${recovered} orphaned log events from processing queue back to pending queue.`,
+            );
         }
     }
 

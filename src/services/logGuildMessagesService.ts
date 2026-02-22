@@ -47,7 +47,7 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     throw lastError;
 }
 
-function isLegacyCommandByDev(message: Message, legacyCommandPrefixes: string[]): boolean {
+export function isLegacyCommandByDev(message: Message, legacyCommandPrefixes: string[]): boolean {
     if (legacyCommandPrefixes.length === 0) {
         return false;
     }
@@ -113,7 +113,11 @@ async function buildAttachmentData(
     return processedAttachments;
 }
 
-async function processMessageLog(guildId: string, channelId: string, message: Message) {
+export async function processMessageCreateLog(
+    guildId: string,
+    channelId: string,
+    message: Message,
+): Promise<boolean> {
     const processedAttachments = await buildAttachmentData(guildId, channelId, message.id, message);
     const reactions = message.reactions.cache.map((r) => ({
         emojiName: r.emoji.name,
@@ -208,7 +212,11 @@ export async function runGuildMessageBackfill({
 
                     const task = (async (): Promise<MessageBackfillOutcome> => {
                         try {
-                            const logged = await processMessageLog(guild.id, channel.id, message);
+                            const logged = await processMessageCreateLog(
+                                guild.id,
+                                channel.id,
+                                message,
+                            );
                             return { logged, failed: false };
                         } catch (logError) {
                             logger.error(

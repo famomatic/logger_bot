@@ -71,7 +71,9 @@ export async function renderEvent({
             if (eventData.inviterId) {
                 try {
                     const inviter = await interaction.client.users.fetch(str(eventData.inviterId));
-                    memberAddDetails.push(`**초대자:** ${inviter.tag} (${str(eventData.inviterId)})`);
+                    memberAddDetails.push(
+                        `**초대자:** ${inviter.tag} (${str(eventData.inviterId)})`,
+                    );
                 } catch {
                     memberAddDetails.push(`**초대자 ID:** ${str(eventData.inviterId)}`);
                 }

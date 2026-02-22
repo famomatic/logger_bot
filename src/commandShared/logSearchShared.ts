@@ -433,16 +433,12 @@ export async function fetchAndDisplayLogs(
             }
         }
 
-        summaryBuilder.setContent(
-            `${summaryPrefix} (${totalCount}개 중 ${logsDisplayed}개 표시)`,
-        );
+        summaryBuilder.setContent(`${summaryPrefix} (${totalCount}개 중 ${logsDisplayed}개 표시)`);
 
         if (displayableComponents.length <= 1 && totalCount > 0 && attachmentsToSend.length === 0) {
             // <= 1 because we added summary and separator
             displayableComponents.push(
-                new TextDisplayBuilder().setContent(
-                    LOG_SEARCH_MESSAGES.renderFailureMessage,
-                ),
+                new TextDisplayBuilder().setContent(LOG_SEARCH_MESSAGES.renderFailureMessage),
             );
         }
 

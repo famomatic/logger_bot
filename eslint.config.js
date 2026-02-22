@@ -8,12 +8,7 @@ import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
 export default defineConfig(
     // 1. 무시 경로
     {
-        ignores: [
-            'dist/**',
-            'node_modules/**',
-            'eslint.config.js',
-            'src/types/*.d.ts',
-        ],
+        ignores: ['dist/**', 'node_modules/**', 'eslint.config.js', 'src/types/*.d.ts'],
     },
 
     // 2. 기본 추천 설정

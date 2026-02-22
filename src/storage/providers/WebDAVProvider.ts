@@ -77,7 +77,7 @@ export class WebDAVProvider implements StorageProvider {
     }
 
     async download(filePath: string): Promise<Buffer> {
-        const fullPath = this.normalizePath(filePath);
+        const fullPath = this.resolveDownloadPath(filePath);
         try {
             const result = await this.client.getFileContents(fullPath, { format: 'binary' });
             if (Buffer.isBuffer(result)) {
@@ -93,6 +93,21 @@ export class WebDAVProvider implements StorageProvider {
             }
             throw error;
         }
+    }
+
+    private resolveDownloadPath(filePath: string): string {
+        const normalizedBase = this.basePath.replace(/\/+$/, '');
+        const normalizedInput = filePath.startsWith('/') ? filePath : `/${filePath}`;
+
+        // Keep backward compatibility for rows that already store an absolute WebDAV path.
+        if (
+            normalizedInput === normalizedBase ||
+            normalizedInput.startsWith(`${normalizedBase}/`)
+        ) {
+            return normalizedInput;
+        }
+
+        return this.normalizePath(filePath);
     }
 
     private normalizePath(filePath: string): string {

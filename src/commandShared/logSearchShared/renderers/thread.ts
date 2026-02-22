@@ -30,7 +30,9 @@ const renderThreadCreate = async (input: GroupRendererInput): Promise<GroupRende
     const thread = getThreadData(input);
 
     if (thread) {
-        details.push(`**스레드 이름:** ${str(thread.name, 'N/A')} (<#${str(thread.id, 'ID 없음')}>)`);
+        details.push(
+            `**스레드 이름:** ${str(thread.name, 'N/A')} (<#${str(thread.id, 'ID 없음')}>)`,
+        );
         if (thread.id) {
             details.push(`**ID:** ${str(thread.id)}`);
         }
@@ -78,8 +80,9 @@ const renderThreadDelete = async (input: GroupRendererInput): Promise<GroupRende
 
     return {
         eventSpecificsText: details.length > 0 ? details.join('\n') : '스레드 삭제 정보 없음',
-        thumbnailComponent:
-            input.logUserId ? await buildUserThumbnail(input, input.logUserId) : undefined,
+        thumbnailComponent: input.logUserId
+            ? await buildUserThumbnail(input, input.logUserId)
+            : undefined,
     };
 };
 
@@ -90,10 +93,14 @@ const renderThreadUpdate = async (input: GroupRendererInput): Promise<GroupRende
     const newThread = isJsonData(newThreadCandidate) ? newThreadCandidate : undefined;
 
     if (newThread) {
-        details.push(`**스레드:** ${str(newThread.name, 'N/A')} (<#${str(newThread.id, 'ID 없음')}>)`);
+        details.push(
+            `**스레드:** ${str(newThread.name, 'N/A')} (<#${str(newThread.id, 'ID 없음')}>)`,
+        );
         if (oldThread) {
             if (oldThread.name !== newThread.name) {
-                details.push(`**이름 변경:** \\\`${str(oldThread.name)}\\\` -> \\\`${str(newThread.name)}\\\``);
+                details.push(
+                    `**이름 변경:** \\\`${str(oldThread.name)}\\\` -> \\\`${str(newThread.name)}\\\``,
+                );
             }
             if (oldThread.archived !== newThread.archived) {
                 details.push(
@@ -119,8 +126,9 @@ const renderThreadUpdate = async (input: GroupRendererInput): Promise<GroupRende
 
     return {
         eventSpecificsText: details.length > 0 ? details.join('\n') : '스레드 업데이트 정보 없음',
-        thumbnailComponent:
-            input.logUserId ? await buildUserThumbnail(input, input.logUserId) : undefined,
+        thumbnailComponent: input.logUserId
+            ? await buildUserThumbnail(input, input.logUserId)
+            : undefined,
     };
 };
 

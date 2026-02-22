@@ -29,9 +29,7 @@ export async function renderEvent(
     const oldState = getJsonData(data.oldState);
     const newState = getJsonData(data.newState) ?? getJsonData(data.state);
     const member =
-        getJsonData(data.member) ??
-        getJsonData(newState?.member) ??
-        getJsonData(oldState?.member);
+        getJsonData(data.member) ?? getJsonData(newState?.member) ?? getJsonData(oldState?.member);
     const memberUser = getJsonData(member?.user);
 
     const userId = str(newState?.id ?? oldState?.id ?? member?.id);

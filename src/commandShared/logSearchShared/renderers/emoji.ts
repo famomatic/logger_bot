@@ -144,9 +144,7 @@ async function renderEmojiDeleteEvent(params: RenderEmojiEventParams): Promise<E
     };
 }
 
-export async function renderEvent(
-    params: RenderEmojiEventParams,
-): Promise<EmojiRenderResult> {
+export async function renderEvent(params: RenderEmojiEventParams): Promise<EmojiRenderResult> {
     switch (params.eventType) {
         case 'emojiCreate':
             return renderEmojiCreateEvent(params);

@@ -43,7 +43,9 @@ const renderChannelCreate = async (input: GroupRendererInput): Promise<GroupRend
     const channel = getChannelData(input);
 
     if (channel) {
-        details.push(`**채널 이름:** ${str(channel.name, 'N/A')} (<#${str(channel.id, 'ID 없음')}>)`);
+        details.push(
+            `**채널 이름:** ${str(channel.name, 'N/A')} (<#${str(channel.id, 'ID 없음')}>)`,
+        );
         if (channel.id) {
             details.push(`**ID:** ${str(channel.id)}`);
         }
@@ -64,8 +66,9 @@ const renderChannelCreate = async (input: GroupRendererInput): Promise<GroupRend
 
     return {
         eventSpecificsText: details.length > 0 ? details.join('\n') : '채널 생성 정보 없음',
-        thumbnailComponent:
-            input.logUserId ? await buildUserThumbnail(input, input.logUserId) : undefined,
+        thumbnailComponent: input.logUserId
+            ? await buildUserThumbnail(input, input.logUserId)
+            : undefined,
     };
 };
 
@@ -98,15 +101,21 @@ const renderChannelDelete = async (input: GroupRendererInput): Promise<GroupRend
 
 const renderChannelUpdate = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
     const details: string[] = [];
-    const oldChannel = isJsonData(input.eventData.oldChannel) ? input.eventData.oldChannel : undefined;
+    const oldChannel = isJsonData(input.eventData.oldChannel)
+        ? input.eventData.oldChannel
+        : undefined;
     const newChannelCandidate = input.eventData.newChannel ?? input.eventData.channel;
     const newChannel = isJsonData(newChannelCandidate) ? newChannelCandidate : undefined;
 
     if (newChannel) {
-        details.push(`**채널:** ${str(newChannel.name, 'N/A')} (<#${str(newChannel.id, 'ID 없음')}>)`);
+        details.push(
+            `**채널:** ${str(newChannel.name, 'N/A')} (<#${str(newChannel.id, 'ID 없음')}>)`,
+        );
         if (oldChannel) {
             if (oldChannel.name !== newChannel.name) {
-                details.push(`**이름 변경:** \\\`${str(oldChannel.name)}\\\` -> \\\`${str(newChannel.name)}\\\``);
+                details.push(
+                    `**이름 변경:** \\\`${str(oldChannel.name)}\\\` -> \\\`${str(newChannel.name)}\\\``,
+                );
             }
             if (oldChannel.topic !== newChannel.topic) {
                 details.push(
@@ -142,14 +151,13 @@ const renderChannelUpdate = async (input: GroupRendererInput): Promise<GroupRend
 
     return {
         eventSpecificsText: details.length > 0 ? details.join('\n') : '채널 업데이트 정보 없음',
-        thumbnailComponent:
-            input.logUserId ? await buildUserThumbnail(input, input.logUserId) : undefined,
+        thumbnailComponent: input.logUserId
+            ? await buildUserThumbnail(input, input.logUserId)
+            : undefined,
     };
 };
 
-const renderChannelPinsUpdate = async (
-    input: GroupRendererInput,
-): Promise<GroupRendererResult> => {
+const renderChannelPinsUpdate = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
     const details: string[] = [];
     const channel = isJsonData(input.eventData.channel) ? input.eventData.channel : undefined;
     const channelId = str(input.eventData.channelId ?? channel?.id);
@@ -168,8 +176,9 @@ const renderChannelPinsUpdate = async (
 
     return {
         eventSpecificsText: details.join('\n'),
-        thumbnailComponent:
-            input.logUserId ? await buildUserThumbnail(input, input.logUserId) : undefined,
+        thumbnailComponent: input.logUserId
+            ? await buildUserThumbnail(input, input.logUserId)
+            : undefined,
     };
 };
 

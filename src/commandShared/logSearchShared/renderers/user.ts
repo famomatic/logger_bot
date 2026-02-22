@@ -29,7 +29,9 @@ export async function renderUserEvent(input: GroupRendererInput): Promise<GroupR
     const newUser = isJsonData(newUserCandidate) ? newUserCandidate : undefined;
 
     if (newUser) {
-        details.push(`**사용자:** ${str(newUser.tag) || str(newUser.username)} (<@${str(newUser.id)}>)`);
+        details.push(
+            `**사용자:** ${str(newUser.tag) || str(newUser.username)} (<@${str(newUser.id)}>)`,
+        );
         if (oldUser) {
             if (oldUser.username !== newUser.username) {
                 details.push(

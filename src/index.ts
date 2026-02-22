@@ -4,6 +4,7 @@ import { logger } from './utils/logger.js';
 import discordClient, { destroyDiscordClient } from './utils/discordClient.js';
 import { destroyDatabase, loadAuthorizedGuildIds } from './db/database.js';
 import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
+import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';
 
 import { loadAlertSubscriptions } from './utils/alertManager.js';
 import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
@@ -47,6 +48,7 @@ async function initializeBot() {
             void (async () => {
                 // 슬래시 커맨드 등록 로그는 loadSlashCommands 에서 출력됨
                 await checkAndLeaveUnauthorizedGuilds(readyClient);
+                await recoverMissedMessagesOnStartup(readyClient);
             })();
         });
 

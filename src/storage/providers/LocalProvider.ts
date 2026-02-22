@@ -18,7 +18,7 @@ export class LocalStorageProvider implements StorageProvider {
     }
 
     async download(filePath: string): Promise<Buffer> {
-        const fullPath = path.join(this.basePath, filePath);
+        const fullPath = path.isAbsolute(filePath) ? filePath : path.join(this.basePath, filePath);
         return await fs.readFile(fullPath);
     }
 }

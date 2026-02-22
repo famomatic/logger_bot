@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { config } from '../config/config.js';
+import { inspect } from 'node:util';
 
 // Sentry 및 관련 모듈 import (ESM 방식)
 import * as Sentry from '@sentry/node';
@@ -49,16 +50,25 @@ const levelColors = {
 // 타임스탬프 포맷 함수
 const getTimestamp = () => new Date().toISOString();
 
+const formatLogArg = (arg: unknown): unknown => {
+    if (arg instanceof Error) {
+        return arg.stack ?? `${arg.name}: ${arg.message}`;
+    }
+
+    if (typeof arg === 'object' && arg !== null) {
+        return inspect(arg, { depth: 5, colors: false, compact: false });
+    }
+
+    return arg;
+};
+
 // 기본 로거 함수
 const log = (level: keyof typeof levelColors, ...args: unknown[]) => {
     const color = levelColors[level] ?? chalk.white;
     const timestamp = chalk.cyan(`[${getTimestamp()}]`);
     const levelTag = color(`[${level.toUpperCase()}]`);
 
-    // 객체나 배열을 보기 좋게 출력
-    const formattedArgs = args.map((arg) =>
-        typeof arg === 'object' && arg !== null ? JSON.stringify(arg, null, 2) : arg,
-    );
+    const formattedArgs = args.map(formatLogArg);
 
     console.log(timestamp, levelTag, ...formattedArgs);
 };

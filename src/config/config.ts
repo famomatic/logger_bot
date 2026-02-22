@@ -103,6 +103,13 @@ function loadConfig() {
             flushIntervalMs: parseInteger(process.env.LOG_QUEUE_FLUSH_INTERVAL_MS, 1000),
             maxRetries: parseInteger(process.env.LOG_QUEUE_MAX_RETRIES, 3),
         },
+        messageRecovery: {
+            enabled: process.env.MESSAGE_RECOVERY_ENABLED?.toLowerCase() !== 'false',
+            maxPagesPerChannel: Math.max(
+                1,
+                parseInteger(process.env.MESSAGE_RECOVERY_MAX_PAGES_PER_CHANNEL, 20),
+            ),
+        },
         sentryDsn: process.env.SENTRY_DSN,
         nodeEnv: process.env.NODE_ENV ?? 'development',
         devLevels: {

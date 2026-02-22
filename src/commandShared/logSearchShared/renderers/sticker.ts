@@ -119,7 +119,9 @@ async function renderStickerUpdateEvent(
     let thumbnailComponent = currentThumbnail;
 
     if (newSticker?.id) {
-        stickerDetails.push(`**스티커:** ${str(newSticker.name, 'N/A')} (ID: ${str(newSticker.id)})`);
+        stickerDetails.push(
+            `**스티커:** ${str(newSticker.name, 'N/A')} (ID: ${str(newSticker.id)})`,
+        );
 
         if (oldSticker) {
             if (oldSticker.name !== newSticker.name) {
@@ -219,9 +221,7 @@ async function renderStickerDeleteEvent(
     };
 }
 
-export async function renderEvent(
-    params: RenderStickerEventParams,
-): Promise<StickerRenderResult> {
+export async function renderEvent(params: RenderStickerEventParams): Promise<StickerRenderResult> {
     switch (params.eventType) {
         case 'stickerCreate':
             return renderStickerCreateEvent(params);

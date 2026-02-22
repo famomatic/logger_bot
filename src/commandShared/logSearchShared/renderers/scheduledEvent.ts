@@ -117,10 +117,14 @@ const renderScheduledEventUpdate = async (
     const newEvent = isJsonData(newEventCandidate) ? newEventCandidate : undefined;
 
     if (newEvent) {
-        eventDetails.push(`**이벤트:** ${str(newEvent.name, 'N/A')} (ID: ${str(newEvent.id, '정보 없음')})`);
+        eventDetails.push(
+            `**이벤트:** ${str(newEvent.name, 'N/A')} (ID: ${str(newEvent.id, '정보 없음')})`,
+        );
         if (oldEvent) {
             if (oldEvent.name !== newEvent.name) {
-                eventDetails.push(`**이름 변경:** \\\`${str(oldEvent.name)}\\\` -> \\\`${str(newEvent.name)}\\\``);
+                eventDetails.push(
+                    `**이름 변경:** \\\`${str(oldEvent.name)}\\\` -> \\\`${str(newEvent.name)}\\\``,
+                );
             }
             if (oldEvent.description !== newEvent.description) {
                 eventDetails.push(
@@ -170,9 +174,7 @@ const renderScheduledEventUpdate = async (
 
     return {
         eventSpecificsText:
-            eventDetails.length > 0
-                ? eventDetails.join('\n')
-                : '예약된 이벤트 업데이트 정보 없음',
+            eventDetails.length > 0 ? eventDetails.join('\n') : '예약된 이벤트 업데이트 정보 없음',
         thumbnailComponent,
     };
 };
@@ -271,7 +273,9 @@ const renderScheduledEventUserChange = async (
     };
 };
 
-export async function renderScheduledEvent(input: GroupRendererInput): Promise<GroupRendererResult> {
+export async function renderScheduledEvent(
+    input: GroupRendererInput,
+): Promise<GroupRendererResult> {
     switch (input.eventType) {
         case 'guildScheduledEventCreate':
             return renderScheduledEventCreate(input);

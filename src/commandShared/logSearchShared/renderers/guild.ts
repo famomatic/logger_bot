@@ -30,11 +30,15 @@ const renderGuildBanAdd = async (input: GroupRendererInput): Promise<GroupRender
         : null;
     const userData = isJsonData(input.eventData.user) ? input.eventData.user : fallbackUserData;
     const reasonValue = input.eventData.reason;
-    const executorData = isJsonData(input.eventData.executor) ? input.eventData.executor : undefined;
+    const executorData = isJsonData(input.eventData.executor)
+        ? input.eventData.executor
+        : undefined;
     const executorId = str(executorData?.id);
 
     if (userData) {
-        banDetails.push(`**사용자:** ${str(userData.tag) || `<@${str(userData.id)}>`} (${str(userData.id)})`);
+        banDetails.push(
+            `**사용자:** ${str(userData.tag) || `<@${str(userData.id)}>`} (${str(userData.id)})`,
+        );
     } else if (input.eventData.userId) {
         banDetails.push(`**사용자 ID:** ${str(input.eventData.userId)}`);
     }
@@ -77,7 +81,9 @@ const renderGuildBanRemove = async (input: GroupRendererInput): Promise<GroupRen
         ? { id: input.eventData.userId, tag: input.eventData.userTag }
         : null;
     const userData = isJsonData(input.eventData.user) ? input.eventData.user : fallbackUserData;
-    const executorData = isJsonData(input.eventData.executor) ? input.eventData.executor : undefined;
+    const executorData = isJsonData(input.eventData.executor)
+        ? input.eventData.executor
+        : undefined;
     const executorId = str(executorData?.id);
 
     if (userData) {
@@ -131,7 +137,9 @@ const renderGuildUpdate = async (input: GroupRendererInput): Promise<GroupRender
     guildChanges.push(`**"${str(newGuild.name) || str(oldGuild.name)}" 설정 변경**`);
 
     if (oldGuild.name !== newGuild.name) {
-        guildChanges.push(`**이름:** \\\`${str(oldGuild.name)}\\\` -> \\\`${str(newGuild.name)}\\\``);
+        guildChanges.push(
+            `**이름:** \\\`${str(oldGuild.name)}\\\` -> \\\`${str(newGuild.name)}\\\``,
+        );
     }
     if (oldGuild.icon !== newGuild.icon) {
         guildChanges.push('**아이콘 변경됨**');
@@ -159,7 +167,9 @@ const renderGuildUpdate = async (input: GroupRendererInput): Promise<GroupRender
                 `**소유자:** ${oldOwnerUser?.tag ?? oldOwnerId} -> ${newOwnerUser?.tag ?? newOwnerId}`,
             );
         } catch {
-            guildChanges.push(`**소유자 ID:** ${str(oldGuild.ownerId)} -> ${str(newGuild.ownerId)}`);
+            guildChanges.push(
+                `**소유자 ID:** ${str(oldGuild.ownerId)} -> ${str(newGuild.ownerId)}`,
+            );
         }
     }
     if (oldGuild.afkChannelId !== newGuild.afkChannelId) {
