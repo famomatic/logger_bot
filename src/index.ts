@@ -103,8 +103,6 @@ function setupGracefulShutdown() {
             await shutdownLogQueue();
             destroyDiscordClient();
             await destroyDatabase();
-            destroyDiscordClient();
-            await destroyDatabase();
             // webdav client is now managed by StorageManager which doesn't need explicit destroy yet
             // or we add storageManager.destroy() if needed, but for now removing the legacy call
             logger.info('Shutdown complete.');

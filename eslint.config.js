@@ -11,7 +11,6 @@ export default defineConfig(
         ignores: [
             'dist/**',
             'node_modules/**',
-            'scripts/**',
             'eslint.config.js',
             'src/types/*.d.ts',
         ],
@@ -21,6 +20,18 @@ export default defineConfig(
     eslint.configs.recommended,
 
     // 3. TypeScript 및 주석 제어 설정
+    {
+        files: ['scripts/**/*.cjs'],
+        languageOptions: {
+            ecmaVersion: 'latest',
+            sourceType: 'commonjs',
+            globals: {
+                ...globals.node,
+            },
+        },
+    },
+
+    // 4. TypeScript 및 주석 제어 설정
     {
         files: ['**/*.ts', '**/*.tsx'],
         extends: [
