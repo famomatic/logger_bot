@@ -9,6 +9,7 @@ import * as Sentry from '@sentry/node';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
 // 기본 통합 기능 목록을 가져오는 함수 import
 import { getDefaultIntegrations } from '@sentry/node';
+import { requestShutdown } from './shutdownManager.js';
 
 // Sentry 초기화 (DSN이 설정된 경우에만)
 // --- Sentry 재활성화 ---
@@ -108,9 +109,11 @@ process.on('uncaughtException', (err) => {
             .catch((closeErr) =>
                 console.error(chalk.red('Sentry close error on uncaughtException:'), closeErr),
             )
-            .finally(() => process.exit(1));
+            .finally(() => {
+                void requestShutdown('uncaughtException', { error: err, exitCode: 1 });
+            });
     } else {
-        process.exit(1);
+        void requestShutdown('uncaughtException', { error: err, exitCode: 1 });
     }
 });
 
@@ -125,8 +128,10 @@ process.on('unhandledRejection', (reason, promise) => {
             .catch((closeErr) =>
                 console.error(chalk.red('Sentry close error on unhandledRejection:'), closeErr),
             )
-            .finally(() => process.exit(1));
+            .finally(() => {
+                void requestShutdown('unhandledRejection', { error: reason, exitCode: 1 });
+            });
     } else {
-        process.exit(1);
+        void requestShutdown('unhandledRejection', { error: reason, exitCode: 1 });
     }
 });

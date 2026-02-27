@@ -7,7 +7,9 @@
     "scripts": {
         "start": "node dist/index.js",
         "clean": "node -e \"['dist', 'node_modules', 'package-lock.json'].forEach((p) => require('fs').rmSync(p, { recursive: true, force: true }))\" && npm install",
-        "dev": "tsx src/index.ts",
+        "dev": "npm run build && NODE_ENV=dev node dist/index.js",
+        "dev:build:watch": "tsc -w",
+        "dev:run:watch": "NODE_ENV=dev node --watch dist/index.js",
         "build": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
         "type": "tsc --noEmit",
         "lint": "eslint .",

@@ -7,6 +7,7 @@ import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import type { AttachmentData } from '../types/commands.js';
 import type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
 import type { ErrorWithCode } from '../types/errors.js';
+import type { BuildMessageCreateDataParams, MessageReactionSnapshot } from '../types/messageLog.js';
 import { logger } from '../utils/logger.js';
 
 export type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
@@ -65,7 +66,7 @@ export function isLegacyCommandByDev(message: Message, legacyCommandPrefixes: st
     return message.content === matchedPrefix || message.content.startsWith(`${matchedPrefix} `);
 }
 
-async function buildAttachmentData(
+export async function buildAttachmentData(
     guildId: string,
     channelId: string,
     messageId: string,
@@ -113,32 +114,49 @@ async function buildAttachmentData(
     return processedAttachments;
 }
 
+export function buildMessageCreateLogData(
+    params: BuildMessageCreateDataParams,
+): Record<string, unknown> {
+    const { message, attachments } = params;
+
+    return {
+        messageId: message.id,
+        content: message.content,
+        authorTag: message.author.tag,
+        authorUsername: message.author.username,
+        attachments,
+        stickers: message.stickers.map((s) => ({
+            id: s.id,
+            name: s.name,
+            format: s.format,
+        })),
+        reactions: params.reactions ?? [],
+        embeds: params.embeds ?? [],
+        messageType: message.type,
+        forwardedContentList: params.forwardedContentList ?? null,
+        referencedMessage: params.referencedMessage ?? null,
+        rawReference: params.rawReference ?? null,
+    };
+}
+
 export async function processMessageCreateLog(
     guildId: string,
     channelId: string,
     message: Message,
 ): Promise<boolean> {
     const processedAttachments = await buildAttachmentData(guildId, channelId, message.id, message);
-    const reactions = message.reactions.cache.map((r) => ({
+    const reactions: MessageReactionSnapshot[] = message.reactions.cache.map((r) => ({
         emojiName: r.emoji.name,
         emojiId: r.emoji.id,
         emojiAnimated: r.emoji.animated,
         count: r.count,
     }));
 
-    const dataToStore = {
-        messageId: message.id,
-        content: message.content,
-        authorTag: message.author.tag,
-        authorUsername: message.author.username,
+    const dataToStore = buildMessageCreateLogData({
+        message,
         attachments: processedAttachments,
-        stickers: message.stickers.map((s) => ({
-            id: s.id,
-            name: s.name,
-            format: s.format,
-        })),
         reactions,
-    };
+    });
 
     return await logEvent(
         'messageCreate',

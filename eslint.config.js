@@ -44,11 +44,10 @@ export default defineConfig(
             },
             globals: {
                 ...globals.node,
-                ...globals.browser,
             },
         },
         rules: {
-            '@typescript-eslint/no-var-requires': 'error',
+            '@typescript-eslint/no-require-imports': 'error',
             '@typescript-eslint/no-explicit-any': 'error',
             '@typescript-eslint/ban-ts-comment': [
                 'error',
@@ -67,6 +66,12 @@ export default defineConfig(
                         "TSAsExpression[expression.type='TSAsExpression'][expression.typeAnnotation.type='TSUnknownKeyword']",
                     message:
                         'Avoid double assertion via `unknown`: `(x as unknown) as T`. Prefer runtime checks/type guards, or a single justified assertion.',
+                },
+                {
+                    selector:
+                        "CallExpression[callee.type='MemberExpression'][callee.property.name='join'][arguments.length=1][arguments.0.type='Literal'][arguments.0.value='\\\\n']",
+                    message:
+                        "Avoid `join('\\\\n')`. Use a real newline join (`join('\\n')`) or direct template/newline handling.",
                 },
             ],
         },

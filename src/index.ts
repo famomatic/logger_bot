@@ -8,6 +8,7 @@ import { recoverMissedMessagesOnStartup } from './services/startupMessageRecover
 
 import { loadAlertSubscriptions } from './utils/alertManager.js';
 import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
+import { registerShutdownHandler, requestShutdown } from './utils/shutdownManager.js';
 
 // 로더 임포트
 import { loadLegacyCommands } from './utils/loadLegacyCommands.js';
@@ -99,26 +100,26 @@ async function handleInteraction(interaction: Interaction) {
 void initializeBot();
 
 function setupGracefulShutdown() {
-    const shutdown = async (signal: NodeJS.Signals) => {
-        logger.info(`Received ${signal}. Shutting down gracefully...`);
+    registerShutdownHandler(async ({ reason, error }) => {
+        logger.info(`Shutdown requested (${reason}).`);
+        if (error) {
+            logger.error('Shutdown triggered by fatal error:', error);
+        }
         try {
             await shutdownLogQueue();
             destroyDiscordClient();
             await destroyDatabase();
-            // webdav client is now managed by StorageManager which doesn't need explicit destroy yet
-            // or we add storageManager.destroy() if needed, but for now removing the legacy call
             logger.info('Shutdown complete.');
         } catch (err) {
             logger.error('Error during shutdown:', err);
-        } finally {
-            process.exit(0);
         }
-    };
+    });
+
     process.once('SIGINT', () => {
-        void shutdown('SIGINT');
+        void requestShutdown('SIGINT', { exitCode: 0 });
     });
     process.once('SIGTERM', () => {
-        void shutdown('SIGTERM');
+        void requestShutdown('SIGTERM', { exitCode: 0 });
     });
 }
 
