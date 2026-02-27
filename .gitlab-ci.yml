@@ -9,6 +9,11 @@ stages:
     - build
     - security
 
+variables:
+    npm_config_cache: '$CI_PROJECT_DIR/.npm'
+    npm_config_fund: 'false'
+    npm_config_audit: 'false'
+
 default:
     image: node:20-bookworm
     interruptible: true
@@ -19,10 +24,6 @@ default:
         paths:
             - .npm/
         policy: pull-push
-    variables:
-        npm_config_cache: '$CI_PROJECT_DIR/.npm'
-        npm_config_fund: 'false'
-        npm_config_audit: 'false'
     before_script:
         - node --version
         - npm --version
