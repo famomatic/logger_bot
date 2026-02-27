@@ -1,5 +1,6 @@
 import chalk from 'chalk';
 import { config } from '../config/config.js';
+import { inspect } from 'node:util';
 
 // Sentry 및 관련 모듈 import (ESM 방식)
 import * as Sentry from '@sentry/node';
@@ -8,6 +9,7 @@ import * as Sentry from '@sentry/node';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
 // 기본 통합 기능 목록을 가져오는 함수 import
 import { getDefaultIntegrations } from '@sentry/node';
+import { requestShutdown } from './shutdownManager.js';
 
 // Sentry 초기화 (DSN이 설정된 경우에만)
 // --- Sentry 재활성화 ---
@@ -49,16 +51,25 @@ const levelColors = {
 // 타임스탬프 포맷 함수
 const getTimestamp = () => new Date().toISOString();
 
+const formatLogArg = (arg: unknown): unknown => {
+    if (arg instanceof Error) {
+        return arg.stack ?? `${arg.name}: ${arg.message}`;
+    }
+
+    if (typeof arg === 'object' && arg !== null) {
+        return inspect(arg, { depth: 5, colors: false, compact: false });
+    }
+
+    return arg;
+};
+
 // 기본 로거 함수
 const log = (level: keyof typeof levelColors, ...args: unknown[]) => {
     const color = levelColors[level] ?? chalk.white;
     const timestamp = chalk.cyan(`[${getTimestamp()}]`);
     const levelTag = color(`[${level.toUpperCase()}]`);
 
-    // 객체나 배열을 보기 좋게 출력
-    const formattedArgs = args.map((arg) =>
-        typeof arg === 'object' && arg !== null ? JSON.stringify(arg, null, 2) : arg,
-    );
+    const formattedArgs = args.map(formatLogArg);
 
     console.log(timestamp, levelTag, ...formattedArgs);
 };
@@ -98,9 +109,11 @@ process.on('uncaughtException', (err) => {
             .catch((closeErr) =>
                 console.error(chalk.red('Sentry close error on uncaughtException:'), closeErr),
             )
-            .finally(() => process.exit(1));
+            .finally(() => {
+                void requestShutdown('uncaughtException', { error: err, exitCode: 1 });
+            });
     } else {
-        process.exit(1);
+        void requestShutdown('uncaughtException', { error: err, exitCode: 1 });
     }
 });
 
@@ -115,8 +128,10 @@ process.on('unhandledRejection', (reason, promise) => {
             .catch((closeErr) =>
                 console.error(chalk.red('Sentry close error on unhandledRejection:'), closeErr),
             )
-            .finally(() => process.exit(1));
+            .finally(() => {
+                void requestShutdown('unhandledRejection', { error: reason, exitCode: 1 });
+            });
     } else {
-        process.exit(1);
+        void requestShutdown('unhandledRejection', { error: reason, exitCode: 1 });
     }
 });

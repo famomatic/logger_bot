@@ -16,6 +16,7 @@ import { logEvent } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import type { AttachmentData, SlashCommand } from '../types/commands.js';
+import type { MessageReactionSnapshot } from '../types/messageLog.js';
 
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     let lastError: unknown = null;
@@ -172,12 +173,14 @@ export const command: SlashCommand = {
                         }
                     }
 
-                    const reactions = message.reactions.cache.map((r) => ({
-                        emojiName: r.emoji.name,
-                        emojiId: r.emoji.id,
-                        emojiAnimated: r.emoji.animated,
-                        count: r.count,
-                    }));
+                    const reactions: MessageReactionSnapshot[] = message.reactions.cache.map(
+                        (r) => ({
+                            emojiName: r.emoji.name,
+                            emojiId: r.emoji.id,
+                            emojiAnimated: r.emoji.animated,
+                            count: r.count,
+                        }),
+                    );
 
                     const dataToStore = {
                         messageId: message.id,

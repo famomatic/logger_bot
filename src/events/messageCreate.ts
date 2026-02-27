@@ -1,118 +1,21 @@
 import { Events, Message, Client, Collection, MessageReference } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import axios, { AxiosError } from 'axios';
-import { storageManager } from '../storage/StorageManager.js';
-import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import { config } from '../config/config.js';
 import pool, { logEvent, isGuildAuthorized } from '../db/database.js';
 import type { LegacyCommand } from '../types/commands.js';
 import type { ErrorWithCode } from '../types/errors.js';
-
-// 첨부파일 다운로드 재시도 로직
-async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
-    let lastError: unknown = null;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            logger.debug(`Downloading attachment: ${url} (try ${attempt}/${maxRetries})`);
-            const res = await axios.get<ArrayBuffer>(url, { responseType: 'arraybuffer' });
-            return Buffer.from(res.data);
-        } catch (err: unknown) {
-            lastError = err;
-            const message = err instanceof Error ? err.message : String(err);
-            logger.warn(`Failed to download ${url} on attempt ${attempt}: ${message}`);
-            if (attempt < maxRetries) {
-                await new Promise((r) => setTimeout(r, 1000 * attempt));
-            }
-        }
-    }
-    throw lastError;
-}
-
-// Forward message types (Discord's internal structure for forwarded messages)
-interface ForwardedMessageAuthor {
-    id?: string;
-    username?: string;
-    discriminator?: string;
-    bot?: boolean;
-}
-
-interface ForwardedAttachment {
-    id?: string;
-    filename?: string;
-    content_type?: string;
-    contentType?: string;
-    size?: number;
-    url?: string;
-    proxy_url?: string;
-    proxyURL?: string;
-}
-
-interface ForwardedEmbedFooter {
-    text?: string;
-    icon_url?: string;
-    iconURL?: string;
-}
-
-interface ForwardedEmbedImage {
-    url?: string;
-    proxy_url?: string;
-    proxyURL?: string;
-    height?: number;
-    width?: number;
-}
-
-interface ForwardedEmbedAuthor {
-    name?: string;
-    url?: string;
-    icon_url?: string;
-    iconURL?: string;
-}
-
-interface ForwardedEmbedField {
-    name?: string;
-    value?: string;
-    inline?: boolean;
-}
-
-interface ForwardedEmbedProvider {
-    name?: string;
-    url?: string;
-}
-
-interface ForwardedEmbed {
-    title?: string;
-    description?: string;
-    url?: string;
-    timestamp?: string;
-    color?: number;
-    footer?: ForwardedEmbedFooter;
-    image?: ForwardedEmbedImage;
-    thumbnail?: ForwardedEmbedImage;
-    video?: ForwardedEmbedImage;
-    author?: ForwardedEmbedAuthor;
-    fields?: ForwardedEmbedField[];
-    provider?: ForwardedEmbedProvider;
-}
-
-interface ForwardedMessage {
-    id?: string;
-    content?: string;
-    author?: ForwardedMessageAuthor;
-    attachments?: ForwardedAttachment[];
-    embeds?: ForwardedEmbed[];
-    timestamp?: string;
-    edited_timestamp?: string;
-}
-
-// Extend Message to access raw forwarded messages (not in discord.js types)
-interface MessageWithForwarded extends Message {
-    forwardedMessages?: ForwardedMessage[];
-    forwarded_messages?: ForwardedMessage[];
-}
-
-interface DbLogRow {
-    data: Record<string, unknown>;
-}
+import type {
+    DbLogRow,
+    ForwardedAttachment,
+    ForwardedEmbed,
+    ForwardedEmbedField,
+    ForwardedMessage,
+    MessageWithForwarded,
+} from '../types/messageLog.js';
+import {
+    buildAttachmentData,
+    buildMessageCreateLogData,
+} from '../services/logGuildMessagesService.js';
 
 const BOT_PREFIX = 'logger '; // 고정 접두사 정의
 
@@ -176,62 +79,12 @@ const event = {
             logger.warn(`Unauthorized ${eventType} event logging on guild ${guildId} skipped`);
             return;
         }
-        // 첨부 파일 처리 및 정보 추출
-        const processedAttachments = [];
-        if (message.attachments.size > 0) {
-            logger.debug(
-                `Processing ${message.attachments.size} attachments for message ${messageId}`,
-            );
-            for (const attachment of message.attachments.values()) {
-                let storagePath: string | null = null;
-                let downloadError: string | null = null;
-
-                if (config.storage.type) {
-                    // Assumes type is present if we are here
-                    try {
-                        const fileBuffer = await downloadWithRetry(attachment.url, 3);
-                        logger.debug(
-                            `Downloaded ${attachment.name ?? 'unnamed'} (${fileBuffer.length} bytes)`,
-                        );
-
-                        const relativePath = createAttachmentStoragePath(
-                            guildId,
-                            channelId,
-                            messageId,
-                            attachment.id,
-                            attachment.name,
-                        );
-                        storagePath = await storageManager.upload(relativePath, fileBuffer);
-                    } catch (error: unknown) {
-                        downloadError =
-                            error instanceof Error
-                                ? error.message
-                                : 'Unknown download/upload error';
-                        logger.error(
-                            `Failed to download/upload attachment ${attachment.id} (${attachment.name ?? 'unnamed'}):`,
-                            error,
-                        );
-                    }
-                }
-
-                processedAttachments.push({
-                    id: attachment.id,
-                    storagePath,
-                    downloadError,
-                    filename: attachment.name,
-                    contentType: attachment.contentType,
-                    size: attachment.size,
-                    discordUrl: attachment.url,
-                });
-            }
-        }
-
-        // 스티커 정보 추출
-        const stickers = message.stickers.map((stk) => ({
-            id: stk.id,
-            name: stk.name,
-            format: stk.format,
-        }));
+        const processedAttachments = await buildAttachmentData(
+            guildId,
+            channelId,
+            messageId,
+            message,
+        );
 
         // 임베드 정보 추출 (일반 메시지용)
         const embeds = message.embeds.map((embed) => ({
@@ -439,11 +292,7 @@ const event = {
                 } catch (error: unknown) {
                     const errMsg = error instanceof Error ? error.message : String(error);
                     const errCode =
-                        error instanceof AxiosError
-                            ? error.code
-                            : error instanceof Error
-                              ? (error as ErrorWithCode).code
-                              : undefined;
+                        error instanceof Error ? (error as ErrorWithCode).code : undefined;
                     logger.warn(`Failed to fetch referenced message ${refId}: ${errMsg}`);
                     referencedMessageData = {
                         error: `Failed to fetch: ${errMsg}`,
@@ -456,17 +305,12 @@ const event = {
         }
 
         // 데이터베이스에 저장할 JSON 데이터
-        const dataToStore: Record<string, unknown> = {
-            messageId: messageId,
-            content: message.content,
-            authorTag: message.author.tag,
-            authorUsername: message.author.username,
+        const dataToStore = buildMessageCreateLogData({
+            message,
             attachments: processedAttachments,
-            stickers: stickers,
-            embeds: embeds,
-            messageType: message.type,
+            embeds,
             forwardedContentList: forwardedContentData,
-            referencedMessage: referencedMessageData, // 답장/참조된 원본 메시지 정보 추가
+            referencedMessage: referencedMessageData,
             rawReference: message.reference
                 ? {
                       channelId: message.reference.channelId,
@@ -475,7 +319,7 @@ const event = {
                       type: (message.reference as MessageReference & { type?: unknown }).type,
                   }
                 : null,
-        };
+        });
 
         try {
             // await query(insertQuery, values);

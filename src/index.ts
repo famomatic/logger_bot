@@ -4,9 +4,11 @@ import { logger } from './utils/logger.js';
 import discordClient, { destroyDiscordClient } from './utils/discordClient.js';
 import { destroyDatabase, loadAuthorizedGuildIds } from './db/database.js';
 import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
+import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';
 
 import { loadAlertSubscriptions } from './utils/alertManager.js';
 import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
+import { registerShutdownHandler, requestShutdown } from './utils/shutdownManager.js';
 
 // 로더 임포트
 import { loadLegacyCommands } from './utils/loadLegacyCommands.js';
@@ -47,6 +49,7 @@ async function initializeBot() {
             void (async () => {
                 // 슬래시 커맨드 등록 로그는 loadSlashCommands 에서 출력됨
                 await checkAndLeaveUnauthorizedGuilds(readyClient);
+                await recoverMissedMessagesOnStartup(readyClient);
             })();
         });
 
@@ -97,28 +100,26 @@ async function handleInteraction(interaction: Interaction) {
 void initializeBot();
 
 function setupGracefulShutdown() {
-    const shutdown = async (signal: NodeJS.Signals) => {
-        logger.info(`Received ${signal}. Shutting down gracefully...`);
+    registerShutdownHandler(async ({ reason, error }) => {
+        logger.info(`Shutdown requested (${reason}).`);
+        if (error) {
+            logger.error('Shutdown triggered by fatal error:', error);
+        }
         try {
             await shutdownLogQueue();
             destroyDiscordClient();
             await destroyDatabase();
-            destroyDiscordClient();
-            await destroyDatabase();
-            // webdav client is now managed by StorageManager which doesn't need explicit destroy yet
-            // or we add storageManager.destroy() if needed, but for now removing the legacy call
             logger.info('Shutdown complete.');
         } catch (err) {
             logger.error('Error during shutdown:', err);
-        } finally {
-            process.exit(0);
         }
-    };
+    });
+
     process.once('SIGINT', () => {
-        void shutdown('SIGINT');
+        void requestShutdown('SIGINT', { exitCode: 0 });
     });
     process.once('SIGTERM', () => {
-        void shutdown('SIGTERM');
+        void requestShutdown('SIGTERM', { exitCode: 0 });
     });
 }
 

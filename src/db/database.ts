@@ -9,17 +9,22 @@ import discordClient from '../utils/discordClient.js';
 import { dispatchAlert } from '../utils/alertManager.js';
 import type { AlertSubscriptionRow } from '../types/alerts.js';
 import type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
+import type { PgError } from '../types/errors.js';
+import type {
+    BatchInsertedLogRow,
+    CountRow,
+    FetchedLogRow,
+    GuildLogStatsRow,
+    LatestMessageCreateCheckpointRow,
+    RankedEventTypeRow,
+    RankedRow,
+    ScopeSummaryRow,
+} from '../types/dbRows.js';
 
 export type { AlertSubscriptionRow } from '../types/alerts.js';
 export type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
 
 dotenv.config();
-
-// PostgreSQL error type for pg library errors with code/detail
-interface PgError extends Error {
-    code?: string;
-    detail?: string;
-}
 
 const pool = new Pool({
     user: config.dbUser,
@@ -122,6 +127,32 @@ export async function fetchAlertSubscriptions(): Promise<AlertSubscriptionRow[]>
     }
 }
 
+export async function fetchLatestMessageCreateTargetIdsByChannel(
+    guildId: string,
+): Promise<Map<string, string>> {
+    try {
+        const result = await pool.query<LatestMessageCreateCheckpointRow>(
+            `
+            SELECT DISTINCT ON (channel_id) channel_id, target_id
+            FROM event_logs
+            WHERE guild_id = $1
+              AND event_type = 'messageCreate'
+              AND channel_id IS NOT NULL
+            ORDER BY channel_id, "timestamp" DESC
+            `,
+            [guildId],
+        );
+
+        return new Map(result.rows.map((row) => [row.channel_id, row.target_id]));
+    } catch (error) {
+        logger.error(
+            `Failed to fetch latest messageCreate checkpoints for guild ${guildId}:`,
+            error,
+        );
+        return new Map();
+    }
+}
+
 type LogEventDispatcher = (event: LogEventRecord) => Promise<boolean>;
 
 let logEventDispatcher: LogEventDispatcher | null = null;
@@ -178,15 +209,32 @@ function normalizeLogEvent(
     };
 }
 
+function assertValidGuildId(guildId: string): void {
+    if (!/^\d+$/.test(guildId)) {
+        throw new Error(`Invalid guild ID format: ${guildId}`);
+    }
+}
+
+function quoteIdentifier(input: string): string {
+    return `"${input.replace(/"/g, '""')}"`;
+}
+
+function quoteLiteral(input: string): string {
+    return `'${input.replace(/'/g, "''")}'`;
+}
+
 async function ensureGuildPartition(guildId: string): Promise<void> {
+    assertValidGuildId(guildId);
     const partitionTableName = `event_logs_guild_${guildId}`;
+    const quotedPartitionTableName = quoteIdentifier(partitionTableName);
+    const quotedGuildId = quoteLiteral(guildId);
     try {
-        const createPartitionQuery = `CREATE TABLE IF NOT EXISTS "${partitionTableName}" PARTITION OF event_logs FOR VALUES IN ('${guildId}');`;
+        const createPartitionQuery = `CREATE TABLE IF NOT EXISTS ${quotedPartitionTableName} PARTITION OF event_logs FOR VALUES IN (${quotedGuildId});`;
         await pool.query(createPartitionQuery);
     } catch (error: unknown) {
         const pgErr = error as PgError;
         if (pgErr.code === '42P07') {
-            const attachQuery = `ALTER TABLE event_logs ATTACH PARTITION "${partitionTableName}" FOR VALUES IN ('${guildId}');`;
+            const attachQuery = `ALTER TABLE event_logs ATTACH PARTITION ${quotedPartitionTableName} FOR VALUES IN (${quotedGuildId});`;
             await pool.query(attachQuery);
         } else if (pgErr.code !== '42710' && pgErr.code !== '42809') {
             throw error;
@@ -288,15 +336,7 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
     `;
 
     try {
-        const result = await pool.query<{
-            event_type: string;
-            guild_id: string;
-            user_id: string | null;
-            channel_id: string | null;
-            target_id: string;
-            data: Record<string, unknown>;
-            timestamp: Date;
-        }>(insertQuery, values);
+        const result = await pool.query<BatchInsertedLogRow>(insertQuery, values);
 
         for (const row of result.rows) {
             void dispatchAlert(
@@ -384,20 +424,6 @@ function logOriginalError(
 
 // Function to fetch logs with pagination
 // ... (fetchLogs 구현은 동일하게 유지)
-
-interface FetchedLogRow {
-    id: number;
-    event_type: string;
-    user_id: string | null;
-    channel_id: string | null;
-    target_id: string | null;
-    data: Record<string, unknown>;
-    timestamp: Date;
-}
-
-interface CountRow {
-    count: string;
-}
 
 /**
  * Fetches logs from the database with pagination.
@@ -567,15 +593,6 @@ export interface GuildLogStats {
     stickerCount: number;
 }
 
-interface GuildLogStatsRow {
-    total_logs: string;
-    message_create_count: string;
-    text_message_count: string;
-    total_text_characters: string;
-    attachment_count: string;
-    sticker_count: string;
-}
-
 export async function getGuildLogStats(guildId: string): Promise<GuildLogStats> {
     const query = `
     WITH message_data AS (
@@ -627,29 +644,6 @@ export async function getGuildLogStats(guildId: string): Promise<GuildLogStats> 
             stickerCount: 0,
         };
     }
-}
-
-interface ScopeSummaryRow {
-    total_logs: string;
-    message_create_count: string;
-    message_update_count: string;
-    message_delete_count: string;
-    moderation_action_count: string;
-    attachment_count: string;
-    sticker_count: string;
-    last_activity_at: Date | null;
-    last_24h_count: string;
-    prev_24h_count: string;
-}
-
-interface RankedRow {
-    id: string | null;
-    count: string;
-}
-
-interface RankedEventTypeRow {
-    event_type: string;
-    count: string;
 }
 
 function toCount(value: string | null | undefined): number {
