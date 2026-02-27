@@ -1,0 +1,78 @@
+workflow:
+    rules:
+        - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+        - if: '$CI_COMMIT_BRANCH'
+        - if: '$CI_COMMIT_TAG'
+
+stages:
+    - quality
+    - build
+    - security
+
+default:
+    image: node:20-bookworm
+    interruptible: true
+    cache:
+        key:
+            files:
+                - package-lock.json
+        paths:
+            - .npm/
+        policy: pull-push
+    variables:
+        npm_config_cache: '$CI_PROJECT_DIR/.npm'
+        npm_config_fund: 'false'
+        npm_config_audit: 'false'
+    before_script:
+        - node --version
+        - npm --version
+        - npm ci --prefer-offline
+
+lint_strict:
+    stage: quality
+    script:
+        - npm run lint:strict
+
+lint_scripts:
+    stage: quality
+    script:
+        - npm run lint:scripts
+
+prettier_check:
+    stage: quality
+    script:
+        - npx prettier --check .
+
+typecheck:
+    stage: quality
+    script:
+        - npm run type
+
+verify_renderers:
+    stage: quality
+    script:
+        - npm run verify:renderers
+
+build:
+    stage: build
+    needs:
+        - lint_strict
+        - lint_scripts
+        - prettier_check
+        - typecheck
+        - verify_renderers
+    script:
+        - npm run build
+    artifacts:
+        when: always
+        expire_in: 7 days
+        paths:
+            - dist/
+
+audit_production_deps:
+    stage: security
+    script:
+        - npm audit --omit=dev --audit-level=high
+    rules:
+        - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+        - if: '$CI_COMMIT_TAG'
