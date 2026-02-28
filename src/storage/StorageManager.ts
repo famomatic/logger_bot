@@ -1,4 +1,4 @@
-import { StorageProvider } from './StorageProvider.js';
+import type { StorageProvider } from '../types/storage.js';
 import { LocalStorageProvider } from './providers/LocalProvider.js';
 import { WebDAVProvider } from './providers/WebDAVProvider.js';
 import { S3StorageProvider } from './providers/S3Provider.js';

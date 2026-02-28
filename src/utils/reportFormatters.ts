@@ -1,22 +1,10 @@
 import type { Client } from 'discord.js';
-
-export interface EventTypeCountLike {
-    eventType: string;
-    count: number;
-}
-
-export interface IdCountLike {
-    id: string;
-    count: number;
-}
-
-export interface FormatListOptions {
-    locale?: string;
-    emptyText?: string;
-    countUnit?: string;
-}
-
-export type MentionEntityType = 'user' | 'channel';
+import type {
+    EventTypeCountLike,
+    FormatListOptions,
+    IdCountLike,
+    MentionEntityType,
+} from '../types/reportFormatters.js';
 
 function formatRankedList<T>(
     items: T[],

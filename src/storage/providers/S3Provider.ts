@@ -1,6 +1,6 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
-import { StorageProvider } from '../StorageProvider.js';
+import type { StorageProvider } from '../../types/storage.js';
 
 export class S3StorageProvider implements StorageProvider {
     private client: S3Client;

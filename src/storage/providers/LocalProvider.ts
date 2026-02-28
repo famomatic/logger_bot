@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { StorageProvider } from '../StorageProvider.js';
+import type { StorageProvider } from '../../types/storage.js';
 
 export class LocalStorageProvider implements StorageProvider {
     private basePath: string;

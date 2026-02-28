@@ -3,7 +3,7 @@ import type {
     MessageComponentInteraction,
     ThumbnailBuilder,
 } from 'discord.js';
-import type { JsonData } from '../../../types/json.js';
+import type { JsonData } from './json.js';
 
 export type LogSearchInteraction = ChatInputCommandInteraction | MessageComponentInteraction;
 

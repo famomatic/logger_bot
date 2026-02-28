@@ -1,6 +1,6 @@
 import SMB2 from '@marsaud/smb2';
 import path from 'path';
-import { StorageProvider } from '../StorageProvider.js';
+import type { StorageProvider } from '../../types/storage.js';
 
 export class SMBStorageProvider implements StorageProvider {
     private client: SMB2;

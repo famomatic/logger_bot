@@ -10,8 +10,6 @@ import type { ErrorWithCode } from '../types/errors.js';
 import type { BuildMessageCreateDataParams, MessageReactionSnapshot } from '../types/messageLog.js';
 import { logger } from '../utils/logger.js';
 
-export type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
-
 export class NoAccessibleGuildChannelsError extends Error {
     constructor(guildId: string) {
         super(`No accessible channels found for guild ${guildId}`);

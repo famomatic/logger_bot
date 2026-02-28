@@ -8,6 +8,7 @@ import { sanitizeObjectStrings } from '../utils/sanitize.js';
 import discordClient from '../utils/discordClient.js';
 import { dispatchAlert } from '../utils/alertManager.js';
 import type { AlertSubscriptionRow } from '../types/alerts.js';
+import type { GuildLogStats } from '../types/database.js';
 import type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
 import type { PgError } from '../types/errors.js';
 import type {
@@ -20,9 +21,6 @@ import type {
     RankedRow,
     ScopeSummaryRow,
 } from '../types/dbRows.js';
-
-export type { AlertSubscriptionRow } from '../types/alerts.js';
-export type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
 
 dotenv.config();
 
@@ -582,15 +580,6 @@ export async function countLogs(
         logger.error(`Error counting logs for guild ${guildId}:`, error);
         return 0; // Return 0 or throw error
     }
-}
-
-export interface GuildLogStats {
-    totalLogs: number;
-    messageCreateCount: number;
-    textMessageCount: number;
-    totalTextCharacters: number;
-    attachmentCount: number;
-    stickerCount: number;
 }
 
 export async function getGuildLogStats(guildId: string): Promise<GuildLogStats> {

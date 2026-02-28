@@ -1,5 +1,5 @@
 import { createClient, WebDAVClient, WebDAVClientOptions } from 'webdav';
-import { StorageProvider } from '../StorageProvider.js';
+import type { StorageProvider } from '../../types/storage.js';
 import { setDefaultResultOrder } from 'node:dns';
 import { logger } from '../../utils/logger.js';
 

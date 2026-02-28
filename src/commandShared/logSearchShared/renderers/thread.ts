@@ -1,7 +1,7 @@
 import { ThumbnailBuilder } from 'discord.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from './types.js';
+import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,

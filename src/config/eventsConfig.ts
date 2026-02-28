@@ -1,11 +1,4 @@
-export interface EventConfig {
-    eventName: string;
-    friendlyName: string;
-    dbEventType: string;
-    category: string; // 이벤트 카테고리
-    searchableFields?: string[];
-    includeInChoices?: boolean; // 명령어 선택지에 포함할지 여부
-}
+import type { EventConfig } from '../types/eventsConfig.js';
 
 export const eventConfigurations: Record<string, EventConfig> = {
     messageCreate: {

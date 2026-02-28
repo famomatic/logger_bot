@@ -1,4 +1,12 @@
-import { Events, Message, Client, Collection, MessageReference } from 'discord.js';
+import {
+    Events,
+    Message,
+    Client,
+    Collection,
+    MessageReference,
+    MessageFlags,
+    MessageReferenceType,
+} from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/config.js';
 import pool, { logEvent, isGuildAuthorized } from '../db/database.js';
@@ -133,10 +141,90 @@ const event = {
                 : null,
         }));
 
-        // 전달된 메시지 정보 추출 (message.type === 24 인 경우)
+        // 전달된 메시지 정보 추출
         let forwardedContentData: Record<string, unknown>[] | null = null;
-        if ((message.type as number) === 24) {
-            // MessageType.Forward equivalent
+        const snapshotMessages = Array.from(message.messageSnapshots.values());
+        if (snapshotMessages.length > 0) {
+            forwardedContentData = snapshotMessages.map((snapshot) => ({
+                id: snapshot.id,
+                content: snapshot.content,
+                author: snapshot.author
+                    ? {
+                          id: snapshot.author.id,
+                          username: snapshot.author.username,
+                          discriminator: snapshot.author.discriminator,
+                          tag: snapshot.author.tag,
+                          bot: snapshot.author.bot,
+                      }
+                    : null,
+                attachments: snapshot.attachments.map((att) => ({
+                    id: att.id,
+                    filename: att.name,
+                    contentType: att.contentType,
+                    size: att.size,
+                    url: att.url,
+                    proxy_url: att.proxyURL,
+                })),
+                embeds: snapshot.embeds.map((emb) => ({
+                    title: emb.title,
+                    description: emb.description,
+                    url: emb.url,
+                    timestamp: emb.timestamp,
+                    color: emb.color,
+                    footer: emb.footer
+                        ? {
+                              text: emb.footer.text,
+                              icon_url: emb.footer.iconURL,
+                          }
+                        : null,
+                    image: emb.image
+                        ? {
+                              url: emb.image.url,
+                              proxy_url: emb.image.proxyURL,
+                              height: emb.image.height,
+                              width: emb.image.width,
+                          }
+                        : null,
+                    thumbnail: emb.thumbnail
+                        ? {
+                              url: emb.thumbnail.url,
+                              proxy_url: emb.thumbnail.proxyURL,
+                              height: emb.thumbnail.height,
+                              width: emb.thumbnail.width,
+                          }
+                        : null,
+                    video: emb.video
+                        ? {
+                              url: emb.video.url,
+                              proxy_url: emb.video.proxyURL,
+                              height: emb.video.height,
+                              width: emb.video.width,
+                          }
+                        : null,
+                    author: emb.author
+                        ? {
+                              name: emb.author.name,
+                              url: emb.author.url,
+                              icon_url: emb.author.iconURL,
+                          }
+                        : null,
+                    fields: emb.fields.map((field) => ({
+                        name: field.name,
+                        value: field.value,
+                        inline: field.inline,
+                    })),
+                    provider: emb.provider ? { name: emb.provider.name, url: emb.provider.url } : null,
+                })),
+                components: snapshot.components.map((component) => component.toJSON()),
+                flags: {
+                    bitfield: snapshot.flags.bitfield,
+                    isComponentsV2: snapshot.flags.has(MessageFlags.IsComponentsV2),
+                    hasSnapshot: snapshot.flags.has(MessageFlags.HasSnapshot),
+                },
+                timestamp: snapshot.createdAt ? snapshot.createdAt.toISOString() : null,
+                edited_timestamp: snapshot.editedAt ? snapshot.editedAt.toISOString() : null,
+            }));
+        } else {
             const msgWithFwd = message as MessageWithForwarded;
             const rawFwMessages = msgWithFwd.forwardedMessages ?? msgWithFwd.forwarded_messages;
             if (rawFwMessages && Array.isArray(rawFwMessages) && rawFwMessages.length > 0) {
@@ -146,7 +234,7 @@ const event = {
                         (att: ForwardedAttachment) => ({
                             id: att.id,
                             filename: att.filename,
-                            contentType: att.content_type ?? att.contentType, // 필드명 불일치 대응
+                            contentType: att.content_type ?? att.contentType,
                             size: att.size,
                             url: att.url,
                             proxy_url: att.proxy_url ?? att.proxyURL,
@@ -305,7 +393,8 @@ const event = {
         }
 
         // 데이터베이스에 저장할 JSON 데이터
-        const dataToStore = buildMessageCreateLogData({
+        const dataToStore = {
+            ...buildMessageCreateLogData({
             message,
             attachments: processedAttachments,
             embeds,
@@ -319,7 +408,20 @@ const event = {
                       type: (message.reference as MessageReference & { type?: unknown }).type,
                   }
                 : null,
-        });
+            }),
+            components: message.components.map((component) => component.toJSON()),
+            messageFlags: {
+                bitfield: message.flags.bitfield,
+                isComponentsV2: message.flags.has(MessageFlags.IsComponentsV2),
+                hasSnapshot: message.flags.has(MessageFlags.HasSnapshot),
+            },
+            isForwardLike:
+                message.flags.has(MessageFlags.HasSnapshot) ||
+                message.messageSnapshots.size > 0 ||
+                (message.reference &&
+                    (message.reference as MessageReference & { type?: unknown }).type ===
+                        MessageReferenceType.Forward),
+        };
 
         try {
             // await query(insertQuery, values);

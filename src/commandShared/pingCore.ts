@@ -7,8 +7,6 @@ import {
 } from 'discord.js';
 import type { PingMetrics } from '../types/ping.js';
 
-export type { PingMetrics } from '../types/ping.js';
-
 export function createPendingPingReply() {
     return {
         flags: MessageFlags.IsComponentsV2 as const,
