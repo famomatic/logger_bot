@@ -3,8 +3,10 @@ import { spawn as spawnChildProcess } from 'child_process';
 import { spawn as spawnPty } from 'node-pty';
 import type { IPty } from 'node-pty';
 import type { LegacyCommand } from '../types/commands.js';
+import type { SupportedLocale } from '../types/i18n.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
+import { defaultText, getMessageLocale, t } from '../i18n/index.js';
 
 const MAX_BLOCK_LENGTH = 1800;
 const PASSWORD_PROMPT_REGEX = /(password[^:]*:|sudo:)/i;
@@ -93,11 +95,11 @@ function extractTimeoutOption(
     if (timeoutMatch) {
         const timeoutValue = timeoutMatch[1] ?? timeoutMatch[2];
         if (!timeoutValue) {
-            throw new Error('타임아웃 값이 필요합니다. 예: --timeout=30s');
+            throw new Error('exec.timeoutValueRequired');
         }
         const parsed = parseDurationToMs(timeoutValue);
         if (parsed === null || parsed <= 0) {
-            throw new Error('타임아웃 형식이 올바르지 않습니다. (예: 30s, 5m, 10000ms)');
+            throw new Error('exec.timeoutInvalid');
         }
         timeoutMs = parsed;
         working = working.slice(timeoutMatch[0].length).trimStart();
@@ -106,16 +108,16 @@ function extractTimeoutOption(
     return { command: working, timeoutMs };
 }
 
-function formatTimeout(timeoutMs?: number): string | null {
+function formatTimeout(locale: SupportedLocale, timeoutMs?: number): string | null {
     if (!timeoutMs || timeoutMs <= 0) {
         return null;
     }
 
     if (timeoutMs % 60000 === 0) {
-        return `${timeoutMs / 60000}분`;
+        return t(locale, 'exec.minute', { value: timeoutMs / 60000 });
     }
     if (timeoutMs % 1000 === 0) {
-        return `${timeoutMs / 1000}초`;
+        return t(locale, 'exec.second', { value: timeoutMs / 1000 });
     }
     return `${timeoutMs}ms`;
 }
@@ -146,7 +148,7 @@ async function fetchSudoPasswordFromCommand(command: string): Promise<string> {
                         new Error(
                             stderr.trim() ||
                                 stdout.trim() ||
-                                'sudo 비밀번호를 가져오는 데 실패했습니다.',
+                                defaultText('exec.sudoPasswordFetchFailed'),
                         ),
                     );
                 }
@@ -251,10 +253,10 @@ async function ensureSudoTimestamp(sudoPassword: string, timeoutMs?: number): Pr
     });
 
     if (result.timedOut) {
-        throw new Error('sudo 자격 증명 확인이 타임아웃되었습니다.');
+        throw new Error('exec.sudoCheckTimeout');
     }
     if (result.exitCode !== 0) {
-        throw new Error('sudo 자격 증명을 갱신하지 못했습니다.');
+        throw new Error('exec.sudoRefreshFailed');
     }
 }
 
@@ -267,9 +269,7 @@ async function runBashCommand(
 
     if (containsSudo) {
         if (!options.sudoPassword) {
-            throw new Error(
-                'sudo 명령을 실행하려면 SUDO_PASSWORD 또는 SUDO_PASSWORD_COMMAND 설정이 필요합니다.',
-            );
+            throw new Error('exec.sudoConfigRequired');
         }
         command = command.replace(/\bsudo\b(?![^\n\r]*-S)/g, 'sudo -S');
         await ensureSudoTimestamp(options.sudoPassword, options.timeoutMs);
@@ -314,28 +314,29 @@ async function runPsqlCommand(
 const command: LegacyCommand = {
     name: 'exec',
     async execute(message: Message) {
+        const locale = getMessageLocale(message);
         const devLevel = config.getDevLevel(message.author.id);
         if (devLevel < 3) {
-            await message.reply('이 명령어는 개발자 레벨 3 이상만 사용할 수 있습니다.');
+            await message.reply(t(locale, 'exec.dev3Only'));
             return;
         }
 
         const trimmed = message.content.trim();
         const firstSplit = splitAtFirstWhitespace(trimmed);
         if (!firstSplit.tail) {
-            await message.reply('사용법: logger exec <bash|psql> <command>');
+            await message.reply(t(locale, 'exec.usage'));
             return;
         }
 
         const secondSplit = splitAtFirstWhitespace(firstSplit.tail);
         if (!secondSplit.tail) {
-            await message.reply('사용법: logger exec <bash|psql> <command>');
+            await message.reply(t(locale, 'exec.usage'));
             return;
         }
 
         const thirdSplit = splitAtFirstWhitespace(secondSplit.tail);
         if (!thirdSplit.tail) {
-            await message.reply('사용법: logger exec <bash|psql> <command>');
+            await message.reply(t(locale, 'exec.usage'));
             return;
         }
 
@@ -343,11 +344,11 @@ const command: LegacyCommand = {
         const payload = thirdSplit.tail;
 
         if (!payload) {
-            await message.reply('실행할 명령어 또는 쿼리를 입력해주세요.');
+            await message.reply(t(locale, 'exec.promptCommand'));
             return;
         }
 
-        const reply = await message.reply('⏳ 명령을 실행 중입니다...');
+        const reply = await message.reply(t(locale, 'exec.running'));
 
         let timeoutMs = config.execCommandTimeoutMs;
         let commandPayload = payload;
@@ -358,13 +359,13 @@ const command: LegacyCommand = {
             timeoutMs = timeoutResult.timeoutMs;
         } catch (optionError) {
             await reply.edit(
-                String(optionError instanceof Error ? optionError.message : optionError),
+                optionError instanceof Error ? t(locale, optionError.message) : String(optionError),
             );
             return;
         }
 
         if (!commandPayload) {
-            await reply.edit('실행할 명령어 또는 쿼리를 입력해주세요.');
+            await reply.edit(t(locale, 'exec.promptCommand'));
             return;
         }
 
@@ -378,9 +379,7 @@ const command: LegacyCommand = {
                 if (/\bsudo\b/.test(commandPayload)) {
                     sudoPassword = await getSudoPassword();
                     if (!sudoPassword) {
-                        await reply.edit(
-                            'sudo 명령을 실행하려면 SUDO_PASSWORD 또는 SUDO_PASSWORD_COMMAND가 필요합니다.',
-                        );
+                        await reply.edit(t(locale, 'exec.sudoConfigRequired'));
                         return;
                     }
                     secrets.push(sudoPassword);
@@ -390,23 +389,25 @@ const command: LegacyCommand = {
             } else if (mode === 'psql') {
                 result = await runPsqlCommand(commandPayload, { timeoutMs });
             } else {
-                await reply.edit('지원하지 않는 모드입니다. 사용 가능 모드: bash, psql');
+                await reply.edit(t(locale, 'exec.unsupportedMode'));
                 return;
             }
 
-            const timeoutLabel = formatTimeout(timeoutMs);
+            const timeoutLabel = formatTimeout(locale, timeoutMs);
             const trimmedStdout = maskSensitive(result.stdout.trim(), secrets);
             const trimmedStderr = maskSensitive(result.stderr.trim(), secrets);
 
             const stdoutBlock = formatForCodeBlock(trimmedStdout);
             const stderrBlock = formatForCodeBlock(trimmedStderr);
 
-            let response = `**모드:** ${mode}\n**종료 코드:** ${result.exitCode ?? '알 수 없음'}`;
+            let response =
+                `${t(locale, 'exec.mode', { mode })}\n` +
+                `${t(locale, 'exec.exitCode', { code: result.exitCode ?? t(locale, 'exec.unknown') })}`;
             if (timeoutLabel) {
-                response += `\n**타임아웃:** ${timeoutLabel}`;
+                response += `\n${t(locale, 'exec.timeout', { value: timeoutLabel })}`;
             }
             if (result.timedOut) {
-                response += '\n⚠️ 명령이 타임아웃으로 종료되었습니다.';
+                response += `\n${t(locale, 'exec.timedOut')}`;
             }
             if (trimmedStdout) {
                 response += `\n\n**STDOUT**\n\u0060\u0060\u0060\n${stdoutBlock}\n\u0060\u0060\u0060`;
@@ -415,7 +416,7 @@ const command: LegacyCommand = {
                 response += `\n\n**STDERR**\n\u0060\u0060\u0060\n${stderrBlock}\n\u0060\u0060\u0060`;
             }
             if (!trimmedStdout && !trimmedStderr) {
-                response += '\n\n출력 없음';
+                response += `\n\n${t(locale, 'exec.noOutput')}`;
             }
 
             response = maskSensitive(response, secrets);
@@ -431,10 +432,12 @@ const command: LegacyCommand = {
             );
         } catch (error) {
             const err = error as Error;
-            const messageToSend = maskSensitive(
-                err?.message ? String(err.message) : String(error),
-                secrets,
-            );
+            const translatedMessage = err?.message?.startsWith('exec.')
+                ? t(locale, err.message)
+                : err?.message
+                  ? String(err.message)
+                  : String(error);
+            const messageToSend = maskSensitive(translatedMessage, secrets);
             const stackToLog = err?.stack ? maskSensitive(String(err.stack), secrets) : undefined;
 
             if (stackToLog) {
@@ -445,9 +448,12 @@ const command: LegacyCommand = {
                 logger.error('Failed to execute legacy exec command:', messageToSend);
             }
 
-            await reply.edit(`❌ 실행 중 오류가 발생했습니다: ${messageToSend}`);
+            await reply.edit(t(locale, 'exec.failed', { error: messageToSend }));
         }
     },
 };
 
+/**
+ * 레거시 커맨드 모듈 계약(`export { command }`)입니다.
+ */
 export { command };

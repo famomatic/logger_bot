@@ -51,6 +51,9 @@ const levelColors = {
 // 타임스탬프 포맷 함수
 const getTimestamp = () => new Date().toISOString();
 
+/**
+ * Error/객체/원시값을 로그 출력 가능한 형태로 정규화합니다.
+ */
 const formatLogArg = (arg: unknown): unknown => {
     if (arg instanceof Error) {
         return arg.stack ?? `${arg.name}: ${arg.message}`;
@@ -74,7 +77,9 @@ const log = (level: keyof typeof levelColors, ...args: unknown[]) => {
     console.log(timestamp, levelTag, ...formattedArgs);
 };
 
-// 공개할 로그 함수들
+/**
+ * 프로젝트 전역 로거입니다. 콘솔 출력과 Sentry 예외 캡처를 함께 처리합니다.
+ */
 export const logger = {
     info: (...args: unknown[]) => log('info', ...args),
     warn: (...args: unknown[]) => log('warn', ...args),

@@ -10,26 +10,30 @@ import {
 import { config } from '../config/config.js';
 import { categoryEventMap } from '../utils/alertManager.js';
 import { logger } from '../utils/logger.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
 const choices = Object.keys(categoryEventMap)
     .map((cat) => ({ name: cat, value: cat }))
     .slice(0, 25);
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('log-alert-test')
-        .setDescription('로그 알림 채널로 테스트 메시지를 보냅니다.')
+        .setDescription(defaultText('logAlert.testDescription'))
         .addStringOption((o) =>
             o
                 .setName('event_type')
-                .setDescription('이벤트 카테고리')
+                .setDescription(defaultText('logAlert.eventCategory'))
                 .setRequired(true)
                 .addChoices(...choices),
         )
         .addChannelOption((o) =>
             o
                 .setName('channel')
-                .setDescription('테스트 메시지를 보낼 채널')
+                .setDescription(defaultText('logAlert.testChannel'))
                 .setRequired(true)
                 .addChannelTypes(
                     ChannelType.GuildText,
@@ -40,9 +44,10 @@ export const command = {
         )
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuild'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -53,7 +58,7 @@ export const command = {
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
         if (devLevel < 2 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 레벨2 이상 개발자 또는 관리자만 사용할 수 있습니다.',
+                content: t(locale, 'common.level2OrAdminOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -63,7 +68,7 @@ export const command = {
         const eventTypes = categoryEventMap[category];
         if (!eventTypes) {
             await interaction.reply({
-                content: '유효하지 않은 이벤트 카테고리입니다.',
+                content: t(locale, 'logAlert.invalidCategory'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -72,7 +77,7 @@ export const command = {
         const optionChannel = interaction.options.getChannel('channel', true);
         if (!('isTextBased' in optionChannel) || !optionChannel.isTextBased()) {
             await interaction.reply({
-                content: '텍스트 채널만 지정할 수 있습니다.',
+                content: t(locale, 'logAlert.textChannelOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -82,11 +87,11 @@ export const command = {
         try {
             await channel.send({
                 content: [
-                    '로그 알림 테스트',
-                    `카테고리: ${category}`,
-                    `대상 이벤트: ${eventTypes.join(', ')}`,
-                    `실행자: <@${interaction.user.id}>`,
-                    `시각: <t:${Math.floor(Date.now() / 1000)}:F>`,
+                    t(locale, 'logAlert.testHeader'),
+                    t(locale, 'logAlert.testCategory', { category }),
+                    t(locale, 'logAlert.testEvents', { events: eventTypes.join(', ') }),
+                    t(locale, 'logAlert.testExecutor', { userId: interaction.user.id }),
+                    t(locale, 'logAlert.testTime', { timestamp: Math.floor(Date.now() / 1000) }),
                 ].join('\n'),
                 allowedMentions: { parse: [] },
             });
@@ -96,13 +101,13 @@ export const command = {
             );
 
             await interaction.reply({
-                content: `테스트 메시지를 ${channel.toString()} 채널로 전송했습니다.`,
+                content: t(locale, 'logAlert.testSent', { channel: channel.toString() }),
                 flags: MessageFlags.Ephemeral,
             });
         } catch (error) {
             logger.error('/log-alert-test failed to send message:', error);
             await interaction.reply({
-                content: '테스트 메시지를 보낼 수 없습니다. 봇 권한을 확인해주세요.',
+                content: t(locale, 'logAlert.testFailed'),
                 flags: MessageFlags.Ephemeral,
             });
         }

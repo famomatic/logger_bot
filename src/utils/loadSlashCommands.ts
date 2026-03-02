@@ -6,6 +6,9 @@ import { logger } from './logger.js';
 import { config } from '../config/config.js';
 import type { SlashCommand } from '../types/commands.js';
 
+/**
+ * dist의 슬래시 커맨드 모듈을 동적으로 로드하고 Discord에 등록합니다.
+ */
 export async function loadSlashCommands(client: Client): Promise<void> {
     client.commands = new Collection<string, SlashCommand>();
     const __filename = fileURLToPath(import.meta.url);
@@ -79,6 +82,9 @@ export async function loadSlashCommands(client: Client): Promise<void> {
         logger.error('Error reading slash commands directory:', error);
     }
 }
+/**
+ * 메모리에 적재된 슬래시 커맨드 캐시를 비웁니다.
+ */
 export function unloadSlashCommands(client: Client): void {
     client.commands?.clear?.();
 }

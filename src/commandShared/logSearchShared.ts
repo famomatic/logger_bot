@@ -16,13 +16,13 @@ import {
     InteractionReplyOptions,
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { eventConfigurations } from '../config/eventsConfig.js';
+import { getFriendlyEventName } from '../config/eventsConfig.js';
 import { searchLogs } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { buildContainerMessage } from './componentsV2.js';
 import type { JsonData } from '../types/json.js';
 import type { AttachmentLogData } from '../types/logs.js';
-import { LOG_SEARCH_MESSAGES, MAX_TEXT_SIZE, PAGE_SIZE } from './logSearchShared/constants.js';
+import { MAX_TEXT_SIZE, PAGE_SIZE, getLogSearchMessages } from './logSearchShared/constants.js';
 import { str } from './logSearchShared/formatters.js';
 import { renderEvent as renderMessageEvent } from './logSearchShared/renderers/message.js';
 import { renderEvent as renderMemberEvent } from './logSearchShared/renderers/member.js';
@@ -36,10 +36,14 @@ import { renderInviteEvent } from './logSearchShared/renderers/invite.js';
 import { renderChannelEvent } from './logSearchShared/renderers/channel.js';
 import { renderThreadEvent } from './logSearchShared/renderers/thread.js';
 import { renderUserEvent } from './logSearchShared/renderers/user.js';
+import { getInteractionLocale, t } from '../i18n/index.js';
 
+/** 로그 검색 명령에서 날짜 파서를 재사용할 수 있도록 re-export 합니다. */
 export { parseDateString } from './logSearchShared/date.js';
 
-// 로그를 가져와서 컴포넌트 V2와 버튼으로 표시하는 함수
+/**
+ * 로그 검색 결과를 페이지 단위로 조회해 Components V2 UI(본문/첨부/페이지 버튼)로 렌더링합니다.
+ */
 export async function fetchAndDisplayLogs(
     interaction: ChatInputCommandInteraction | MessageComponentInteraction,
     currentOffset: number,
@@ -56,6 +60,8 @@ export async function fetchAndDisplayLogs(
     includeCloseButton = false,
     currentPage: number = Math.floor(currentOffset / PAGE_SIZE),
 ) {
+    const locale = getInteractionLocale(interaction);
+    const logSearchMessages = getLogSearchMessages(locale);
     const {
         guildId,
         userId,
@@ -89,12 +95,12 @@ export async function fetchAndDisplayLogs(
                 buildContainerMessage({
                     title:
                         noOptionsProvidedInitially && currentOffset === 0
-                            ? LOG_SEARCH_MESSAGES.noRecentLogsTitle
-                            : LOG_SEARCH_MESSAGES.noSearchResultsTitle,
+                            ? logSearchMessages.noRecentLogsTitle
+                            : logSearchMessages.noSearchResultsTitle,
                     description:
                         noOptionsProvidedInitially && currentOffset === 0
-                            ? LOG_SEARCH_MESSAGES.noRecentLogsDescription
-                            : LOG_SEARCH_MESSAGES.noSearchResultsDescription,
+                            ? logSearchMessages.noRecentLogsDescription
+                            : logSearchMessages.noSearchResultsDescription,
                     accentColor: 0xed4245,
                 }),
             );
@@ -113,9 +119,13 @@ export async function fetchAndDisplayLogs(
         // Create a TextDisplayBuilder for the summary message (formerly content)
         const summaryPrefix =
             noOptionsProvidedInitially && currentOffset === 0 && totalCount > 0
-                ? LOG_SEARCH_MESSAGES.summaryRecentPrefix
-                : LOG_SEARCH_MESSAGES.summarySearchPrefix;
-        const summaryMessage = `${summaryPrefix} (${totalCount}개 중 ${logs.length}개 표시)`;
+                ? logSearchMessages.summaryRecentPrefix
+                : logSearchMessages.summarySearchPrefix;
+        const summaryMessage = t(locale, 'logSearchShared.showingCount', {
+            prefix: summaryPrefix,
+            total: totalCount,
+            shown: logs.length,
+        });
         const summaryBuilder = new TextDisplayBuilder().setContent(summaryMessage);
         displayableComponents.push(summaryBuilder);
         displayableComponents.push(new SeparatorBuilder()); // Add a separator after the summary
@@ -143,7 +153,7 @@ export async function fetchAndDisplayLogs(
 
             const timestampContent = `<t:${Math.floor(new Date(log.timestamp).getTime() / 1000)}:F>`;
             const timestampText = new TextDisplayBuilder().setContent(timestampContent);
-            let eventSpecificsText = '(내용 없음)';
+            let eventSpecificsText = t(locale, 'logSearchShared.emptyContent');
 
             if (log.event_data && typeof log.event_data === 'object') {
                 const data = log.event_data as JsonData;
@@ -154,6 +164,7 @@ export async function fetchAndDisplayLogs(
                         eventSpecificsText = renderMessageEvent({
                             eventType: log.event_type,
                             eventData: data,
+                            locale,
                         });
                         break;
                     }
@@ -344,30 +355,27 @@ export async function fetchAndDisplayLogs(
                                     eventSpecificsText.substring(0, 750) + '...```';
                             }
                         } else {
-                            eventSpecificsText = '(기록된 세부 정보 없음)';
+                            eventSpecificsText = t(locale, 'logSearchShared.emptyDetails');
                         }
                         break;
                 }
             }
-
-            const currentEventConfig = Object.values(eventConfigurations).find(
-                (c) => c.dbEventType === log.event_type,
-            );
-            const friendlyEventName = currentEventConfig
-                ? currentEventConfig.friendlyName
-                : log.event_type;
+            const friendlyEventName = getFriendlyEventName(log.event_type, locale);
 
             const infoTextContent =
-                `**이벤트:** ${friendlyEventName} (${log.event_type})\n` +
-                `${log.channel_id ? `**채널:** <#${log.channel_id}>\n` : ''}` +
+                `${t(locale, 'logSearchShared.eventLabel', {
+                    name: friendlyEventName,
+                    type: log.event_type,
+                })}\n` +
+                `${log.channel_id ? `${t(locale, 'logSearchShared.channelLabel', { channelId: log.channel_id })}\n` : ''}` +
                 // guildMemberAdd/Remove의 경우 사용자 정보는 eventSpecificsText에서 더 자세히 다룸
                 // 그 외 이벤트는 기존 방식 유지
                 (!['guildMemberAdd', 'guildMemberRemove'].includes(log.event_type) && log.user_id
-                    ? `**사용자:** <@${log.user_id}>\n`
+                    ? `${t(locale, 'logSearchShared.userLabel', { userId: log.user_id })}\n`
                     : !['guildMemberAdd', 'guildMemberRemove'].includes(log.event_type)
-                      ? '**사용자:** 시스템\n'
+                      ? `${t(locale, 'logSearchShared.systemUserLabel')}\n`
                       : '') +
-                `**내용:**\n${eventSpecificsText}`;
+                t(locale, 'logSearchShared.contentLabel', { value: eventSpecificsText });
             const infoContentString = infoTextContent.substring(0, 2000);
             const infoText = new TextDisplayBuilder().setContent(infoContentString); // Max length for text display
 
@@ -413,7 +421,7 @@ export async function fetchAndDisplayLogs(
                             );
                             displayableComponents.push(fileComponent);
                         } else if (attachmentData.discordUrl) {
-                            const attText = `📎 [${str(attachmentData.filename) || '첨부파일'} (다운로드 실패)](${str(attachmentData.discordUrl)})`;
+                            const attText = `📎 [${str(attachmentData.filename) || t(locale, 'logSearchShared.attachmentDownloadFail')}](${str(attachmentData.discordUrl)})`;
                             if (currentTextSize + attText.length > MAX_TEXT_SIZE) break;
                             currentTextSize += attText.length;
                             displayableComponents.push(
@@ -421,7 +429,7 @@ export async function fetchAndDisplayLogs(
                             );
                         }
                     } else if (attachmentData.discordUrl) {
-                        const attText = `📎 [${str(attachmentData.filename) || '첨부파일'}](${str(attachmentData.discordUrl)})`;
+                        const attText = `📎 [${str(attachmentData.filename) || t(locale, 'logSearchShared.attachment')}](${str(attachmentData.discordUrl)})`;
                         if (currentTextSize + attText.length > MAX_TEXT_SIZE) break;
                         currentTextSize += attText.length;
                         displayableComponents.push(new TextDisplayBuilder().setContent(attText));
@@ -433,32 +441,43 @@ export async function fetchAndDisplayLogs(
             }
         }
 
-        summaryBuilder.setContent(`${summaryPrefix} (${totalCount}개 중 ${logsDisplayed}개 표시)`);
+        summaryBuilder.setContent(
+            t(locale, 'logSearchShared.showingCount', {
+                prefix: summaryPrefix,
+                total: totalCount,
+                shown: logsDisplayed,
+            }),
+        );
 
         if (displayableComponents.length <= 1 && totalCount > 0 && attachmentsToSend.length === 0) {
             // <= 1 because we added summary and separator
             displayableComponents.push(
-                new TextDisplayBuilder().setContent(LOG_SEARCH_MESSAGES.renderFailureMessage),
+                new TextDisplayBuilder().setContent(logSearchMessages.renderFailureMessage),
             );
         }
 
         const prevOffset = Math.max(0, currentOffset - PAGE_SIZE);
         const prevButton = new ButtonBuilder()
             .setCustomId(`log_search_prev_${prevOffset}_${currentPage - 1}`)
-            .setLabel('이전')
+            .setLabel(t(locale, 'logSearchShared.prev'))
             .setStyle(ButtonStyle.Primary)
             .setDisabled(currentPage === 0);
 
         const nextOffset = currentOffset + logsDisplayed;
         const nextButton = new ButtonBuilder()
             .setCustomId(`log_search_next_${nextOffset}_${currentPage + 1}`)
-            .setLabel('다음')
+            .setLabel(t(locale, 'logSearchShared.next'))
             .setStyle(ButtonStyle.Primary)
             .setDisabled(nextOffset >= totalCount);
 
         const pageInfo = new ButtonBuilder()
             .setCustomId('log_search_pageinfo')
-            .setLabel(`페이지: ${currentPage + 1} / ${Math.ceil(totalCount / PAGE_SIZE)}`)
+            .setLabel(
+                t(locale, 'logSearchShared.page', {
+                    current: currentPage + 1,
+                    total: Math.ceil(totalCount / PAGE_SIZE),
+                }),
+            )
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(true);
 
@@ -471,7 +490,7 @@ export async function fetchAndDisplayLogs(
         if (includeCloseButton) {
             const closeButton = new ButtonBuilder()
                 .setCustomId('log_search_close')
-                .setLabel('닫기')
+                .setLabel(t(locale, 'logSearchShared.close'))
                 .setStyle(ButtonStyle.Danger);
             buttonActionRow =
                 new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
@@ -494,8 +513,8 @@ export async function fetchAndDisplayLogs(
         logger.error('Error during fetchAndDisplayLogs:', error);
         const errorReplyOptions: InteractionEditReplyOptions = {
             ...buildContainerMessage({
-                title: LOG_SEARCH_MESSAGES.genericErrorTitle,
-                description: LOG_SEARCH_MESSAGES.genericErrorDescription,
+                title: logSearchMessages.genericErrorTitle,
+                description: logSearchMessages.genericErrorDescription,
                 accentColor: 0xed4245,
             }),
             files: [],

@@ -2,6 +2,9 @@ import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3
 import { Readable } from 'stream';
 import type { StorageProvider } from '../../types/storage.js';
 
+/**
+ * AWS S3(또는 호환 오브젝트 스토리지) 기반 첨부파일 스토리지 구현입니다.
+ */
 export class S3StorageProvider implements StorageProvider {
     private client: S3Client;
     private bucket: string;

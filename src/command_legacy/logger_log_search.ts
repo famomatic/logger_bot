@@ -13,6 +13,7 @@ import { logger } from '../utils/logger.js';
 import { config } from '../config/config.js';
 import { isValidEventType } from '../config/eventsConfig.js';
 import { parseDateString, fetchAndDisplayLogs } from '../commandShared/logSearchShared.js';
+import { getMessageLocale, t } from '../i18n/index.js';
 
 function parseArgs(content: string) {
     const args: Record<string, string> = {};
@@ -27,17 +28,18 @@ function parseArgs(content: string) {
 const command: LegacyCommand = {
     name: 'log-search',
     async execute(message: Message) {
+        const locale = getMessageLocale(message);
         const memberPermissions = message.member?.permissions;
         const devLevel = config.getDevLevel(message.author.id);
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
 
         if (!message.guildId) {
-            await message.reply({ content: '이 명령어는 서버 내에서만 사용할 수 있습니다.' });
+            await message.reply({ content: t(locale, 'common.onlyInGuildStrict') });
             return;
         }
 
         if (devLevel < 2 && !isAdmin) {
-            await message.reply('이 명령어는 레벨2 이상 개발자 또는 관리자만 사용할 수 있습니다.');
+            await message.reply(t(locale, 'common.level2OrAdminOnly'));
             return;
         }
 
@@ -52,7 +54,7 @@ const command: LegacyCommand = {
         if (rawEventType) {
             if (!isValidEventType(rawEventType)) {
                 await message.reply({
-                    content: `오류: 유효하지 않은 이벤트 유형입니다: \`${rawEventType}\`. 올바른 이벤트 타입을 입력해주세요.`,
+                    content: t(locale, 'common.invalidEventType', { eventType: rawEventType }),
                 });
                 return;
             }
@@ -66,8 +68,7 @@ const command: LegacyCommand = {
             const parsed = parseDateString(startDateString, false);
             if (!parsed) {
                 await message.reply({
-                    content:
-                        '오류: 유효하지 않은 시작 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.',
+                    content: t(locale, 'common.invalidStartDate'),
                 });
                 return;
             }
@@ -78,8 +79,7 @@ const command: LegacyCommand = {
             const parsed = parseDateString(endDateString, true);
             if (!parsed) {
                 await message.reply({
-                    content:
-                        '오류: 유효하지 않은 종료 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.',
+                    content: t(locale, 'common.invalidEndDate'),
                 });
                 return;
             }
@@ -88,7 +88,7 @@ const command: LegacyCommand = {
 
         if (startDate && endDate && startDate.getTime() > endDate.getTime()) {
             await message.reply({
-                content: '오류: 검색 시작일이 종료일보다 늦을 수 없습니다.',
+                content: t(locale, 'common.startAfterEnd'),
             });
             return;
         }
@@ -105,7 +105,7 @@ const command: LegacyCommand = {
         const noOptionsProvidedInitially =
             !userId && !channelId && !startDateString && !endDateString && !eventType;
 
-        const reply = await message.reply('검색 중입니다...');
+        const reply = await message.reply(t(locale, 'logSearch.searching'));
 
         const pseudoInteraction = {
             client: message.client,
@@ -147,7 +147,9 @@ const command: LegacyCommand = {
                         await i.update({
                             flags: MessageFlags.IsComponentsV2,
                             components: [
-                                new TextDisplayBuilder().setContent('이 메시지는 곧 삭제됩니다.'),
+                                new TextDisplayBuilder().setContent(
+                                    t(locale, 'logSearch.closingSoon'),
+                                ),
                             ],
                             embeds: [],
                             files: [],
@@ -183,4 +185,7 @@ const command: LegacyCommand = {
     },
 };
 
+/**
+ * 레거시 커맨드 모듈 계약(`export { command }`)입니다.
+ */
 export { command };

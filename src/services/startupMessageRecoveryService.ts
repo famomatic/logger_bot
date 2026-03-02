@@ -13,6 +13,9 @@ interface RecoverySummary {
     errors: number;
 }
 
+/**
+ * 길드별 체크포인트를 기준으로 누락 가능성이 있는 `messageCreate` 로그를 복구합니다.
+ */
 async function recoverGuildMessages(
     guild: Guild,
     legacyCommandPrefixes: string[],
@@ -100,6 +103,9 @@ async function recoverGuildMessages(
     };
 }
 
+/**
+ * 봇 시작 시 권한 있는 길드를 순회해 누락 메시지 로그를 복구하고 요약 통계를 남깁니다.
+ */
 export async function recoverMissedMessagesOnStartup(client: Client): Promise<void> {
     if (!config.messageRecovery.enabled) {
         logger.info('[message-recovery] Startup message recovery is disabled.');

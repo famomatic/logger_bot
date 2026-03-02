@@ -1,5 +1,9 @@
 import type { EventConfig } from '../types/eventsConfig.js';
+import type { SupportedLocale } from '../types/i18n.js';
 
+/**
+ * Discord 이벤트별 로깅 메타데이터(이름/카테고리/검색 필드/선택지 노출 여부) 정의입니다.
+ */
 export const eventConfigurations: Record<string, EventConfig> = {
     messageCreate: {
         eventName: 'MessageCreate',
@@ -397,6 +401,9 @@ export const eventConfigurations: Record<string, EventConfig> = {
     },
 };
 
+/**
+ * 슬래시 옵션에 노출할 이벤트 타입 선택지 목록을 생성합니다.
+ */
 export function getEventTypeChoices() {
     return Object.values(eventConfigurations)
         .filter((config) => config.includeInChoices)
@@ -406,6 +413,25 @@ export function getEventTypeChoices() {
         }));
 }
 
+/**
+ * 입력된 이벤트 타입 문자열이 설정 목록에 존재하는지 검증합니다.
+ */
 export function isValidEventType(eventType: string): boolean {
     return Object.values(eventConfigurations).some((config) => config.dbEventType === eventType);
+}
+
+/**
+ * 이벤트 타입의 사용자 표시용 이름을 locale 기준으로 반환합니다.
+ */
+export function getFriendlyEventName(eventType: string, locale: SupportedLocale): string {
+    const config = Object.values(eventConfigurations).find(
+        (item) => item.dbEventType === eventType,
+    );
+    if (!config) {
+        return eventType;
+    }
+    if (locale === 'ko') {
+        return config.friendlyName;
+    }
+    return config.dbEventType;
 }

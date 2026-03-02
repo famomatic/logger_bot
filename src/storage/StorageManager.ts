@@ -6,6 +6,9 @@ import { SMBStorageProvider } from './providers/SMBProvider.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 
+/**
+ * 설정된 스토리지 백엔드를 초기화하고 업/다운로드를 위임하는 파사드입니다.
+ */
 export class StorageManager {
     private provider: StorageProvider;
 
@@ -72,4 +75,7 @@ export class StorageManager {
     }
 }
 
+/**
+ * 애플리케이션 전역에서 재사용하는 스토리지 매니저 싱글턴입니다.
+ */
 export const storageManager = new StorageManager();

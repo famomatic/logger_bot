@@ -10,26 +10,30 @@ import {
 import { config } from '../config/config.js';
 import { removeSubscription, categoryEventMap } from '../utils/alertManager.js';
 import { logger } from '../utils/logger.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
 const choices = Object.keys(categoryEventMap)
     .map((cat) => ({ name: cat, value: cat }))
     .slice(0, 25);
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('log-alert-remove')
-        .setDescription('특정 이벤트 카테고리 알림을 채널에서 제거합니다.')
+        .setDescription(defaultText('logAlert.removeDescription'))
         .addStringOption((o) =>
             o
                 .setName('event_type')
-                .setDescription('이벤트 카테고리')
+                .setDescription(defaultText('logAlert.eventCategory'))
                 .setRequired(true)
                 .addChoices(...choices),
         )
         .addChannelOption((o) =>
             o
                 .setName('channel')
-                .setDescription('알림을 제거할 채널')
+                .setDescription(defaultText('logAlert.removeChannel'))
                 .setRequired(true)
                 .addChannelTypes(
                     ChannelType.GuildText,
@@ -40,9 +44,10 @@ export const command = {
         )
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuild'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -52,7 +57,7 @@ export const command = {
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
         if (devLevel < 2 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 레벨2 이상 개발자 또는 관리자만 사용할 수 있습니다.',
+                content: t(locale, 'common.level2OrAdminOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -61,7 +66,7 @@ export const command = {
         const optionChannel = interaction.options.getChannel('channel', true);
         if (!('isTextBased' in optionChannel) || !optionChannel.isTextBased()) {
             await interaction.reply({
-                content: '텍스트 채널만 지정할 수 있습니다.',
+                content: t(locale, 'logAlert.textChannelOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -70,7 +75,7 @@ export const command = {
         const removed = removeSubscription(interaction.guildId, category, channel.id);
         if (!removed) {
             await interaction.reply({
-                content: '해당 카테고리 알림이 이 채널에 설정되어 있지 않습니다.',
+                content: t(locale, 'logAlert.removeNotFound'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -79,7 +84,10 @@ export const command = {
             `/log-alert-remove by ${interaction.user.tag} in guild ${interaction.guildId} for category ${category} channel ${channel.id}`,
         );
         await interaction.reply({
-            content: `${channel.toString()} 채널에서 ${category} 이벤트 알림을 제거했습니다.`,
+            content: t(locale, 'logAlert.removeSuccess', {
+                channel: channel.toString(),
+                category,
+            }),
             flags: MessageFlags.Ephemeral,
         });
     },

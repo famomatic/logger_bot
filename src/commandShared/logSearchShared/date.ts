@@ -1,4 +1,7 @@
-// 날짜 문자열(YYYY-MM-DD)을 Date 객체로 변환하는 헬퍼 함수
+/**
+ * `YYYY-MM-DD` 형식 문자열을 UTC 기준 Date로 파싱합니다.
+ * `isEndDate`가 true면 해당 날짜의 23:59:59.999로 맞춥니다.
+ */
 export function parseDateString(dateString: string, isEndDate = false): Date | null {
     const parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
     if (!parts) return null;

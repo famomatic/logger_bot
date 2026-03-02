@@ -5,17 +5,23 @@ import {
     createPingResultReply,
     resolvePingMetrics,
 } from '../commandShared/pingCore.js';
+import { getInteractionLocale, localizations } from '../i18n/index.js';
 
 // 일반 사용자도 사용 가능하므로 별도 권한 확인 없음
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('ping')
-        .setDescription('봇의 현재 지연 시간과 웹소켓 상태를 보여줍니다.'),
+        .setDescription(localizations('command.pingDescription').ko)
+        .setDescriptionLocalizations(localizations('command.pingDescription')),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
         logger.info(`/ping command executed by ${interaction.user.tag}`);
         const sentReply = await interaction.reply({
-            ...createPendingPingReply(),
+            ...createPendingPingReply(locale),
             fetchReply: true,
         });
         const metrics = await resolvePingMetrics(
@@ -24,6 +30,6 @@ export const command = {
             interaction.client,
         );
 
-        await interaction.editReply(createPingResultReply(metrics));
+        await interaction.editReply(createPingResultReply(metrics, locale));
     },
 };

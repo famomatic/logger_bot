@@ -9,6 +9,9 @@ import {
 } from 'discord.js';
 import type { BuildContainerMessageOptions } from '../types/components.js';
 
+/**
+ * Discord Components V2 컨테이너 메시지 payload를 공통 포맷으로 생성합니다.
+ */
 export function buildContainerMessage(options: BuildContainerMessageOptions): {
     flags: MessageFlags.IsComponentsV2;
     components: TopLevelComponentData[];

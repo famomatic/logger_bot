@@ -213,7 +213,9 @@ const event = {
                         value: field.value,
                         inline: field.inline,
                     })),
-                    provider: emb.provider ? { name: emb.provider.name, url: emb.provider.url } : null,
+                    provider: emb.provider
+                        ? { name: emb.provider.name, url: emb.provider.url }
+                        : null,
                 })),
                 components: snapshot.components.map((component) => component.toJSON()),
                 flags: {
@@ -395,19 +397,19 @@ const event = {
         // 데이터베이스에 저장할 JSON 데이터
         const dataToStore = {
             ...buildMessageCreateLogData({
-            message,
-            attachments: processedAttachments,
-            embeds,
-            forwardedContentList: forwardedContentData,
-            referencedMessage: referencedMessageData,
-            rawReference: message.reference
-                ? {
-                      channelId: message.reference.channelId,
-                      messageId: message.reference.messageId,
-                      guildId: message.reference.guildId,
-                      type: (message.reference as MessageReference & { type?: unknown }).type,
-                  }
-                : null,
+                message,
+                attachments: processedAttachments,
+                embeds,
+                forwardedContentList: forwardedContentData,
+                referencedMessage: referencedMessageData,
+                rawReference: message.reference
+                    ? {
+                          channelId: message.reference.channelId,
+                          messageId: message.reference.messageId,
+                          guildId: message.reference.guildId,
+                          type: (message.reference as MessageReference & { type?: unknown }).type,
+                      }
+                    : null,
             }),
             components: message.components.map((component) => component.toJSON()),
             messageFlags: {
@@ -446,4 +448,7 @@ const event = {
     },
 } as const;
 
+/**
+ * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
+ */
 export default event;

@@ -12,6 +12,7 @@ import { getEventTypeChoices, isValidEventType } from '../config/eventsConfig.js
 import { parseDateString } from '../commandShared/logSearchShared.js';
 import { searchLogs } from '../db/database.js';
 import type { LogEntry } from '../types/logs.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
 type ExportFormat = 'json' | 'csv';
 const EXPORT_PAGE_SIZE = 500;
@@ -55,61 +56,68 @@ function toCsv(rows: LogEntry[]): string {
     return [header, ...body].join('\n');
 }
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('log-export')
-        .setDescription('조건에 맞는 로그를 파일(JSON/CSV)로 내보냅니다.')
+        .setDescription(defaultText('logExport.description'))
         .addStringOption((option) =>
             option
                 .setName('format')
-                .setDescription('내보내기 포맷')
+                .setDescription(defaultText('logExport.format'))
                 .setRequired(true)
                 .addChoices({ name: 'JSON', value: 'json' }, { name: 'CSV', value: 'csv' }),
         )
         .addIntegerOption((option) =>
             option
                 .setName('max_rows')
-                .setDescription('최대 추출 개수 (1~5000, 기본 1000)')
+                .setDescription(defaultText('logExport.maxRows'))
                 .setMinValue(1)
                 .setMaxValue(5000)
                 .setRequired(false),
         )
         .addUserOption((option) =>
-            option.setName('user').setDescription('검색할 사용자').setRequired(false),
+            option.setName('user').setDescription(defaultText('logExport.user')).setRequired(false),
         )
         .addStringOption((option) =>
-            option.setName('channel').setDescription('검색할 채널 ID').setRequired(false),
+            option
+                .setName('channel')
+                .setDescription(defaultText('logExport.channel'))
+                .setRequired(false),
         )
         .addStringOption((option) =>
             option
                 .setName('start-date')
-                .setDescription('검색 시작일 (YYYY-MM-DD)')
+                .setDescription(defaultText('logExport.startDate'))
                 .setRequired(false),
         )
         .addStringOption((option) =>
             option
                 .setName('end-date')
-                .setDescription('검색 종료일 (YYYY-MM-DD)')
+                .setDescription(defaultText('logExport.endDate'))
                 .setRequired(false),
         )
         .addStringOption((option) =>
             option
                 .setName('event-type')
-                .setDescription('이벤트 유형')
+                .setDescription(defaultText('logExport.eventType'))
                 .setRequired(false)
                 .addChoices(...getEventTypeChoices()),
         )
         .addStringOption((option) =>
             option
                 .setName('keyword')
-                .setDescription('텍스트 키워드 (content/newContent/oldContent)')
+                .setDescription(defaultText('logExport.keyword'))
                 .setRequired(false),
         )
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
         if (!interaction.guildId) {
             await interaction.reply({
-                content: '이 명령어는 서버 내에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuildStrict'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -120,7 +128,7 @@ export const command = {
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
         if (devLevel < 2 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 레벨2 이상 개발자 또는 관리자만 사용할 수 있습니다.',
+                content: t(locale, 'common.level2OrAdminOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -140,7 +148,7 @@ export const command = {
             const trimmed = targetChannelIdInput.trim();
             if (!/^\d{17,20}$/.test(trimmed)) {
                 await interaction.reply({
-                    content: '오류: 채널은 ID로 입력해주세요. (예: 123456789012345678)',
+                    content: t(locale, 'common.invalidChannelIdInput'),
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -152,7 +160,7 @@ export const command = {
         if (rawEventType) {
             if (!isValidEventType(rawEventType)) {
                 await interaction.reply({
-                    content: `오류: 유효하지 않은 이벤트 유형입니다: \`${rawEventType}\``,
+                    content: t(locale, 'common.invalidEventType', { eventType: rawEventType }),
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -167,8 +175,7 @@ export const command = {
             const parsed = parseDateString(startDateString, false);
             if (!parsed) {
                 await interaction.reply({
-                    content:
-                        '오류: 유효하지 않은 시작 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.',
+                    content: t(locale, 'common.invalidStartDate'),
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -180,8 +187,7 @@ export const command = {
             const parsed = parseDateString(endDateString, true);
             if (!parsed) {
                 await interaction.reply({
-                    content:
-                        '오류: 유효하지 않은 종료 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.',
+                    content: t(locale, 'common.invalidEndDate'),
                     flags: MessageFlags.Ephemeral,
                 });
                 return;
@@ -191,7 +197,7 @@ export const command = {
 
         if (startDate && endDate && startDate.getTime() > endDate.getTime()) {
             await interaction.reply({
-                content: '오류: 검색 시작일이 종료일보다 늦을 수 없습니다.',
+                content: t(locale, 'common.startAfterEnd'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -236,7 +242,7 @@ export const command = {
 
         if (exportedRows.length === 0) {
             await interaction.editReply({
-                content: '조건에 맞는 로그가 없습니다.',
+                content: t(locale, 'logExport.noLogs'),
                 embeds: [],
                 components: [],
             });
@@ -270,11 +276,20 @@ export const command = {
 
         await interaction.editReply({
             content: [
-                `내보내기 완료: ${exportedRows.length.toLocaleString('ko-KR')}건`,
-                `포맷: ${format.toUpperCase()}`,
+                t(locale, 'logExport.doneCount', {
+                    count: exportedRows.length.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US'),
+                }),
+                t(locale, 'logExport.formatLine', { format: format.toUpperCase() }),
                 truncated
-                    ? `주의: 조건 일치 전체 ${totalCount.toLocaleString('ko-KR')}건 중 ${exportedRows.length.toLocaleString('ko-KR')}건만 추출했습니다. (max_rows 제한)`
-                    : `전체 ${totalCount.toLocaleString('ko-KR')}건을 모두 추출했습니다.`,
+                    ? t(locale, 'logExport.truncated', {
+                          total: totalCount.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US'),
+                          count: exportedRows.length.toLocaleString(
+                              locale === 'ko' ? 'ko-KR' : 'en-US',
+                          ),
+                      })
+                    : t(locale, 'logExport.full', {
+                          total: totalCount.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US'),
+                      }),
             ].join('\n'),
             files: [attachment],
             allowedMentions: { parse: [] },

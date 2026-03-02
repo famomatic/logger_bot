@@ -10,26 +10,30 @@ import {
 import { config } from '../config/config.js';
 import { addSubscription, categoryEventMap } from '../utils/alertManager.js';
 import { logger } from '../utils/logger.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
 const choices = Object.keys(categoryEventMap)
     .map((cat) => ({ name: cat, value: cat }))
     .slice(0, 25);
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('log-alert-add')
-        .setDescription('특정 이벤트 카테고리의 알림을 채널로 전송합니다.')
+        .setDescription(defaultText('logAlert.addDescription'))
         .addStringOption((o) =>
             o
                 .setName('event_type')
-                .setDescription('이벤트 카테고리')
+                .setDescription(defaultText('logAlert.eventCategory'))
                 .setRequired(true)
                 .addChoices(...choices),
         )
         .addChannelOption((o) =>
             o
                 .setName('channel')
-                .setDescription('알림을 보낼 채널')
+                .setDescription(defaultText('logAlert.targetChannel'))
                 .setRequired(true)
                 .addChannelTypes(
                     ChannelType.GuildText,
@@ -40,9 +44,10 @@ export const command = {
         )
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuild'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -52,7 +57,7 @@ export const command = {
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
         if (devLevel < 2 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 레벨2 이상 개발자 또는 관리자만 사용할 수 있습니다.',
+                content: t(locale, 'common.level2OrAdminOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -63,7 +68,7 @@ export const command = {
         // but the returned type does not expose text methods. Narrow the type here.
         if (!('isTextBased' in optionChannel) || !optionChannel.isTextBased()) {
             await interaction.reply({
-                content: '텍스트 채널만 지정할 수 있습니다.',
+                content: t(locale, 'logAlert.textChannelOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -72,7 +77,7 @@ export const command = {
         const added = addSubscription(interaction.guildId, category, channel.id);
         if (!added) {
             await interaction.reply({
-                content: '유효하지 않은 이벤트 카테고리입니다.',
+                content: t(locale, 'logAlert.invalidCategory'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -81,7 +86,10 @@ export const command = {
             `/log-alert-add set by ${interaction.user.tag} in guild ${interaction.guildId} for category ${category} channel ${channel.id}`,
         );
         await interaction.reply({
-            content: `이제 ${category} 이벤트 알림이 ${channel.toString()} 채널에 전송됩니다.`,
+            content: t(locale, 'logAlert.addSuccess', {
+                category,
+                channel: channel.toString(),
+            }),
             flags: MessageFlags.Ephemeral,
         });
     },

@@ -1,4 +1,6 @@
 import type { JsonValue } from '../../../types/json.js';
+import type { SupportedLocale } from '../../../types/i18n.js';
+import { t } from '../../../i18n/index.js';
 import { escapeCodeBlockContent } from '../../../utils/sanitize.js';
 import { formatStickerSummary, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
@@ -6,6 +8,7 @@ import { isJsonData } from '../types.js';
 interface RenderMessageEventParams {
     eventType: string;
     eventData: JsonValue | undefined;
+    locale: SupportedLocale;
 }
 
 const COMPONENT_TYPE_LABELS: Record<number, string> = {
@@ -28,6 +31,9 @@ const COMPONENT_TYPE_LABELS: Record<number, string> = {
     19: 'FileUpload',
 };
 
+/**
+ * 메시지 컴포넌트 배열을 타입별 개수 요약 문자열로 변환합니다.
+ */
 function summarizeComponentTypes(components: JsonValue[] | undefined): string | null {
     if (!components || components.length === 0) {
         return null;
@@ -59,7 +65,13 @@ function summarizeComponentTypes(components: JsonValue[] | undefined): string | 
         .join(', ');
 }
 
-function buildMessageFlagSummary(flagsValue: JsonValue | undefined): string | null {
+/**
+ * 메시지 플래그 객체를 사람이 읽기 쉬운 요약으로 변환합니다.
+ */
+function buildMessageFlagSummary(
+    locale: SupportedLocale,
+    flagsValue: JsonValue | undefined,
+): string | null {
     if (!isJsonData(flagsValue)) {
         return null;
     }
@@ -69,65 +81,101 @@ function buildMessageFlagSummary(flagsValue: JsonValue | undefined): string | nu
     const bitfield = str(flagsValue.bitfield, '');
 
     if (!bitfield) {
-        return `플래그: ComponentsV2=${isComponentsV2}, HasSnapshot=${hasSnapshot}`;
+        return t(locale, 'logSearchShared.message.flagsNoBitfield', {
+            isComponentsV2,
+            hasSnapshot,
+        });
     }
 
-    return `플래그: ComponentsV2=${isComponentsV2}, HasSnapshot=${hasSnapshot}, Bitfield=${bitfield}`;
+    return t(locale, 'logSearchShared.message.flagsWithBitfield', {
+        isComponentsV2,
+        hasSnapshot,
+        bitfield,
+    });
 }
 
-function buildForwardSummary(forwarded: JsonValue[] | undefined): string | null {
+/**
+ * 전달 메시지 목록을 미리보기 텍스트로 요약합니다.
+ */
+function buildForwardSummary(
+    locale: SupportedLocale,
+    forwarded: JsonValue[] | undefined,
+): string | null {
     if (!forwarded || forwarded.length === 0) {
         return null;
     }
 
-    const lines: string[] = [`전달 메시지: ${forwarded.length}개`];
+    const lines: string[] = [
+        t(locale, 'logSearchShared.message.forwardedCount', { count: forwarded.length }),
+    ];
     const maxPreviewCount = 3;
     const visible = forwarded.slice(0, maxPreviewCount);
 
     visible.forEach((item, index) => {
         if (!isJsonData(item)) {
-            lines.push(`${index + 1}. (파싱 불가)`);
+            lines.push(
+                t(locale, 'logSearchShared.message.forwardedUnreadable', { index: index + 1 }),
+            );
             return;
         }
 
         const author = isJsonData(item.author) ? item.author : null;
-        const authorLabel = str(author?.tag ?? author?.username, '알 수 없음');
+        const authorLabel = str(
+            author?.tag ?? author?.username,
+            t(locale, 'logSearchShared.legacy.unknown'),
+        );
         const content = str(item.content, '').trim();
         const contentPreview =
-            content.length > 60 ? `${content.substring(0, 60)}...` : content || '(본문 없음)';
+            content.length > 60
+                ? `${content.substring(0, 60)}...`
+                : content || t(locale, 'logSearchShared.message.noBody');
         const attachments = Array.isArray(item.attachments) ? item.attachments.length : 0;
         const embeds = Array.isArray(item.embeds) ? item.embeds.length : 0;
         const componentSummary = summarizeComponentTypes(
             Array.isArray(item.components) ? item.components : undefined,
         );
-        const flagSummary = buildMessageFlagSummary(item.flags);
+        const flagSummary = buildMessageFlagSummary(locale, item.flags);
 
         const details: string[] = [
-            `작성자: ${authorLabel}`,
-            `본문: ${contentPreview}`,
-            `첨부 ${attachments}개`,
-            `임베드 ${embeds}개`,
+            t(locale, 'logSearchShared.message.author', { value: authorLabel }),
+            t(locale, 'logSearchShared.message.body', { value: contentPreview }),
+            t(locale, 'logSearchShared.message.attachmentsCount', { count: attachments }),
+            t(locale, 'logSearchShared.message.embedsCount', { count: embeds }),
         ];
         if (componentSummary) {
-            details.push(`컴포넌트 ${componentSummary}`);
+            details.push(
+                t(locale, 'logSearchShared.message.componentsSummary', { value: componentSummary }),
+            );
         }
         if (flagSummary) {
-            details.push(flagSummary.replace('플래그: ', ''));
+            details.push(flagSummary);
         }
 
-        lines.push(`${index + 1}. ${details.join(' | ')}`);
+        lines.push(
+            t(locale, 'logSearchShared.message.forwardedLine', {
+                index: index + 1,
+                value: details.join(' | '),
+            }),
+        );
     });
 
     if (forwarded.length > maxPreviewCount) {
-        lines.push(`...외 ${forwarded.length - maxPreviewCount}개`);
+        lines.push(
+            t(locale, 'logSearchShared.message.forwardedRemaining', {
+                count: forwarded.length - maxPreviewCount,
+            }),
+        );
     }
 
     return lines.join('\n');
 }
 
-export function renderEvent({ eventType, eventData }: RenderMessageEventParams): string {
+/**
+ * 메시지 이벤트 타입별 상세 본문 텍스트를 렌더링합니다.
+ */
+export function renderEvent({ eventType, eventData, locale }: RenderMessageEventParams): string {
     if (!isJsonData(eventData)) {
-        return '(내용 없음)';
+        return t(locale, 'logSearchShared.legacy.noContent');
     }
 
     switch (eventType) {
@@ -144,10 +192,14 @@ export function renderEvent({ eventType, eventData }: RenderMessageEventParams):
                 const stickerSummaries = stickers.map((sticker, index: number) =>
                     formatStickerSummary(sticker, index),
                 );
-                messageParts.push(`스티커:\n${stickerSummaries.join('\n')}`);
+                messageParts.push(
+                    t(locale, 'logSearchShared.message.stickersBlock', {
+                        value: stickerSummaries.join('\n'),
+                    }),
+                );
             }
 
-            const flagsSummary = buildMessageFlagSummary(eventData.messageFlags);
+            const flagsSummary = buildMessageFlagSummary(locale, eventData.messageFlags);
             if (flagsSummary) {
                 messageParts.push(flagsSummary);
             }
@@ -159,10 +211,16 @@ export function renderEvent({ eventType, eventData }: RenderMessageEventParams):
                 const componentCount = Array.isArray(eventData.components)
                     ? eventData.components.length
                     : 0;
-                messageParts.push(`컴포넌트: ${componentCount}개 (${componentSummary})`);
+                messageParts.push(
+                    t(locale, 'logSearchShared.message.componentsCount', {
+                        count: componentCount,
+                        value: componentSummary,
+                    }),
+                );
             }
 
             const forwardedSummary = buildForwardSummary(
+                locale,
                 Array.isArray(eventData.forwardedContentList)
                     ? eventData.forwardedContentList
                     : undefined,
@@ -171,7 +229,9 @@ export function renderEvent({ eventType, eventData }: RenderMessageEventParams):
                 messageParts.push(forwardedSummary);
             }
 
-            return messageParts.length > 0 ? messageParts.join('\n\n') : '(내용 없음)';
+            return messageParts.length > 0
+                ? messageParts.join('\n\n')
+                : t(locale, 'logSearchShared.legacy.noContent');
         }
         case 'messageUpdate': {
             const oldContent = str(eventData.oldContent);
@@ -179,17 +239,22 @@ export function renderEvent({ eventType, eventData }: RenderMessageEventParams):
             if (newContent && oldContent) {
                 const oldContentPreview =
                     oldContent.length > 100 ? `${oldContent.substring(0, 100)}...` : oldContent;
-                return `현재: \`\`\`${escapeCodeBlockContent(newContent)}\`\`\`\n이전: \`\`\`${escapeCodeBlockContent(oldContentPreview)}\`\`\``;
+                return t(locale, 'logSearchShared.message.currentAndPrevious', {
+                    current: `\`\`\`${escapeCodeBlockContent(newContent)}\`\`\``,
+                    previous: `\`\`\`${escapeCodeBlockContent(oldContentPreview)}\`\`\``,
+                });
             }
             if (newContent) {
                 return `\`\`\`${escapeCodeBlockContent(newContent)}\`\`\``;
             }
             if (oldContent) {
-                return `이전: \`\`\`${escapeCodeBlockContent(oldContent)}\`\`\``;
+                return t(locale, 'logSearchShared.message.previousOnly', {
+                    previous: `\`\`\`${escapeCodeBlockContent(oldContent)}\`\`\``,
+                });
             }
-            return '(내용 없음)';
+            return t(locale, 'logSearchShared.legacy.noContent');
         }
         default:
-            return '(내용 없음)';
+            return t(locale, 'logSearchShared.legacy.noContent');
     }
 }

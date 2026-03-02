@@ -1,6 +1,8 @@
 import { Client, WebSocketShardStatus, version as djsVersion } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { buildContainerMessage } from './componentsV2.js';
+import type { SupportedLocale } from '../types/i18n.js';
+import { t } from '../i18n/index.js';
 
 interface StatusSnapshot {
     uptime: string;
@@ -16,17 +18,24 @@ interface StatusSnapshot {
     memoryHeapUsedMb: string;
 }
 
-function formatUptime(uptimeSeconds: number): string {
+/**
+ * 초 단위 uptime 값을 locale 텍스트 포맷으로 변환합니다.
+ */
+function formatUptime(uptimeSeconds: number, locale: SupportedLocale): string {
     const d = Math.floor(uptimeSeconds / (3600 * 24));
     const h = Math.floor((uptimeSeconds % (3600 * 24)) / 3600);
     const m = Math.floor((uptimeSeconds % 3600) / 60);
     const s = Math.floor(uptimeSeconds % 60);
-    return `${d}일 ${h}시간 ${m}분 ${s}초`;
+    return t(locale, 'status.duration', { d, h, m, s });
 }
 
+/**
+ * 상태 명령 응답에 필요한 런타임/메모리/명령어 통계를 수집합니다.
+ */
 export async function collectStatusSnapshot(
     client: Client,
     source: 'legacy' | 'slash',
+    locale: SupportedLocale,
 ): Promise<StatusSnapshot> {
     let apiLatency = Math.round(client.ws.ping);
     if (apiLatency === -1) {
@@ -48,7 +57,7 @@ export async function collectStatusSnapshot(
     const memoryUsage = process.memoryUsage();
 
     return {
-        uptime: formatUptime(process.uptime()),
+        uptime: formatUptime(process.uptime(), locale),
         apiLatency,
         wsStatus: WebSocketShardStatus[client.ws.status] ?? client.ws.status.toString(),
         guilds: client.guilds.cache.size,
@@ -62,41 +71,50 @@ export async function collectStatusSnapshot(
     };
 }
 
-export function buildStatusReply(client: Client, snapshot: StatusSnapshot, accentColor = 0x3498db) {
+/**
+ * 수집한 상태 스냅샷을 Components V2 응답 포맷으로 구성합니다.
+ */
+export function buildStatusReply(
+    client: Client,
+    snapshot: StatusSnapshot,
+    locale: SupportedLocale,
+    accentColor = 0x3498db,
+) {
+    const botName = client.user?.username ?? 'Bot';
     const botAvatar = client.user?.displayAvatarURL({ forceStatic: false, size: 128 });
 
     return buildContainerMessage({
-        title: `${client.user?.username ?? '봇'} 상태 정보`,
+        title: t(locale, 'status.title', { botName }),
         mediaGalleryItems: botAvatar
-            ? [{ url: botAvatar, description: `${client.user?.username ?? '봇'} 아바타` }]
+            ? [{ url: botAvatar, description: t(locale, 'status.avatar', { botName }) }]
             : undefined,
         accentColor,
         sections: [
             {
-                title: '기본 정보',
+                title: t(locale, 'status.basicInfo'),
                 body:
-                    `업타임: ${snapshot.uptime}\n` +
-                    `Discord API 지연시간: ${snapshot.apiLatency}ms\n` +
-                    `웹소켓 상태: ${snapshot.wsStatus}\n` +
-                    `Node.js 버전: ${snapshot.nodeVersion}\n` +
-                    `Discord.js 버전: v${djsVersion}`,
+                    `${t(locale, 'status.uptime', { uptime: snapshot.uptime })}\n` +
+                    `${t(locale, 'status.apiLatency', { apiLatency: snapshot.apiLatency })}\n` +
+                    `${t(locale, 'status.wsStatus', { wsStatus: snapshot.wsStatus })}\n` +
+                    `${t(locale, 'status.nodeVersion', { nodeVersion: snapshot.nodeVersion })}\n` +
+                    `${t(locale, 'status.djsVersion', { djsVersion })}`,
             },
             {
-                title: '메모리 사용량',
+                title: t(locale, 'status.memoryUsage'),
                 body:
                     `RSS: ${snapshot.memoryRssMb} MB\n` +
                     `Heap Total: ${snapshot.memoryHeapTotalMb} MB\n` +
                     `Heap Used: ${snapshot.memoryHeapUsedMb} MB`,
             },
             {
-                title: '서버 및 명령어 현황',
+                title: t(locale, 'status.guildStats'),
                 body:
-                    `연결된 서버 수: ${snapshot.guilds}개\n` +
-                    `전체 사용자 수 (캐시 기준): ${snapshot.users}명\n` +
-                    `로드된 슬래시 명령어: ${snapshot.slashCommandsCount}개\n` +
-                    `로드된 레거시 명령어: ${snapshot.legacyCommandsCount}개`,
+                    `${t(locale, 'status.guilds', { guilds: snapshot.guilds })}\n` +
+                    `${t(locale, 'status.users', { users: snapshot.users })}\n` +
+                    `${t(locale, 'status.slashCommands', { count: snapshot.slashCommandsCount })}\n` +
+                    `${t(locale, 'status.legacyCommands', { count: snapshot.legacyCommandsCount })}`,
             },
         ],
-        footer: `상태 정보 • 생성 시각: <t:${Math.floor(Date.now() / 1000)}:F>`,
+        footer: t(locale, 'status.footer', { timestamp: Math.floor(Date.now() / 1000) }),
     });
 }

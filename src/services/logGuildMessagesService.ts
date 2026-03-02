@@ -10,6 +10,9 @@ import type { ErrorWithCode } from '../types/errors.js';
 import type { BuildMessageCreateDataParams, MessageReactionSnapshot } from '../types/messageLog.js';
 import { logger } from '../utils/logger.js';
 
+/**
+ * 백필 대상 길드에서 읽을 수 있는 텍스트 채널이 없을 때 발생시키는 오류입니다.
+ */
 export class NoAccessibleGuildChannelsError extends Error {
     constructor(guildId: string) {
         super(`No accessible channels found for guild ${guildId}`);
@@ -27,6 +30,9 @@ interface MessageBackfillOutcome {
     failed: boolean;
 }
 
+/**
+ * 첨부파일 다운로드를 지수형 대기(1s, 2s, 3s...)로 재시도합니다.
+ */
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     let lastError: unknown = null;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -46,6 +52,10 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     throw lastError;
 }
 
+/**
+ * 개발자 레거시 명령어 메시지인지 판별합니다.
+ * 백필/실시간 로깅 시 관리용 명령 메시지를 제외하는 데 사용됩니다.
+ */
 export function isLegacyCommandByDev(message: Message, legacyCommandPrefixes: string[]): boolean {
     if (legacyCommandPrefixes.length === 0) {
         return false;
@@ -64,6 +74,9 @@ export function isLegacyCommandByDev(message: Message, legacyCommandPrefixes: st
     return message.content === matchedPrefix || message.content.startsWith(`${matchedPrefix} `);
 }
 
+/**
+ * 메시지 첨부파일을 다운로드한 뒤 설정된 스토리지 백엔드로 업로드하고 메타데이터를 구성합니다.
+ */
 export async function buildAttachmentData(
     guildId: string,
     channelId: string,
@@ -112,6 +125,9 @@ export async function buildAttachmentData(
     return processedAttachments;
 }
 
+/**
+ * `messageCreate` 이벤트 저장용 payload를 일관된 스키마로 생성합니다.
+ */
 export function buildMessageCreateLogData(
     params: BuildMessageCreateDataParams,
 ): Record<string, unknown> {
@@ -137,6 +153,9 @@ export function buildMessageCreateLogData(
     };
 }
 
+/**
+ * 단일 메시지에 대해 첨부/리액션 정보를 포함한 `messageCreate` 로그를 DB에 기록합니다.
+ */
 export async function processMessageCreateLog(
     guildId: string,
     channelId: string,
@@ -167,6 +186,9 @@ export async function processMessageCreateLog(
     );
 }
 
+/**
+ * 접근 가능한 길드 텍스트 채널 전반을 순회하며 과거 메시지를 백필 로깅합니다.
+ */
 export async function runGuildMessageBackfill({
     guild,
     legacyCommandPrefixes,

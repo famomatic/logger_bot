@@ -4,6 +4,7 @@ import {
     type MessageComponentInteraction,
 } from 'discord.js';
 import type { JsonData, JsonValue } from '../../../types/json.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { str } from '../formatters.js';
 import { isJsonData } from '../types.js';
 
@@ -21,14 +22,23 @@ interface EmojiRenderResult {
     thumbnailComponent?: ThumbnailBuilder;
 }
 
+/**
+ * 이모지 이벤트 payload에서 안전하게 JsonData를 추출합니다.
+ */
 function getEmojiData(value: JsonValue | undefined): JsonData | undefined {
     return isJsonData(value) ? value : undefined;
 }
 
+/**
+ * 이모지 ID/animated 여부로 CDN 썸네일 URL을 생성합니다.
+ */
 function getEmojiThumbnailUrl(emoji: JsonData): string {
     return `https://cdn.discordapp.com/emojis/${str(emoji.id)}.${emoji.animated ? 'gif' : 'png'}?size=64`;
 }
 
+/**
+ * 사용자 ID로 아바타 썸네일 컴포넌트를 조회/생성합니다.
+ */
 async function fetchUserThumbnail(
     interaction: ChatInputCommandInteraction | MessageComponentInteraction,
     userId: string,
@@ -48,18 +58,28 @@ async function fetchUserThumbnail(
     }
 }
 
+/**
+ * emojiCreate 로그의 표시 텍스트와 썸네일을 생성합니다.
+ */
 async function renderEmojiCreateEvent(params: RenderEmojiEventParams): Promise<EmojiRenderResult> {
     const { data, interaction, logUserId } = params;
+    const locale = getInteractionLocale(interaction);
     const emojiDetails: string[] = [];
     const emoji = getEmojiData(data.emoji) ?? data;
     let thumbnailComponent: ThumbnailBuilder | undefined;
 
     if (emoji.id) {
-        emojiDetails.push(`**이모지 이름:** ${str(emoji.name, 'N/A')}`);
+        emojiDetails.push(
+            `${t(locale, 'logSearchShared.legacy.emojiNameLabel')} ${str(emoji.name, 'N/A')}`,
+        );
         emojiDetails.push(`**ID:** ${str(emoji.id)}`);
-        emojiDetails.push(`**표시:** <:${str(emoji.name)}:${str(emoji.id)}>`);
+        emojiDetails.push(
+            `${t(locale, 'logSearchShared.emoji.displayLabel')} <:${str(emoji.name)}:${str(emoji.id)}>`,
+        );
         if (emoji.animated) {
-            emojiDetails.push('**애니메이션됨:** 예');
+            emojiDetails.push(
+                `${t(locale, 'logSearchShared.emoji.animatedLabel')} ${t(locale, 'logSearchShared.legacy.yes')}`,
+            );
         }
     }
 
@@ -75,13 +95,19 @@ async function renderEmojiCreateEvent(params: RenderEmojiEventParams): Promise<E
 
     return {
         eventSpecificsText:
-            emojiDetails.length > 0 ? emojiDetails.join('\n') : '이모지 생성 정보 없음',
+            emojiDetails.length > 0
+                ? emojiDetails.join('\n')
+                : t(locale, 'logSearchShared.emoji.createNoInfo'),
         thumbnailComponent,
     };
 }
 
+/**
+ * emojiUpdate 로그의 변경 요약 텍스트와 썸네일을 생성합니다.
+ */
 async function renderEmojiUpdateEvent(params: RenderEmojiEventParams): Promise<EmojiRenderResult> {
     const { data, interaction, logUserId } = params;
+    const locale = getInteractionLocale(interaction);
     const emojiDetails: string[] = [];
     const oldEmoji = getEmojiData(data.oldEmoji);
     const newEmoji = getEmojiData(data.newEmoji) ?? getEmojiData(data.emoji);
@@ -89,20 +115,20 @@ async function renderEmojiUpdateEvent(params: RenderEmojiEventParams): Promise<E
 
     if (newEmoji?.id) {
         emojiDetails.push(
-            `**이모지:** ${str(newEmoji.name, 'N/A')} (ID: ${str(newEmoji.id)}) <:${str(newEmoji.name)}:${str(newEmoji.id)}>`,
+            `${t(locale, 'logSearchShared.legacy.emojiLabel')} ${str(newEmoji.name, 'N/A')} (ID: ${str(newEmoji.id)}) <:${str(newEmoji.name)}:${str(newEmoji.id)}>`,
         );
 
         if (oldEmoji) {
             if (oldEmoji.name !== newEmoji.name) {
                 emojiDetails.push(
-                    `**이름 변경:** \\\`${str(oldEmoji.name)}\\\` -> \\\`${str(newEmoji.name)}\\\``,
+                    `${t(locale, 'logSearchShared.legacy.nameChangedLabel')} \\\`${str(oldEmoji.name)}\\\` -> \\\`${str(newEmoji.name)}\\\``,
                 );
             }
         } else {
-            emojiDetails.push('(이전 이모지 정보 없음)');
+            emojiDetails.push(t(locale, 'logSearchShared.emoji.noPrevious'));
         }
     } else {
-        emojiDetails.push('이모지 정보 없음');
+        emojiDetails.push(t(locale, 'logSearchShared.emoji.noInfo'));
     }
 
     if (newEmoji?.id) {
@@ -117,19 +143,27 @@ async function renderEmojiUpdateEvent(params: RenderEmojiEventParams): Promise<E
 
     return {
         eventSpecificsText:
-            emojiDetails.length > 0 ? emojiDetails.join('\n') : '이모지 업데이트 정보 없음',
+            emojiDetails.length > 0
+                ? emojiDetails.join('\n')
+                : t(locale, 'logSearchShared.emoji.updateNoInfo'),
         thumbnailComponent,
     };
 }
 
+/**
+ * emojiDelete 로그의 표시 텍스트와 썸네일을 생성합니다.
+ */
 async function renderEmojiDeleteEvent(params: RenderEmojiEventParams): Promise<EmojiRenderResult> {
     const { data, interaction, logUserId } = params;
+    const locale = getInteractionLocale(interaction);
     const emojiDetails: string[] = [];
     const emoji = getEmojiData(data.emoji) ?? data;
     let thumbnailComponent: ThumbnailBuilder | undefined;
 
     if (emoji.id) {
-        emojiDetails.push(`**삭제된 이모지 이름:** ${str(emoji.name, 'N/A')}`);
+        emojiDetails.push(
+            `${t(locale, 'logSearchShared.legacy.deletedEmojiNameLabel')} ${str(emoji.name, 'N/A')}`,
+        );
         emojiDetails.push(`**ID:** ${str(emoji.id)}`);
     }
 
@@ -139,11 +173,16 @@ async function renderEmojiDeleteEvent(params: RenderEmojiEventParams): Promise<E
 
     return {
         eventSpecificsText:
-            emojiDetails.length > 0 ? emojiDetails.join('\n') : '이모지 삭제 정보 없음',
+            emojiDetails.length > 0
+                ? emojiDetails.join('\n')
+                : t(locale, 'logSearchShared.emoji.deleteNoInfo'),
         thumbnailComponent,
     };
 }
 
+/**
+ * 이모지 이벤트 타입별 렌더러를 분기 호출합니다.
+ */
 export async function renderEvent(params: RenderEmojiEventParams): Promise<EmojiRenderResult> {
     switch (params.eventType) {
         case 'emojiCreate':

@@ -77,4 +77,7 @@ const event = {
     },
 } as const;
 
+/**
+ * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
+ */
 export default event;

@@ -2,7 +2,9 @@ import type { JsonValue } from '../../types/json.js';
 import { STICKER_FORMAT_LABELS } from './constants.js';
 import { isJsonData } from './types.js';
 
-/** Safely converts an unknown/JsonValue to a string. Returns fallback if nullish. */
+/**
+ * JsonValue를 문자열로 안전 변환합니다. nullish면 fallback을 반환합니다.
+ */
 export function str(val: JsonValue | undefined, fallback = ''): string {
     if (val == null) return fallback;
     if (typeof val === 'string') return val;
@@ -10,7 +12,9 @@ export function str(val: JsonValue | undefined, fallback = ''): string {
     return JSON.stringify(val);
 }
 
-/** Safely converts a value to a number. Returns fallback if not a valid number. */
+/**
+ * JsonValue를 숫자로 안전 변환합니다. 유효하지 않으면 fallback을 반환합니다.
+ */
 export function num(val: JsonValue | undefined, fallback = 0): number {
     if (typeof val === 'number') return val;
     if (typeof val === 'string') {
@@ -20,14 +24,17 @@ export function num(val: JsonValue | undefined, fallback = 0): number {
     return fallback;
 }
 
+/**
+ * 스티커 로그 항목 1개를 사람이 읽기 쉬운 요약 문자열로 변환합니다.
+ */
 export function formatStickerSummary(sticker: JsonValue | undefined, index: number): string {
     if (!isJsonData(sticker)) {
-        return `${index + 1}. 알 수 없는 스티커`;
+        return `${index + 1}. Unknown sticker`;
     }
 
     const parts: string[] = [];
     const name =
-        typeof sticker.name === 'string' && sticker.name.length > 0 ? sticker.name : '이름 없음';
+        typeof sticker.name === 'string' && sticker.name.length > 0 ? sticker.name : 'Unnamed';
     parts.push(`${index + 1}. ${name}`);
 
     const metadata: string[] = [];
@@ -37,9 +44,9 @@ export function formatStickerSummary(sticker: JsonValue | undefined, index: numb
 
     let formatLabel: string | undefined;
     if (typeof sticker.format === 'number') {
-        formatLabel = STICKER_FORMAT_LABELS[sticker.format] ?? `형식 ${sticker.format}`;
+        formatLabel = STICKER_FORMAT_LABELS[sticker.format] ?? `Format ${sticker.format}`;
     } else if (typeof sticker.format_type === 'number') {
-        formatLabel = STICKER_FORMAT_LABELS[sticker.format_type] ?? `형식 ${sticker.format_type}`;
+        formatLabel = STICKER_FORMAT_LABELS[sticker.format_type] ?? `Format ${sticker.format_type}`;
     } else if (typeof sticker.format === 'string') {
         formatLabel = sticker.format;
     }

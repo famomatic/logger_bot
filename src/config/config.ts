@@ -4,8 +4,7 @@ import chalk from 'chalk';
 dotenv.config();
 
 /**
- * 환경 변수를 검증하고 로드합니다.
- * 필수 변수가 누락된 경우 에러를 발생시킵니다.
+ * `10s`, `500ms`, `2m` 같은 duration 문자열을 밀리초 값으로 변환합니다.
  */
 function parseDurationToMs(input?: string | null): number | undefined {
     if (!input) {
@@ -33,12 +32,18 @@ function parseDurationToMs(input?: string | null): number | undefined {
     return Math.round(value * multiplier);
 }
 
+/**
+ * 정수 환경변수를 파싱하고 실패 시 기본값을 반환합니다.
+ */
 function parseInteger(input: string | undefined, fallback: number): number {
     if (!input) return fallback;
     const parsed = parseInt(input, 10);
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+/**
+ * 환경변수에서 런타임 설정을 구성하고 필수값 누락 시 예외를 던집니다.
+ */
 function loadConfig() {
     const requiredEnvVars = [
         'DISCORD_BOT_TOKEN',
@@ -77,6 +82,9 @@ function loadConfig() {
         .map((id) => id.trim())
         .filter((id) => id.length > 0);
 
+    /**
+     * 사용자 ID를 기준으로 개발자 권한 레벨(0~3)을 판별합니다.
+     */
     function getDevLevel(userId: string): number {
         if (level3Ids.includes(userId)) return 3;
         if (level2Ids.includes(userId)) return 2;
@@ -164,12 +172,18 @@ function loadConfig() {
 // 설정 객체 내보내기
 export let config = loadConfig();
 
+/**
+ * 환경변수를 다시 읽어 설정 객체를 런타임에 갱신합니다.
+ */
 export function reloadConfig(): void {
     config = loadConfig();
     console.log(chalk.green('Configuration reloaded.'));
     logStorageConfig();
 }
 
+/**
+ * 현재 스토리지 백엔드 설정 요약을 콘솔에 출력합니다.
+ */
 function logStorageConfig(): void {
     const storageType = config.storage.type;
     console.log(chalk.cyan(`Storage type: ${storageType}`));
@@ -211,4 +225,7 @@ function logStorageConfig(): void {
 console.log(chalk.green('Configuration loaded.'));
 logStorageConfig();
 
+/**
+ * 현재 활성 런타임 설정 객체의 기본 export 입니다.
+ */
 export default config;

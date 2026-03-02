@@ -12,30 +12,32 @@ import {
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import type { SlashCommand } from '../types/commands.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
 // 슬래시 커맨드 정의 및 실행 로직
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()
         .setName('message-delete-user') // <<< 이름 변경됨
-        .setDescription(
-            '{user_id}의 메시지를 삭제합니다. guild_id 또는 channel_id 중 하나를 지정하세요.',
-        )
+        .setDescription(defaultText('messageCmd.deleteUserDesc'))
         .addStringOption((option) =>
             option
                 .setName('user_id')
-                .setDescription('메시지를 삭제할 사용자의 ID')
+                .setDescription(defaultText('messageCmd.userId'))
                 .setRequired(true),
         )
         .addStringOption((option) =>
             option
                 .setName('guild_id')
-                .setDescription('메시지를 삭제할 서버의 ID')
+                .setDescription(defaultText('messageCmd.guildId'))
                 .setRequired(false),
         )
         .addStringOption((option) =>
             option
                 .setName('channel_id')
-                .setDescription('메시지를 삭제할 채널의 ID')
+                .setDescription(defaultText('messageCmd.channelId'))
                 .setRequired(false),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -44,9 +46,10 @@ export const command: SlashCommand = {
     async execute(interaction: CommandInteraction, client: Client) {
         // CommandInteraction 타입 가드 (ChatInputCommand으로 좁히기 위함)
         if (!interaction.isChatInputCommand()) return;
+        const locale = getInteractionLocale(interaction);
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버 내에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuildStrict'),
                 flags: [MessageFlags.Ephemeral],
             });
             return;
@@ -59,7 +62,7 @@ export const command: SlashCommand = {
 
         if (devLevel < 3 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 관리자 또는 개발자만 사용할 수 있습니다.',
+                content: t(locale, 'common.adminOrDevOnly'),
                 flags: [MessageFlags.Ephemeral],
             });
             return;
@@ -73,7 +76,7 @@ export const command: SlashCommand = {
 
         if (!targetGuildIdOption && !targetChannelIdOption) {
             await interaction.reply({
-                content: '오류: guild_id 또는 channel_id 중 하나를 지정해야 합니다.',
+                content: t(locale, 'messageCmd.requireGuildOrChannel'),
                 flags: [MessageFlags.Ephemeral],
             });
             return;
@@ -92,7 +95,9 @@ export const command: SlashCommand = {
                     !('guild' in fetched)
                 ) {
                     await interaction.reply({
-                        content: `오류: ID가 ${targetChannelIdOption}인 유효한 서버 채널을 찾을 수 없습니다.`,
+                        content: t(locale, 'messageCmd.invalidGuildChannel', {
+                            channelId: targetChannelIdOption,
+                        }),
                         flags: [MessageFlags.Ephemeral],
                     });
                     return;
@@ -104,14 +109,14 @@ export const command: SlashCommand = {
                     err,
                 );
                 await interaction.reply({
-                    content: '채널 정보를 가져오는 중 오류가 발생했습니다.',
+                    content: t(locale, 'messageCmd.fetchChannelFailed'),
                     flags: [MessageFlags.Ephemeral],
                 });
                 return;
             }
             if (targetGuildId && specificChannel.guildId !== targetGuildId) {
                 await interaction.reply({
-                    content: '오류: 입력한 channel_id가 제공한 guild_id에 속해있지 않습니다.',
+                    content: t(locale, 'messageCmd.channelGuildMismatch'),
                     flags: [MessageFlags.Ephemeral],
                 });
                 return;
@@ -136,7 +141,7 @@ export const command: SlashCommand = {
             );
             try {
                 await interaction
-                    .editReply({ content: '오류: 응답을 보낼 수 없는 채널입니다.' })
+                    .editReply({ content: t(locale, 'messageCmd.cannotSendResponseChannel') })
                     .catch(() => {
                         /* empty */
                     });
@@ -160,7 +165,7 @@ export const command: SlashCommand = {
                     `${logPrefix} Attempted deletion in non-existent or inaccessible guild ${targetGuildId}`,
                 );
                 await interaction.editReply(
-                    `오류: ID가 ${targetGuildId}인 서버를 찾을 수 없거나 봇이 해당 서버에 없습니다.`,
+                    t(locale, 'messageCmd.guildNotFound', { guildId: targetGuildId! }),
                 );
                 return;
             }
@@ -168,7 +173,7 @@ export const command: SlashCommand = {
             // 대상 사용자 유효성 검사
             if (!/^\d{17,19}$/.test(targetUserId)) {
                 await interaction.editReply(
-                    `오류: 제공된 사용자 ID (${targetUserId})가 올바른 형식이 아닙니다.`,
+                    t(locale, 'messageCmd.invalidProvidedUserId', { userId: targetUserId }),
                 );
                 return;
             }
@@ -196,9 +201,7 @@ export const command: SlashCommand = {
                 logger.warn(
                     `${logPrefix} No accessible channels found for deletion in guild ${targetGuildId}`,
                 );
-                await interaction.editReply(
-                    `오류: 이 서버에서 메시지를 읽고 삭제할 수 있는 채널을 찾을 수 없습니다. (봇 권한 확인 필요)`,
-                );
+                await interaction.editReply(t(locale, 'messageCmd.noAccessibleDeleteChannels'));
                 return;
             }
 
@@ -207,14 +210,23 @@ export const command: SlashCommand = {
                     `${logPrefix} Deleting messages only in channel ${specificChannel.id} of guild ${targetGuildId}`,
                 );
                 await interaction.editReply(
-                    `채널 '#${specificChannel.name}' (${specificChannel.id})에서 사용자 ${targetUserId}의 메시지 삭제를 시작합니다...`,
+                    t(locale, 'messageCmd.startDeleteInChannel', {
+                        channel: specificChannel.name,
+                        channelId: specificChannel.id,
+                        userId: targetUserId,
+                    }),
                 );
             } else {
                 logger.info(
                     `${logPrefix} Found ${channels.size} accessible text channels in guild ${targetGuildId} to scan.`,
                 );
                 await interaction.editReply(
-                    `길드 '${guild.name}' (${targetGuildId}) 내 ${channels.size}개 채널에서 사용자 ${targetUserId}의 메시지 삭제를 시작합니다... (API 제한 시 자동으로 재시도, 최종 결과는 새 메시지로 전송됩니다)`,
+                    t(locale, 'messageCmd.startDeleteInGuild', {
+                        guild: guild.name,
+                        guildId: targetGuildId!,
+                        count: channels.size,
+                        userId: targetUserId,
+                    }),
                 );
             }
 
@@ -275,7 +287,14 @@ export const command: SlashCommand = {
                                             );
                                             await interaction
                                                 .followUp({
-                                                    content: `API 제한으로 메시지 삭제 지연. ${retryAfter / 1000}초 후 재시도... (시도 ${retries}/3)`,
+                                                    content: t(
+                                                        locale,
+                                                        'messageCmd.rateLimitRetry',
+                                                        {
+                                                            seconds: retryAfter / 1000,
+                                                            try: retries,
+                                                        },
+                                                    ),
                                                     ephemeral: true,
                                                 })
                                                 .catch(() => {
@@ -292,7 +311,7 @@ export const command: SlashCommand = {
                                                 !errorMessages.some((e) => e.includes(channel.id))
                                             ) {
                                                 errorMessages.push(
-                                                    `채널 ${channel.name} (#${channel.id}): ${deleteError.message}`,
+                                                    `channel ${channel.name} (#${channel.id}): ${deleteError.message}`,
                                                 );
                                             }
                                             break;
@@ -305,7 +324,7 @@ export const command: SlashCommand = {
                                     );
                                     if (!errorMessages.some((e) => e.includes(message.id))) {
                                         errorMessages.push(
-                                            `메시지 ${message.id} (채널 #${channel.id}): 3번 재시도 후 삭제 실패 (Rate Limit)`,
+                                            `message ${message.id} (channel #${channel.id}): failed after 3 retries (rate limit)`,
                                         );
                                     }
                                 }
@@ -321,7 +340,7 @@ export const command: SlashCommand = {
                         );
                         if (!errorMessages.some((e) => e.includes(channel.id))) {
                             errorMessages.push(
-                                `채널 ${channel.name} (#${channel.id}) 메시지 조회 중 오류: ${fetchError.message}`,
+                                `channel ${channel.name} (#${channel.id}) fetch error: ${fetchError.message}`,
                             );
                         }
                         fetchMore = false;
@@ -342,23 +361,37 @@ export const command: SlashCommand = {
             const endTime = Date.now();
             const duration = ((endTime - startTime) / 1000).toFixed(2);
             let finalReport = specificChannel
-                ? `${interaction.user.toString()}님, 채널 #${specificChannel.name}에서 사용자 ${targetUserId}의 메시지 삭제 완료 (총 ${deletedCount}개 삭제됨). 소요 시간: ${duration}초`
-                : `${interaction.user.toString()}님, 사용자 ${targetUserId}의 메시지 삭제 작업 완료 (총 ${deletedCount}개 삭제됨). 소요 시간: ${duration}초`;
+                ? t(locale, 'messageCmd.finalDeleteReportChannel', {
+                      userMention: interaction.user.toString(),
+                      channel: specificChannel.name,
+                      targetUserId,
+                      count: deletedCount,
+                      duration,
+                  })
+                : t(locale, 'messageCmd.finalDeleteReportGuild', {
+                      userMention: interaction.user.toString(),
+                      targetUserId,
+                      count: deletedCount,
+                      duration,
+                  });
             if (errorMessages.length > 0) {
-                finalReport += `\n\n⚠️ **오류 발생 (${errorMessages.length}건):**\n- ${errorMessages.slice(0, 10).join('\n- ')}`;
+                finalReport += t(locale, 'messageCmd.errorSummaryHeader', {
+                    count: errorMessages.length,
+                    errors: errorMessages.slice(0, 10).join('\n- '),
+                });
                 if (errorMessages.length > 10) {
-                    finalReport += `\n- ... (${errorMessages.length - 10}개 추가 오류)`;
+                    finalReport += t(locale, 'messageCmd.errorSummaryMore', {
+                        count: errorMessages.length - 10,
+                    });
                 }
             }
             await channelToSendResponse.send(finalReport).catch((sendError: unknown) => {
                 logger.error(`${logPrefix} Failed to send final deletion report:`, sendError);
             });
             try {
-                await interaction
-                    .editReply('메시지 삭제 작업이 완료되었습니다. 결과를 채널에 전송했습니다.')
-                    .catch(() => {
-                        /* empty */
-                    });
+                await interaction.editReply(t(locale, 'messageCmd.deleteTaskDone')).catch(() => {
+                    /* empty */
+                });
             } catch {
                 /* Ignore */
             }
@@ -372,7 +405,10 @@ export const command: SlashCommand = {
                 `${logPrefix} Critical error during message deletion process for guild ${targetGuildId}, user ${targetUserId}:`,
                 err,
             );
-            const criticalErrorMessage = `${interaction.user.toString()}님, 메시지 삭제 처리 중 심각한 오류가 발생했습니다: ${err.message}`;
+            const criticalErrorMessage = t(locale, 'messageCmd.criticalDeleteError', {
+                userMention: interaction.user.toString(),
+                error: err.message,
+            });
             if (channelToSendResponse) {
                 await channelToSendResponse
                     .send(criticalErrorMessage)
@@ -385,9 +421,7 @@ export const command: SlashCommand = {
             }
             try {
                 await interaction
-                    .editReply(
-                        '메시지 삭제 처리 중 심각한 오류가 발생했습니다. 오류 내용을 채널에 전송했습니다.',
-                    )
+                    .editReply(t(locale, 'messageCmd.criticalDeleteErrorSent'))
                     .catch(() => {
                         /* empty */
                     });

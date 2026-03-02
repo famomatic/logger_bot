@@ -8,20 +8,26 @@ import {
 import { logger } from '../utils/logger.js';
 import type { SlashCommand } from '../types/commands.js';
 import { canRunReload, executeReload } from '../commandShared/reloadCore.js';
+import { getInteractionLocale, localizations, t } from '../i18n/index.js';
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()
         .setName('reload')
-        .setDescription('봇의 명령어 및 이벤트를 다시 로드합니다.')
+        .setDescription(localizations('command.reloadDescription').ko)
+        .setDescriptionLocalizations(localizations('command.reloadDescription'))
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator), // 관리자만 사용 가능하도록 설정
 
     async execute(interaction: CommandInteraction, client: Client) {
         if (!interaction.isChatInputCommand()) return;
+        const locale = getInteractionLocale(interaction);
         const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
         if (!canRunReload(interaction.user.id, Boolean(isAdmin))) {
             await interaction.reply({
-                content: '이 명령어는 관리자 또는 개발자만 사용할 수 있습니다.',
+                content: t(locale, 'common.adminOrDevOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -32,10 +38,10 @@ export const command: SlashCommand = {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         try {
             await executeReload(client);
-            await interaction.editReply('🔄 봇이 성공적으로 리로드되었습니다.');
+            await interaction.editReply(t(locale, 'reload.success'));
         } catch (error) {
             logger.error('Reload failed:', error);
-            await interaction.editReply('❌ 리로드 중 오류가 발생했습니다.');
+            await interaction.editReply(t(locale, 'reload.failed'));
         }
     },
 };

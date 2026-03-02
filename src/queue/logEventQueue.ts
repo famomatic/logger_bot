@@ -249,10 +249,16 @@ class RedisLogQueue {
 
 let queueInstance: RedisLogQueue | null = null;
 
+/**
+ * Redis 로그 큐 사용 여부(초기화 완료 상태)를 반환합니다.
+ */
 export function isLogQueueRunning(): boolean {
     return queueInstance !== null;
 }
 
+/**
+ * 설정에 따라 Redis 로그 큐를 시작하고 DB 디스패처를 큐 경로로 연결합니다.
+ */
 export async function initializeLogQueue(): Promise<void> {
     if (!config.redis.enabled) {
         setLogEventDispatcher(null);
@@ -278,6 +284,9 @@ export async function initializeLogQueue(): Promise<void> {
     queueInstance = queue;
 }
 
+/**
+ * 로그 큐를 중지하고 DB 디스패처를 직접 쓰기 모드로 되돌립니다.
+ */
 export async function shutdownLogQueue(): Promise<void> {
     setLogEventDispatcher(null);
 
@@ -289,6 +298,9 @@ export async function shutdownLogQueue(): Promise<void> {
     queueInstance = null;
 }
 
+/**
+ * 로그 큐를 재시작합니다.
+ */
 export async function restartLogQueue(): Promise<void> {
     await shutdownLogQueue();
     await initializeLogQueue();

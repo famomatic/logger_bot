@@ -1,4 +1,5 @@
 import { ChannelType, ThumbnailBuilder } from 'discord.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
 import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
@@ -22,6 +23,9 @@ const buildUserThumbnail = async (
     }
 };
 
+/**
+ * 현재 길드 아이콘을 썸네일 컴포넌트로 생성합니다.
+ */
 const buildGuildIconThumbnail = (input: GroupRendererInput): ThumbnailBuilder | undefined => {
     const guildIconUrl = input.interaction.guild?.iconURL({ forceStatic: false, size: 64 });
     if (!guildIconUrl) {
@@ -35,57 +39,81 @@ const buildGuildIconThumbnail = (input: GroupRendererInput): ThumbnailBuilder | 
     });
 };
 
+/**
+ * channel payload에서 표준 채널 데이터 객체를 추출합니다.
+ */
 const getChannelData = (input: GroupRendererInput) =>
     isJsonData(input.eventData.channel) ? input.eventData.channel : input.eventData;
 
+/**
+ * channelCreate 로그의 상세 텍스트와 썸네일을 생성합니다.
+ */
 const renderChannelCreate = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const channel = getChannelData(input);
 
     if (channel) {
         details.push(
-            `**채널 이름:** ${str(channel.name, 'N/A')} (<#${str(channel.id, 'ID 없음')}>)`,
+            `${t(locale, 'logSearchShared.legacy.channelNameLabel')} ${str(channel.name, 'N/A')} (<#${str(channel.id, t(locale, 'logSearchShared.role.idMissing'))}>)`,
         );
         if (channel.id) {
             details.push(`**ID:** ${str(channel.id)}`);
         }
         const typeText =
             channel.type !== undefined
-                ? (ChannelType[num(channel.type)] ?? `타입 ${str(channel.type)}`)
-                : '알 수 없음';
-        details.push(`**타입:** ${typeText}`);
+                ? (ChannelType[num(channel.type)] ??
+                  t(locale, 'logSearchShared.channel.unknownTypeNumber', {
+                      type: str(channel.type),
+                  }))
+                : t(locale, 'logSearchShared.legacy.unknown');
+        details.push(`${t(locale, 'logSearchShared.legacy.typeLabel')} ${typeText}`);
         if (channel.parentId) {
-            details.push(`**카테고리:** <#${str(channel.parentId)}>`);
+            details.push(
+                `${t(locale, 'logSearchShared.legacy.categoryLabel')} <#${str(channel.parentId)}>`,
+            );
         }
         if (channel.topic) {
             details.push(
-                `**주제:** ${str(channel.topic).substring(0, 100)}${str(channel.topic).length > 100 ? '...' : ''}`,
+                `${t(locale, 'logSearchShared.legacy.topicLabel')} ${str(channel.topic).substring(0, 100)}${str(channel.topic).length > 100 ? '...' : ''}`,
             );
         }
     }
 
     return {
-        eventSpecificsText: details.length > 0 ? details.join('\n') : '채널 생성 정보 없음',
+        eventSpecificsText:
+            details.length > 0
+                ? details.join('\n')
+                : t(locale, 'logSearchShared.channel.createNoInfo'),
         thumbnailComponent: input.logUserId
             ? await buildUserThumbnail(input, input.logUserId)
             : undefined,
     };
 };
 
+/**
+ * channelDelete 로그의 상세 텍스트와 썸네일을 생성합니다.
+ */
 const renderChannelDelete = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const channel = getChannelData(input);
 
     if (channel) {
-        details.push(`**삭제된 채널 이름:** ${str(channel.name, 'N/A')}`);
+        details.push(
+            `${t(locale, 'logSearchShared.legacy.deletedChannelNameLabel')} ${str(channel.name, 'N/A')}`,
+        );
         if (channel.id) {
             details.push(`**ID:** ${str(channel.id)}`);
         }
         const typeText =
             channel.type !== undefined
-                ? (ChannelType[num(channel.type)] ?? `타입 ${str(channel.type)}`)
-                : '알 수 없음';
-        details.push(`**타입:** ${typeText}`);
+                ? (ChannelType[num(channel.type)] ??
+                  t(locale, 'logSearchShared.channel.unknownTypeNumber', {
+                      type: str(channel.type),
+                  }))
+                : t(locale, 'logSearchShared.legacy.unknown');
+        details.push(`${t(locale, 'logSearchShared.legacy.typeLabel')} ${typeText}`);
     }
 
     const thumbnailFromExecutor = input.logUserId
@@ -94,12 +122,19 @@ const renderChannelDelete = async (input: GroupRendererInput): Promise<GroupRend
     const thumbnailComponent = thumbnailFromExecutor ?? buildGuildIconThumbnail(input);
 
     return {
-        eventSpecificsText: details.length > 0 ? details.join('\n') : '채널 삭제 정보 없음',
+        eventSpecificsText:
+            details.length > 0
+                ? details.join('\n')
+                : t(locale, 'logSearchShared.channel.deleteNoInfo'),
         thumbnailComponent,
     };
 };
 
+/**
+ * channelUpdate 로그의 변경 요약 텍스트와 썸네일을 생성합니다.
+ */
 const renderChannelUpdate = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const oldChannel = isJsonData(input.eventData.oldChannel)
         ? input.eventData.oldChannel
@@ -109,69 +144,76 @@ const renderChannelUpdate = async (input: GroupRendererInput): Promise<GroupRend
 
     if (newChannel) {
         details.push(
-            `**채널:** ${str(newChannel.name, 'N/A')} (<#${str(newChannel.id, 'ID 없음')}>)`,
+            `${t(locale, 'logSearchShared.legacy.channelLabel')} ${str(newChannel.name, 'N/A')} (<#${str(newChannel.id, t(locale, 'logSearchShared.role.idMissing'))}>)`,
         );
         if (oldChannel) {
             if (oldChannel.name !== newChannel.name) {
                 details.push(
-                    `**이름 변경:** \\\`${str(oldChannel.name)}\\\` -> \\\`${str(newChannel.name)}\\\``,
+                    `${t(locale, 'logSearchShared.legacy.nameChangedLabel')} \\\`${str(oldChannel.name)}\\\` -> \\\`${str(newChannel.name)}\\\``,
                 );
             }
             if (oldChannel.topic !== newChannel.topic) {
                 details.push(
-                    `**주제 변경:** \\\`${str(oldChannel.topic, '').substring(0, 30)}...\\\` -> \\\`${str(newChannel.topic, '').substring(0, 30)}...\\\``,
+                    `${t(locale, 'logSearchShared.legacy.topicChangedLabel')} \\\`${str(oldChannel.topic, '').substring(0, 30)}...\\\` -> \\\`${str(newChannel.topic, '').substring(0, 30)}...\\\``,
                 );
             }
             if (oldChannel.parentId !== newChannel.parentId) {
                 details.push(
-                    `**카테고리 변경:** ${oldChannel.parentId ? `<#${str(oldChannel.parentId)}>` : '없음'} -> ${newChannel.parentId ? `<#${str(newChannel.parentId)}>` : '없음'}`,
+                    `${t(locale, 'logSearchShared.legacy.categoryChangedLabel')} ${oldChannel.parentId ? `<#${str(oldChannel.parentId)}>` : t(locale, 'logSearchShared.legacy.none')} -> ${newChannel.parentId ? `<#${str(newChannel.parentId)}>` : t(locale, 'logSearchShared.legacy.none')}`,
                 );
             }
             if (oldChannel.type !== newChannel.type) {
                 details.push(
-                    `**타입 변경:** ${ChannelType[num(oldChannel.type)]} -> ${ChannelType[num(newChannel.type)]}`,
+                    `${t(locale, 'logSearchShared.legacy.typeChangedLabel')} ${ChannelType[num(oldChannel.type)]} -> ${ChannelType[num(newChannel.type)]}`,
                 );
             }
             if (oldChannel.nsfw !== newChannel.nsfw) {
                 details.push(
-                    `**NSFW:** ${oldChannel.nsfw ? '예' : '아니오'} -> ${newChannel.nsfw ? '예' : '아니오'}`,
+                    `${t(locale, 'logSearchShared.channel.nsfwLabel')} ${oldChannel.nsfw ? t(locale, 'logSearchShared.legacy.yes') : t(locale, 'logSearchShared.legacy.no')} -> ${newChannel.nsfw ? t(locale, 'logSearchShared.legacy.yes') : t(locale, 'logSearchShared.legacy.no')}`,
                 );
             }
             if (oldChannel.rateLimitPerUser !== newChannel.rateLimitPerUser) {
                 details.push(
-                    `**슬로우 모드:** ${num(oldChannel.rateLimitPerUser)}초 -> ${num(newChannel.rateLimitPerUser)}초`,
+                    `${t(locale, 'logSearchShared.channel.slowmodeLabel')} ${num(oldChannel.rateLimitPerUser)}${t(locale, 'logSearchShared.legacy.secondShort')} -> ${num(newChannel.rateLimitPerUser)}${t(locale, 'logSearchShared.legacy.secondShort')}`,
                 );
             }
         } else {
-            details.push('(이전 채널 정보 없음)');
+            details.push(t(locale, 'logSearchShared.channel.noPrevious'));
         }
     } else {
-        details.push('채널 정보 없음');
+        details.push(t(locale, 'logSearchShared.channel.noInfo'));
     }
 
     return {
-        eventSpecificsText: details.length > 0 ? details.join('\n') : '채널 업데이트 정보 없음',
+        eventSpecificsText:
+            details.length > 0
+                ? details.join('\n')
+                : t(locale, 'logSearchShared.channel.updateNoInfo'),
         thumbnailComponent: input.logUserId
             ? await buildUserThumbnail(input, input.logUserId)
             : undefined,
     };
 };
 
+/**
+ * channelPinsUpdate 로그의 상세 텍스트와 썸네일을 생성합니다.
+ */
 const renderChannelPinsUpdate = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const channel = isJsonData(input.eventData.channel) ? input.eventData.channel : undefined;
     const channelId = str(input.eventData.channelId ?? channel?.id);
     const lastPinTimestamp = str(input.eventData.lastPinTimestamp ?? input.eventData.timestamp);
 
     if (channelId) {
-        details.push(`**채널:** <#${channelId}>`);
+        details.push(`${t(locale, 'logSearchShared.legacy.channelLabel')} <#${channelId}>`);
     }
     if (lastPinTimestamp) {
         details.push(
-            `**마지막 고정 시간:** <t:${Math.floor(new Date(lastPinTimestamp).getTime() / 1000)}:F>`,
+            `${t(locale, 'logSearchShared.channel.lastPinLabel')} <t:${Math.floor(new Date(lastPinTimestamp).getTime() / 1000)}:F>`,
         );
     } else {
-        details.push('채널 고정핀 업데이트됨');
+        details.push(t(locale, 'logSearchShared.channel.pinsUpdated'));
     }
 
     return {
@@ -182,6 +224,9 @@ const renderChannelPinsUpdate = async (input: GroupRendererInput): Promise<Group
     };
 };
 
+/**
+ * 채널 이벤트 타입별 렌더러를 분기 호출합니다.
+ */
 export async function renderChannelEvent(input: GroupRendererInput): Promise<GroupRendererResult> {
     switch (input.eventType) {
         case 'channelCreate':
@@ -193,6 +238,11 @@ export async function renderChannelEvent(input: GroupRendererInput): Promise<Gro
         case 'channelPinsUpdate':
             return renderChannelPinsUpdate(input);
         default:
-            return { eventSpecificsText: '(기록된 세부 정보 없음)' };
+            return {
+                eventSpecificsText: t(
+                    getInteractionLocale(input.interaction),
+                    'logSearchShared.legacy.noRecordedDetails',
+                ),
+            };
     }
 }

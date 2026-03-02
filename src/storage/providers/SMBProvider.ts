@@ -2,6 +2,9 @@ import SMB2 from '@marsaud/smb2';
 import path from 'path';
 import type { StorageProvider } from '../../types/storage.js';
 
+/**
+ * SMB 네트워크 공유 기반 첨부파일 스토리지 구현입니다.
+ */
 export class SMBStorageProvider implements StorageProvider {
     private client: SMB2;
 
@@ -33,6 +36,9 @@ export class SMBStorageProvider implements StorageProvider {
     }
 }
 
+/**
+ * SMB 공유 경로를 `\\\\host\\share\\...` 형태로 정규화합니다.
+ */
 function normalizeSharePath(shareUrl: string): string {
     const match = /^\\\\([^\\]+)\\(.+)$/.exec(shareUrl);
     if (!match) {
