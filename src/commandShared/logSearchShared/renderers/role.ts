@@ -6,6 +6,7 @@ import {
 } from 'discord.js';
 import type { JsonValue } from '../../../types/json.js';
 import type { LogEntry } from '../../../types/logs.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
 
@@ -22,6 +23,9 @@ interface RenderRoleEventResult {
     thumbnailComponent: ThumbnailBuilder;
 }
 
+/**
+ * 역할 관련 이벤트 데이터를 읽어 상세 텍스트와 썸네일을 구성합니다.
+ */
 export async function renderEvent({
     interaction,
     log,
@@ -29,7 +33,8 @@ export async function renderEvent({
     eventData,
     thumbnailComponent,
 }: RenderRoleEventParams): Promise<RenderRoleEventResult> {
-    let eventSpecificsText = '(내용 없음)';
+    const locale = getInteractionLocale(interaction);
+    let eventSpecificsText = t(locale, 'logSearchShared.legacy.noContent');
     let nextThumbnailComponent = thumbnailComponent;
 
     if (!isJsonData(eventData)) {
@@ -45,14 +50,16 @@ export async function renderEvent({
             const role = isJsonData(eventData.role) ? eventData.role : null;
             if (role) {
                 roleCreateDetails.push(
-                    `**역할 이름:** ${str(role.name, 'N/A')} (<@&${str(role.id, 'ID 없음')}>)`,
+                    `${t(locale, 'logSearchShared.role.roleNameLabel')} ${str(role.name, 'N/A')} (<@&${str(role.id, t(locale, 'logSearchShared.role.idMissing'))}>)`,
                 );
                 if (role.id) {
-                    roleCreateDetails.push(`**역할 ID:** ${str(role.id)}`);
+                    roleCreateDetails.push(
+                        `${t(locale, 'logSearchShared.role.roleIdLabel')} ${str(role.id)}`,
+                    );
                 }
                 if (role.color) {
                     roleCreateDetails.push(
-                        `**색상:** #${num(role.color).toString(16).padStart(6, '0')}`,
+                        `**${t(locale, 'logSearchShared.role.colorLabel')}** #${num(role.color).toString(16).padStart(6, '0')}`,
                     );
                 }
                 if (role.permissions) {
@@ -60,15 +67,24 @@ export async function renderEvent({
                     const permArray = permissions.toArray();
                     if (permArray.length > 0) {
                         roleCreateDetails.push(
-                            `**권한 (${permArray.length}개):** ${permArray.slice(0, 3).join(', ')}${permArray.length > 3 ? ', ...' : ''}`,
+                            t(locale, 'logSearchShared.role.permissionsWithCount', {
+                                count: permArray.length,
+                                value: `${permArray.slice(0, 3).join(', ')}${permArray.length > 3 ? ', ...' : ''}`,
+                            }),
                         );
                     } else {
-                        roleCreateDetails.push(`**권한:** 없음`);
+                        roleCreateDetails.push(
+                            t(locale, 'logSearchShared.role.permissionsNone', {
+                                none: t(locale, 'logSearchShared.legacy.none'),
+                            }),
+                        );
                     }
                 }
             }
             eventSpecificsText =
-                roleCreateDetails.length > 0 ? roleCreateDetails.join('\n') : '역할 생성 정보 없음';
+                roleCreateDetails.length > 0
+                    ? roleCreateDetails.join('\n')
+                    : t(locale, 'logSearchShared.role.createNoInfo');
 
             if (log.user_id) {
                 try {
@@ -96,25 +112,29 @@ export async function renderEvent({
 
             if (newRole?.id) {
                 roleUpdateDetails.push(
-                    `**역할:** ${str(newRole.name) || str(oldRole?.name) || 'N/A'} (<@&${str(newRole.id)}>)`,
+                    `${t(locale, 'logSearchShared.role.roleLabel')} ${str(newRole.name) || str(oldRole?.name) || 'N/A'} (<@&${str(newRole.id)}>)`,
                 );
                 roleUpdateDetails.push(`**ID:** ${str(newRole.id)}`);
             } else if (oldRole?.id) {
-                roleUpdateDetails.push(`**역할 ID:** ${str(oldRole.id, 'ID 없음')}`);
+                roleUpdateDetails.push(
+                    `${t(locale, 'logSearchShared.role.roleIdLabel')} ${str(oldRole.id, t(locale, 'logSearchShared.role.idMissing'))}`,
+                );
                 if (oldRole.name) {
-                    roleUpdateDetails.push(`**이전 역할 이름:** ${str(oldRole.name)}`);
+                    roleUpdateDetails.push(
+                        `${t(locale, 'logSearchShared.role.previousRoleNameLabel')} ${str(oldRole.name)}`,
+                    );
                 }
             }
 
             if (oldRole && newRole) {
                 if (oldRole.name !== newRole.name) {
                     roleUpdateDetails.push(
-                        `**이름 변경:** \\\`${str(oldRole.name, '(없음)')}\\\` -> \\\`${str(newRole.name, '(없음)')}\\\``,
+                        `${t(locale, 'logSearchShared.legacy.nameChangedLabel')} \\\`${str(oldRole.name, t(locale, 'logSearchShared.legacy.none'))}\\\` -> \\\`${str(newRole.name, t(locale, 'logSearchShared.legacy.none'))}\\\``,
                     );
                 }
                 if (oldRole.color !== newRole.color) {
                     roleUpdateDetails.push(
-                        `**색상 변경:** \`#${num(oldRole.color).toString(16).padStart(6, '0')}\` -> \`#${num(newRole.color).toString(16).padStart(6, '0')}\``,
+                        `**${t(locale, 'logSearchShared.role.colorChangedLabel')}** \`#${num(oldRole.color).toString(16).padStart(6, '0')}\` -> \`#${num(newRole.color).toString(16).padStart(6, '0')}\``,
                     );
                 }
 
@@ -129,52 +149,63 @@ export async function renderEvent({
 
                     if (addedPerms.length > 0) {
                         roleUpdateDetails.push(
-                            `**추가된 권한 (${addedPerms.length}개):** ${addedPerms.slice(0, 3).join(', ')}${addedPerms.length > 3 ? ', ...' : ''}`,
+                            t(locale, 'logSearchShared.role.addedPermissions', {
+                                count: addedPerms.length,
+                                value: `${addedPerms.slice(0, 3).join(', ')}${addedPerms.length > 3 ? ', ...' : ''}`,
+                            }),
                         );
                     }
                     if (removedPerms.length > 0) {
                         roleUpdateDetails.push(
-                            `**제거된 권한 (${removedPerms.length}개):** ${removedPerms.slice(0, 3).join(', ')}${removedPerms.length > 3 ? ', ...' : ''}`,
+                            t(locale, 'logSearchShared.role.removedPermissions', {
+                                count: removedPerms.length,
+                                value: `${removedPerms.slice(0, 3).join(', ')}${removedPerms.length > 3 ? ', ...' : ''}`,
+                            }),
                         );
                     }
                 }
                 if (oldRole.hoist !== newRole.hoist) {
                     roleUpdateDetails.push(
-                        `**분리 표시:** ${oldRole.hoist ? '활성' : '비활성'} -> ${newRole.hoist ? '활성' : '비활성'}`,
+                        `${t(locale, 'logSearchShared.role.hoistLabel')} ${oldRole.hoist ? t(locale, 'logSearchShared.legacy.active') : t(locale, 'logSearchShared.role.inactive')} -> ${newRole.hoist ? t(locale, 'logSearchShared.legacy.active') : t(locale, 'logSearchShared.role.inactive')}`,
                     );
                 }
                 if (oldRole.mentionable !== newRole.mentionable) {
                     roleUpdateDetails.push(
-                        `**멘션 가능:** ${oldRole.mentionable ? '활성' : '비활성'} -> ${newRole.mentionable ? '활성' : '비활성'}`,
+                        `${t(locale, 'logSearchShared.role.mentionableLabel')} ${oldRole.mentionable ? t(locale, 'logSearchShared.legacy.active') : t(locale, 'logSearchShared.role.inactive')} -> ${newRole.mentionable ? t(locale, 'logSearchShared.legacy.active') : t(locale, 'logSearchShared.role.inactive')}`,
                     );
                 }
                 if (oldRole.icon !== newRole.icon) {
-                    roleUpdateDetails.push(`**아이콘 변경됨**`);
+                    roleUpdateDetails.push(t(locale, 'logSearchShared.role.iconChanged'));
                 }
                 if (oldRole.unicodeEmoji !== newRole.unicodeEmoji) {
                     roleUpdateDetails.push(
-                        `**유니코드 이모지 변경:** ${str(oldRole.unicodeEmoji, '(없음)')} -> ${str(newRole.unicodeEmoji, '(없음)')}`,
+                        `${t(locale, 'logSearchShared.role.unicodeEmojiChangedLabel')} ${str(oldRole.unicodeEmoji, t(locale, 'logSearchShared.legacy.none'))} -> ${str(newRole.unicodeEmoji, t(locale, 'logSearchShared.legacy.none'))}`,
                     );
                 }
             } else if (newRole) {
-                roleUpdateDetails.push('(새 역할 정보만 존재하여 변경 사항 비교 불가)');
-                roleUpdateDetails.push(`**이름:** ${str(newRole.name, 'N/A')}`);
+                roleUpdateDetails.push(t(locale, 'logSearchShared.role.onlyNewRole'));
+                roleUpdateDetails.push(
+                    `**${t(locale, 'logSearchShared.role.nameLabel')}** ${str(newRole.name, 'N/A')}`,
+                );
                 if (newRole.color) {
                     roleUpdateDetails.push(
-                        `**색상:** #${num(newRole.color).toString(16).padStart(6, '0')}`,
+                        `**${t(locale, 'logSearchShared.role.colorLabel')}** #${num(newRole.color).toString(16).padStart(6, '0')}`,
                     );
                 }
             } else if (oldRole) {
-                roleUpdateDetails.push('(이전 역할 정보만 존재하여 변경 사항 비교 불가)');
-                roleUpdateDetails.push(`**이름:** ${str(oldRole.name, 'N/A')}`);
+                roleUpdateDetails.push(t(locale, 'logSearchShared.role.onlyOldRole'));
+                roleUpdateDetails.push(
+                    `**${t(locale, 'logSearchShared.role.nameLabel')}** ${str(oldRole.name, 'N/A')}`,
+                );
             }
 
             eventSpecificsText =
                 roleUpdateDetails.length > 2
                     ? roleUpdateDetails.join('\n')
                     : roleUpdateDetails.length > 0
-                      ? roleUpdateDetails.join('\n') + '\n(세부 변경 사항 감지 안됨)'
-                      : '역할 업데이트 정보 없음';
+                      ? roleUpdateDetails.join('\n') +
+                        `\n${t(locale, 'logSearchShared.role.noDetailedChanges')}`
+                      : t(locale, 'logSearchShared.role.updateNoInfo');
 
             if (log.user_id) {
                 try {
@@ -199,13 +230,19 @@ export async function renderEvent({
             const roleDeleteDetails: string[] = [];
             const role = isJsonData(eventData.role) ? eventData.role : null;
             if (role) {
-                roleDeleteDetails.push(`**삭제된 역할 이름:** ${str(role.name, 'N/A')}`);
+                roleDeleteDetails.push(
+                    `${t(locale, 'logSearchShared.role.deletedRoleNameLabel')} ${str(role.name, 'N/A')}`,
+                );
                 if (role.id) {
-                    roleDeleteDetails.push(`**삭제된 역할 ID:** ${str(role.id)}`);
+                    roleDeleteDetails.push(
+                        `${t(locale, 'logSearchShared.role.deletedRoleIdLabel')} ${str(role.id)}`,
+                    );
                 }
             }
             eventSpecificsText =
-                roleDeleteDetails.length > 0 ? roleDeleteDetails.join('\n') : '역할 삭제 정보 없음';
+                roleDeleteDetails.length > 0
+                    ? roleDeleteDetails.join('\n')
+                    : t(locale, 'logSearchShared.role.deleteNoInfo');
 
             if (log.user_id) {
                 try {

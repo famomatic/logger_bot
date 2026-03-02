@@ -3,18 +3,20 @@ import type { LegacyCommand } from '../types/commands.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import { buildStatusReply, collectStatusSnapshot } from '../commandShared/statusCore.js';
+import { getMessageLocale, t } from '../i18n/index.js';
 
 const command: LegacyCommand = {
     name: 'status',
     async execute(message: Message) {
+        const locale = getMessageLocale(message);
         if (config.getDevLevel(message.author.id) < 1) {
-            await message.reply('이 명령어는 개발자만 사용할 수 있습니다.');
+            await message.reply(t(locale, 'common.devOnly'));
             return;
         }
         try {
             const client = message.client;
-            const snapshot = await collectStatusSnapshot(client, 'legacy');
-            const replyOptions = buildStatusReply(client, snapshot, 0x1abc9c);
+            const snapshot = await collectStatusSnapshot(client, 'legacy', locale);
+            const replyOptions = buildStatusReply(client, snapshot, locale, 0x1abc9c);
 
             await message.reply(replyOptions);
         } catch (error) {
@@ -25,11 +27,14 @@ const command: LegacyCommand = {
                 JSON.stringify(err, Object.getOwnPropertyNames(err)),
             );
             await message.reply({
-                content: `상태 정보를 가져오는 중 오류가 발생했습니다: ${err.message}`,
+                content: t(locale, 'status.fetchError', { error: err.message }),
                 allowedMentions: { parse: [] },
             });
         }
     },
 };
 
+/**
+ * 레거시 커맨드 모듈 계약(`export { command }`)입니다.
+ */
 export { command };

@@ -8,6 +8,7 @@ import { sanitizeObjectStrings } from '../utils/sanitize.js';
 import discordClient from '../utils/discordClient.js';
 import { dispatchAlert } from '../utils/alertManager.js';
 import type { AlertSubscriptionRow } from '../types/alerts.js';
+import type { GuildLogStats } from '../types/database.js';
 import type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
 import type { PgError } from '../types/errors.js';
 import type {
@@ -20,9 +21,6 @@ import type {
     RankedRow,
     ScopeSummaryRow,
 } from '../types/dbRows.js';
-
-export type { AlertSubscriptionRow } from '../types/alerts.js';
-export type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
 
 dotenv.config();
 
@@ -48,6 +46,9 @@ pool.on('error', (err, client) => {
 // --- Authorized Guild Cache ---
 let authorizedGuildIds = new Set<string>();
 
+/**
+ * `authorized_guilds` 테이블을 읽어 메모리 캐시를 초기화합니다.
+ */
 export async function loadAuthorizedGuildIds(): Promise<void> {
     try {
         const res = await pool.query('SELECT guild_id FROM authorized_guilds');
@@ -58,10 +59,16 @@ export async function loadAuthorizedGuildIds(): Promise<void> {
     }
 }
 
+/**
+ * 길드가 로깅 허용 대상인지 메모리 캐시 기준으로 확인합니다.
+ */
 export function isGuildAuthorized(guildId: string): boolean {
     return authorizedGuildIds.has(guildId);
 }
 
+/**
+ * 길드 ID를 로깅 허용 목록(DB + 메모리 캐시)에 등록합니다.
+ */
 export async function authorizeGuildId(guildId: string): Promise<void> {
     try {
         await pool.query(
@@ -74,6 +81,9 @@ export async function authorizeGuildId(guildId: string): Promise<void> {
     }
 }
 
+/**
+ * 길드 ID를 로깅 허용 목록(DB + 메모리 캐시)에서 제거합니다.
+ */
 export async function unauthorizeGuildId(guildId: string): Promise<void> {
     try {
         await pool.query('DELETE FROM authorized_guilds WHERE guild_id = $1', [guildId]);
@@ -85,6 +95,9 @@ export async function unauthorizeGuildId(guildId: string): Promise<void> {
 
 // --- Alert Subscriptions ---
 
+/**
+ * 경보 카테고리 구독 채널을 등록합니다.
+ */
 export async function addAlertSubscription(
     guildId: string,
     category: string,
@@ -100,6 +113,9 @@ export async function addAlertSubscription(
     }
 }
 
+/**
+ * 경보 카테고리 구독 채널을 해제합니다.
+ */
 export async function removeAlertSubscription(
     guildId: string,
     category: string,
@@ -115,6 +131,9 @@ export async function removeAlertSubscription(
     }
 }
 
+/**
+ * 전체 경보 구독 목록을 조회합니다.
+ */
 export async function fetchAlertSubscriptions(): Promise<AlertSubscriptionRow[]> {
     try {
         const res = await pool.query<AlertSubscriptionRow>(
@@ -127,6 +146,9 @@ export async function fetchAlertSubscriptions(): Promise<AlertSubscriptionRow[]>
     }
 }
 
+/**
+ * 채널별 최신 `messageCreate` 로그 target_id를 체크포인트로 조회합니다.
+ */
 export async function fetchLatestMessageCreateTargetIdsByChannel(
     guildId: string,
 ): Promise<Map<string, string>> {
@@ -159,10 +181,16 @@ let logEventDispatcher: LogEventDispatcher | null = null;
 
 const TARGET_ID_MAX_LENGTH = 30;
 
+/**
+ * 로그 저장 경로를 외부 디스패처(큐 등)로 위임할 때 사용할 핸들러를 등록합니다.
+ */
 export function setLogEventDispatcher(dispatcher: LogEventDispatcher | null): void {
     logEventDispatcher = dispatcher;
 }
 
+/**
+ * target_id가 없을 때 중복 가능성을 낮춘 합성 ID를 생성합니다.
+ */
 function createSyntheticTargetId(
     eventType: string,
     guildId: string,
@@ -177,6 +205,9 @@ function createSyntheticTargetId(
     return `auto_${hash}`;
 }
 
+/**
+ * DB 컬럼 길이 제한(30자)을 넘는 target_id를 해시 접미사로 축약합니다.
+ */
 function normalizeTargetId(targetId: string): string {
     if (targetId.length <= TARGET_ID_MAX_LENGTH) {
         return targetId;
@@ -187,6 +218,9 @@ function normalizeTargetId(targetId: string): string {
     return `${targetId.slice(0, prefixLength)}_${hash}`;
 }
 
+/**
+ * 로그 이벤트 입력을 DB 저장 가능한 정규화 구조로 변환합니다.
+ */
 function normalizeLogEvent(
     eventType: string,
     guildId: string,
@@ -209,20 +243,32 @@ function normalizeLogEvent(
     };
 }
 
+/**
+ * 파티션 테이블 이름 생성 전 guildId 형식을 검증합니다.
+ */
 function assertValidGuildId(guildId: string): void {
     if (!/^\d+$/.test(guildId)) {
         throw new Error(`Invalid guild ID format: ${guildId}`);
     }
 }
 
+/**
+ * SQL 식별자(테이블명 등) 안전 이스케이프를 수행합니다.
+ */
 function quoteIdentifier(input: string): string {
     return `"${input.replace(/"/g, '""')}"`;
 }
 
+/**
+ * SQL 리터럴 문자열을 안전하게 이스케이프합니다.
+ */
 function quoteLiteral(input: string): string {
     return `'${input.replace(/'/g, "''")}'`;
 }
 
+/**
+ * 길드별 리스트 파티션 테이블이 없으면 생성/attach합니다.
+ */
 async function ensureGuildPartition(guildId: string): Promise<void> {
     assertValidGuildId(guildId);
     const partitionTableName = `event_logs_guild_${guildId}`;
@@ -242,6 +288,9 @@ async function ensureGuildPartition(guildId: string): Promise<void> {
     }
 }
 
+/**
+ * 이벤트 1건을 즉시 DB에 삽입합니다. 파티션 누락 시 1회 복구 재시도합니다.
+ */
 async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Promise<boolean> {
     const insertQuery = `
     INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
@@ -300,10 +349,16 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
     }
 }
 
+/**
+ * 정규화된 로그 이벤트 1건을 즉시 DB에 기록합니다.
+ */
 export async function insertLogEventDirectNow(event: LogEventRecord): Promise<boolean> {
     return await insertLogEventDirect(event);
 }
 
+/**
+ * 로그 이벤트 여러 건을 벌크 insert로 저장하고, 성공 건만 경보 디스패치합니다.
+ */
 export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<number> {
     if (events.length === 0) {
         return 0;
@@ -391,7 +446,9 @@ export async function logEvent(
     return await insertLogEventDirect(event);
 }
 
-// Helper function to avoid duplicating the original error logging logic
+/**
+ * DB 삽입 실패 원본 오류를 표준/비표준 객체 모두 로깅합니다.
+ */
 function logOriginalError(
     error: unknown,
     eventType: string,
@@ -496,7 +553,9 @@ export async function fetchLogs(
     }
 }
 
-// Function to migrate database schema
+/**
+ * 필수 테이블/인덱스/확장 모듈 존재를 보장하는 스키마 마이그레이션을 수행합니다.
+ */
 export async function migrate() {
     const client = await pool.connect();
     try {
@@ -556,7 +615,9 @@ export async function migrate() {
     }
 }
 
-// Function to count logs (optional, can be derived from fetchLogs total)
+/**
+ * 길드 로그 개수를 조건(eventType/userId) 기준으로 집계합니다.
+ */
 export async function countLogs(
     guildId: string,
     filters: { eventType?: string; userId?: string } = {},
@@ -584,15 +645,9 @@ export async function countLogs(
     }
 }
 
-export interface GuildLogStats {
-    totalLogs: number;
-    messageCreateCount: number;
-    textMessageCount: number;
-    totalTextCharacters: number;
-    attachmentCount: number;
-    stickerCount: number;
-}
-
+/**
+ * 길드 전체 로그 통계를 집계해 대시보드/리포트용 값으로 반환합니다.
+ */
 export async function getGuildLogStats(guildId: string): Promise<GuildLogStats> {
     const query = `
     WITH message_data AS (
@@ -646,12 +701,18 @@ export async function getGuildLogStats(guildId: string): Promise<GuildLogStats> 
     }
 }
 
+/**
+ * DB count 문자열 값을 안전한 number(실패 시 0)로 변환합니다.
+ */
 function toCount(value: string | null | undefined): number {
     if (!value) return 0;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/**
+ * 최근 24시간과 이전 24시간의 증감률(%)을 계산합니다.
+ */
 function computeTrendPercent(last24h: number, prev24h: number): number | null {
     if (prev24h === 0) {
         return last24h === 0 ? 0 : null;
@@ -659,6 +720,9 @@ function computeTrendPercent(last24h: number, prev24h: number): number | null {
     return Math.round(((last24h - prev24h) / prev24h) * 100 * 10) / 10;
 }
 
+/**
+ * where 절 기반 범용 리포트 집계를 수행합니다(길드/채널/유저 공용).
+ */
 async function getLogScopeReport(
     whereClause: string,
     queryParams: string[],
@@ -777,10 +841,16 @@ async function getLogScopeReport(
     }
 }
 
+/**
+ * 길드 단위 로그 리포트를 생성합니다.
+ */
 export async function getGuildReport(guildId: string): Promise<LogScopeReport> {
     return await getLogScopeReport('guild_id = $1', [guildId]);
 }
 
+/**
+ * 채널 단위 로그 리포트를 생성합니다.
+ */
 export async function getChannelReport(
     guildId: string,
     channelId: string,
@@ -788,18 +858,25 @@ export async function getChannelReport(
     return await getLogScopeReport('guild_id = $1 AND channel_id = $2', [guildId, channelId]);
 }
 
+/**
+ * 사용자 단위 로그 리포트를 생성합니다.
+ */
 export async function getUserReport(guildId: string, userId: string): Promise<LogScopeReport> {
     return await getLogScopeReport('guild_id = $1 AND user_id = $2', [guildId, userId]);
 }
 
-// Graceful shutdown
+/**
+ * 애플리케이션 종료 시 DB 풀을 정상 종료합니다.
+ */
 export async function destroyDatabase() {
     logger.info('Disconnecting database pool...');
     await pool.end();
     logger.info('Database pool disconnected.');
 }
 
-// Application startup check
+/**
+ * 시작 시 DB 연결 가능 여부를 확인합니다.
+ */
 export async function testDatabaseConnection() {
     try {
         const client = await pool.connect();
@@ -946,4 +1023,7 @@ export async function searchLogs(
 
 // --- End of Log Search Functionality ---
 
+/**
+ * 전역 PostgreSQL 커넥션 풀의 기본 export 입니다.
+ */
 export default pool;

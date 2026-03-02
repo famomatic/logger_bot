@@ -1,23 +1,14 @@
 import type { Client } from 'discord.js';
+import type {
+    EventTypeCountLike,
+    FormatListOptions,
+    IdCountLike,
+    MentionEntityType,
+} from '../types/reportFormatters.js';
 
-export interface EventTypeCountLike {
-    eventType: string;
-    count: number;
-}
-
-export interface IdCountLike {
-    id: string;
-    count: number;
-}
-
-export interface FormatListOptions {
-    locale?: string;
-    emptyText?: string;
-    countUnit?: string;
-}
-
-export type MentionEntityType = 'user' | 'channel';
-
+/**
+ * 공통 순위 목록 렌더러입니다. 데이터가 없으면 빈 텍스트를 반환합니다.
+ */
 function formatRankedList<T>(
     items: T[],
     formatter: (item: T, index: number) => string,
@@ -30,15 +21,21 @@ function formatRankedList<T>(
     return items.map((item, index) => formatter(item, index)).join('\n');
 }
 
+/**
+ * 숫자를 지정한 locale 규칙으로 포맷합니다.
+ */
 export function formatLocalizedNumber(value: number, locale = 'ko-KR'): string {
     return value.toLocaleString(locale);
 }
 
+/**
+ * 이벤트 타입별 집계 배열을 순위 목록 문자열로 변환합니다.
+ */
 export function formatEventTypeCountList(
     eventTypes: EventTypeCountLike[],
     options: FormatListOptions = {},
 ): string {
-    const { locale = 'ko-KR', emptyText = '없음', countUnit = '건' } = options;
+    const { locale = 'en-US', emptyText = 'None', countUnit = '' } = options;
 
     return formatRankedList(
         eventTypes,
@@ -48,12 +45,15 @@ export function formatEventTypeCountList(
     );
 }
 
+/**
+ * 채널/사용자 ID 기반 집계를 멘션 포함 순위 문자열로 변환합니다.
+ */
 export function formatEntityCountList(
     items: IdCountLike[],
     entity: MentionEntityType,
     options: FormatListOptions & { includeId?: boolean } = {},
 ): string {
-    const { locale = 'ko-KR', emptyText = '없음', countUnit = '건', includeId = true } = options;
+    const { locale = 'en-US', emptyText = 'None', countUnit = '', includeId = true } = options;
 
     const mentionPrefix = entity === 'channel' ? '#' : '@';
 
@@ -68,12 +68,15 @@ export function formatEntityCountList(
     );
 }
 
+/**
+ * 사용자 ID 목록을 `tag (id)` 문자열 목록으로 변환합니다.
+ */
 export async function formatUserTagListFromIds(
     client: Client,
     ids: string[] | undefined,
     options: { emptyText?: string; unknownPrefix?: string } = {},
 ): Promise<string> {
-    const { emptyText = '없음', unknownPrefix = 'ID' } = options;
+    const { emptyText = 'None', unknownPrefix = 'ID' } = options;
 
     if (!ids || ids.length === 0) {
         return emptyText;

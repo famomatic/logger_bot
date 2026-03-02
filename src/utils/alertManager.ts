@@ -1,5 +1,5 @@
 import { Client } from 'discord.js';
-import { eventConfigurations } from '../config/eventsConfig.js';
+import { eventConfigurations, getFriendlyEventName } from '../config/eventsConfig.js';
 import { escapeCodeBlockContent } from './sanitize.js';
 import { logger } from './logger.js';
 import {
@@ -8,10 +8,13 @@ import {
     fetchAlertSubscriptions,
 } from '../db/database.js';
 import type { AlertSubscription } from '../types/alerts.js';
+import { resolveLocale } from '../i18n/index.js';
 
 const subscriptions: AlertSubscription[] = [];
 
-// Build category map from eventConfigurations
+/**
+ * 이벤트 카테고리별 DB 이벤트 타입 목록 매핑입니다.
+ */
 export const categoryEventMap: Record<string, string[]> = (() => {
     const map: Record<string, string[]> = {};
     for (const cfg of Object.values(eventConfigurations)) {
@@ -21,6 +24,9 @@ export const categoryEventMap: Record<string, string[]> = (() => {
     return map;
 })();
 
+/**
+ * DB에 저장된 알림 구독 설정을 메모리 구독 목록으로 로드합니다.
+ */
 export async function loadAlertSubscriptions(): Promise<void> {
     try {
         const rows = await fetchAlertSubscriptions();
@@ -40,6 +46,9 @@ export async function loadAlertSubscriptions(): Promise<void> {
     }
 }
 
+/**
+ * 길드/카테고리/채널 기준 알림 구독을 추가하고 DB에 반영합니다.
+ */
 export function addSubscription(guildId: string, category: string, channelId: string): boolean {
     const types = categoryEventMap[category];
     if (!types) return false;
@@ -50,6 +59,9 @@ export function addSubscription(guildId: string, category: string, channelId: st
     return true;
 }
 
+/**
+ * 길드/카테고리/채널 기준 알림 구독을 제거하고 DB에 반영합니다.
+ */
 export function removeSubscription(guildId: string, category: string, channelId: string): boolean {
     const index = subscriptions.findIndex(
         (s) => s.guildId === guildId && s.channelId === channelId && s.category === category,
@@ -62,6 +74,9 @@ export function removeSubscription(guildId: string, category: string, channelId:
     return true;
 }
 
+/**
+ * 이벤트 타입에 맞는 구독 채널로 로그 알림 메시지를 전송합니다.
+ */
 export async function dispatchAlert(
     eventType: string,
     guildId: string,
@@ -79,18 +94,25 @@ export async function dispatchAlert(
             const fetched = await client.channels.fetch(sub.channelId).catch(() => null);
             if (!fetched?.isTextBased()) continue;
             const json = escapeCodeBlockContent(JSON.stringify(data).slice(0, 1800));
-            const friendlyConfig = Object.values(eventConfigurations).find(
-                (cfg) => cfg.dbEventType === eventType,
-            );
-            const friendlyName = friendlyConfig?.friendlyName ?? eventType;
+            const guild = await client.guilds.fetch(guildId).catch(() => null);
+            const locale = resolveLocale(guild?.preferredLocale);
+            const friendlyName = getFriendlyEventName(eventType, locale);
             const summaryLines = [
-                `이벤트: ${friendlyName} (${eventType})`,
-                `타임스탬프: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`,
-                `채널: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`,
-                `대상 ID: ${targetId ?? 'N/A'}`,
-                `사용자 ID: ${userId ?? 'N/A'}`,
+                locale === 'ko'
+                    ? `이벤트: ${friendlyName} (${eventType})`
+                    : `Event: ${friendlyName} (${eventType})`,
+                locale === 'ko'
+                    ? `타임스탬프: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`
+                    : `Timestamp: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`,
+                locale === 'ko'
+                    ? `채널: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`
+                    : `Channel: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`,
+                locale === 'ko'
+                    ? `대상 ID: ${targetId ?? 'N/A'}`
+                    : `Target ID: ${targetId ?? 'N/A'}`,
+                locale === 'ko' ? `사용자 ID: ${userId ?? 'N/A'}` : `User ID: ${userId ?? 'N/A'}`,
             ];
-            const content = `${summaryLines.join('\n')}\n\n데이터:\n\`\`\`json\n${json}\n\`\`\``;
+            const content = `${summaryLines.join('\n')}\n\n${locale === 'ko' ? '데이터' : 'Data'}:\n\`\`\`json\n${json}\n\`\`\``;
 
             if ('send' in fetched && typeof fetched.send === 'function') {
                 await fetched.send({

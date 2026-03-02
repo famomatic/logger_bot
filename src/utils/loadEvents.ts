@@ -6,6 +6,9 @@ import { logger } from './logger.js';
 import type { LegacyCommand } from '../types/commands.js';
 import type { EventHandler } from '../types/events.js';
 
+/**
+ * dist 이벤트 모듈을 동적으로 로드해 Discord 클라이언트에 바인딩합니다.
+ */
 export async function loadEvents(client: Client): Promise<void> {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = path.dirname(__filename);
@@ -40,6 +43,9 @@ export async function loadEvents(client: Client): Promise<void> {
                         continue;
                     }
 
+                    /**
+                     * 이벤트 실행 중 예외를 공통 로깅 처리하는 래퍼 함수입니다.
+                     */
                     const executeWrapper = async (...args: unknown[]) => {
                         try {
                             // messageCreate 특별 처리: legacyCommands 전달
@@ -86,6 +92,9 @@ export async function loadEvents(client: Client): Promise<void> {
         logger.error('Error reading events directory:', error);
     }
 }
+/**
+ * 런타임에 바인딩된 이벤트 리스너를 해제합니다.
+ */
 export function unloadEvents(client: Client): void {
     client.removeAllListeners();
 }

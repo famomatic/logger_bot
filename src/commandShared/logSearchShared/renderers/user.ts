@@ -1,7 +1,8 @@
 import { ThumbnailBuilder } from 'discord.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from './types.js';
+import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,
@@ -22,7 +23,11 @@ const buildUserThumbnail = async (
     }
 };
 
+/**
+ * userUpdate 로그의 변경 요약 텍스트와 썸네일을 생성합니다.
+ */
 export async function renderUserEvent(input: GroupRendererInput): Promise<GroupRendererResult> {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const oldUser = isJsonData(input.eventData.oldUser) ? input.eventData.oldUser : undefined;
     const newUserCandidate = input.eventData.newUser ?? input.eventData.user;
@@ -30,30 +35,30 @@ export async function renderUserEvent(input: GroupRendererInput): Promise<GroupR
 
     if (newUser) {
         details.push(
-            `**사용자:** ${str(newUser.tag) || str(newUser.username)} (<@${str(newUser.id)}>)`,
+            `${t(locale, 'logSearchShared.legacy.userLabel')} ${str(newUser.tag) || str(newUser.username)} (<@${str(newUser.id)}>)`,
         );
         if (oldUser) {
             if (oldUser.username !== newUser.username) {
                 details.push(
-                    `**사용자명 변경:** \\\`${str(oldUser.username)}\\\` -> \\\`${str(newUser.username)}\\\``,
+                    `${t(locale, 'logSearchShared.user.usernameChangedLabel')} \\\`${str(oldUser.username)}\\\` -> \\\`${str(newUser.username)}\\\``,
                 );
             }
             if (oldUser.discriminator !== newUser.discriminator) {
                 details.push(
-                    `**태그 변경:** #${str(oldUser.discriminator)} -> #${str(newUser.discriminator)}`,
+                    `${t(locale, 'logSearchShared.user.tagChangedLabel')} #${str(oldUser.discriminator)} -> #${str(newUser.discriminator)}`,
                 );
             }
             if (oldUser.avatar !== newUser.avatar) {
-                details.push('**아바타 변경됨**');
+                details.push(t(locale, 'logSearchShared.user.avatarChanged'));
             }
             if (oldUser.globalName !== newUser.globalName) {
                 details.push(
-                    `**표시 이름 변경:** \\\`${str(oldUser.globalName, '(없음)')}\\\` -> \\\`${str(newUser.globalName, '(없음)')}\\\``,
+                    `${t(locale, 'logSearchShared.user.displayNameChangedLabel')} \\\`${str(oldUser.globalName, t(locale, 'logSearchShared.legacy.none'))}\\\` -> \\\`${str(newUser.globalName, t(locale, 'logSearchShared.legacy.none'))}\\\``,
                 );
             }
         }
     } else {
-        details.push('사용자 정보 없음');
+        details.push(t(locale, 'logSearchShared.user.noInfo'));
     }
 
     const userIdForThumbnail = str(newUser?.id);
@@ -62,7 +67,10 @@ export async function renderUserEvent(input: GroupRendererInput): Promise<GroupR
         : undefined;
 
     return {
-        eventSpecificsText: details.length > 0 ? details.join('\n') : '사용자 업데이트 정보 없음',
+        eventSpecificsText:
+            details.length > 0
+                ? details.join('\n')
+                : t(locale, 'logSearchShared.user.updateNoInfo'),
         thumbnailComponent,
     };
 }

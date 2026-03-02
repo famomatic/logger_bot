@@ -1,7 +1,8 @@
 import { ThumbnailBuilder } from 'discord.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from './types.js';
+import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,
@@ -22,65 +23,71 @@ const buildUserThumbnail = async (
     }
 };
 
-const EVENT_TYPES: Record<number, string> = {
-    1: '스테이지',
-    2: '음성 채널',
-    3: '외부 링크',
-};
-
+const EVENT_TYPES: Record<number, string> = { 1: 'stage', 2: 'voice', 3: 'external' };
 const EVENT_STATUSES: Record<number, string> = {
-    1: '예정',
-    2: '활성',
-    3: '완료됨',
-    4: '취소됨',
+    1: 'scheduled',
+    2: 'active',
+    3: 'completed',
+    4: 'canceled',
 };
 
 const renderScheduledEventCreate = async (
     input: GroupRendererInput,
 ): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const eventDetails: string[] = [];
     const event = isJsonData(input.eventData.scheduledEvent)
         ? input.eventData.scheduledEvent
         : input.eventData;
 
     if (event) {
-        eventDetails.push(`**이벤트 이름:** ${str(event.name, 'N/A')}`);
+        eventDetails.push(
+            `${t(locale, 'logSearchShared.scheduledEvent.eventNameLabel')} ${str(event.name, 'N/A')}`,
+        );
         if (event.id) {
             eventDetails.push(`**ID:** ${str(event.id)}`);
         }
         if (event.description) {
             eventDetails.push(
-                `**설명:** ${str(event.description).substring(0, 100)}${str(event.description).length > 100 ? '...' : ''}`,
+                `${t(locale, 'logSearchShared.legacy.descriptionLabel')} ${str(event.description).substring(0, 100)}${str(event.description).length > 100 ? '...' : ''}`,
             );
         }
         if (event.scheduledStartTime) {
             eventDetails.push(
-                `**시작 시간:** <t:${Math.floor(new Date(str(event.scheduledStartTime)).getTime() / 1000)}:F>`,
+                `${t(locale, 'logSearchShared.scheduledEvent.startTimeLabel')} <t:${Math.floor(new Date(str(event.scheduledStartTime)).getTime() / 1000)}:F>`,
             );
         }
         if (event.scheduledEndTime) {
             eventDetails.push(
-                `**종료 시간:** <t:${Math.floor(new Date(str(event.scheduledEndTime)).getTime() / 1000)}:F>`,
+                `${t(locale, 'logSearchShared.scheduledEvent.endTimeLabel')} <t:${Math.floor(new Date(str(event.scheduledEndTime)).getTime() / 1000)}:F>`,
             );
         }
         if (event.entityType !== undefined) {
             eventDetails.push(
-                `**유형:** ${EVENT_TYPES[num(event.entityType)] ?? `알 수 없음 (${str(event.entityType)})`}`,
+                `${t(locale, 'logSearchShared.legacy.typeLabel')} ${t(locale, `logSearchShared.scheduledEvent.type.${EVENT_TYPES[num(event.entityType)] ?? 'unknown'}`)}${EVENT_TYPES[num(event.entityType)] ? '' : ` (${str(event.entityType)})`}`,
             );
         }
         if (event.channelId) {
-            eventDetails.push(`**채널:** <#${str(event.channelId)}>`);
+            eventDetails.push(
+                `${t(locale, 'logSearchShared.legacy.channelLabel')} <#${str(event.channelId)}>`,
+            );
         } else if (isJsonData(event.entityMetadata) && event.entityMetadata.location) {
-            eventDetails.push(`**위치:** ${str(event.entityMetadata.location)}`);
+            eventDetails.push(
+                `${t(locale, 'logSearchShared.scheduledEvent.locationLabel')} ${str(event.entityMetadata.location)}`,
+            );
         }
 
         const creatorId = str(event.creatorId);
         if (creatorId) {
             try {
                 const creator = await input.interaction.client.users.fetch(creatorId);
-                eventDetails.push(`**생성자:** ${creator.tag} (<@${creatorId}>)`);
+                eventDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${creator.tag} (<@${creatorId}>)`,
+                );
             } catch {
-                eventDetails.push(`**생성자 ID:** ${creatorId}`);
+                eventDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.creatorIdLabel')} ${creatorId}`,
+                );
             }
         }
     }
@@ -101,7 +108,9 @@ const renderScheduledEventCreate = async (
 
     return {
         eventSpecificsText:
-            eventDetails.length > 0 ? eventDetails.join('\n') : '예약된 이벤트 생성 정보 없음',
+            eventDetails.length > 0
+                ? eventDetails.join('\n')
+                : t(locale, 'logSearchShared.scheduledEvent.createNoInfo'),
         thumbnailComponent,
     };
 };
@@ -109,6 +118,7 @@ const renderScheduledEventCreate = async (
 const renderScheduledEventUpdate = async (
     input: GroupRendererInput,
 ): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const eventDetails: string[] = [];
     const oldEvent = isJsonData(input.eventData.oldScheduledEvent)
         ? input.eventData.oldScheduledEvent
@@ -118,17 +128,17 @@ const renderScheduledEventUpdate = async (
 
     if (newEvent) {
         eventDetails.push(
-            `**이벤트:** ${str(newEvent.name, 'N/A')} (ID: ${str(newEvent.id, '정보 없음')})`,
+            `${t(locale, 'logSearchShared.legacy.eventLabel')} ${str(newEvent.name, 'N/A')} (ID: ${str(newEvent.id, t(locale, 'logSearchShared.legacy.noInfo'))})`,
         );
         if (oldEvent) {
             if (oldEvent.name !== newEvent.name) {
                 eventDetails.push(
-                    `**이름 변경:** \\\`${str(oldEvent.name)}\\\` -> \\\`${str(newEvent.name)}\\\``,
+                    `${t(locale, 'logSearchShared.legacy.nameChangedLabel')} \\\`${str(oldEvent.name)}\\\` -> \\\`${str(newEvent.name)}\\\``,
                 );
             }
             if (oldEvent.description !== newEvent.description) {
                 eventDetails.push(
-                    `**설명 변경:** \\\`${str(oldEvent.description, '').substring(0, 30)}...\\\` -> \\\`${str(newEvent.description, '').substring(0, 30)}...\\\``,
+                    `${t(locale, 'logSearchShared.guild.descriptionChangedLabel')} \\\`${str(oldEvent.description, '').substring(0, 30)}...\\\` -> \\\`${str(newEvent.description, '').substring(0, 30)}...\\\``,
                 );
             }
             if (
@@ -136,24 +146,24 @@ const renderScheduledEventUpdate = async (
                 new Date(str(newEvent.scheduledStartTime)).getTime()
             ) {
                 eventDetails.push(
-                    `**시작 시간 변경:** <t:${Math.floor(new Date(str(oldEvent.scheduledStartTime)).getTime() / 1000)}:R> -> <t:${Math.floor(new Date(str(newEvent.scheduledStartTime)).getTime() / 1000)}:R>`,
+                    `${t(locale, 'logSearchShared.scheduledEvent.startTimeChangedLabel')} <t:${Math.floor(new Date(str(oldEvent.scheduledStartTime)).getTime() / 1000)}:R> -> <t:${Math.floor(new Date(str(newEvent.scheduledStartTime)).getTime() / 1000)}:R>`,
                 );
             }
             if (oldEvent.status !== newEvent.status) {
                 eventDetails.push(
-                    `**상태 변경:** ${EVENT_STATUSES[num(oldEvent.status)] ?? `상태 ${str(oldEvent.status)}`} -> ${EVENT_STATUSES[num(newEvent.status)] ?? `상태 ${str(newEvent.status)}`}`,
+                    `${t(locale, 'logSearchShared.scheduledEvent.statusChangedLabel')} ${t(locale, `logSearchShared.scheduledEvent.status.${EVENT_STATUSES[num(oldEvent.status)] ?? 'unknown'}`)} -> ${t(locale, `logSearchShared.scheduledEvent.status.${EVENT_STATUSES[num(newEvent.status)] ?? 'unknown'}`)}`,
                 );
             }
             if (oldEvent.entityType !== newEvent.entityType) {
                 eventDetails.push(
-                    `**유형 변경:** ${EVENT_TYPES[num(oldEvent.entityType)] ?? `타입 ${str(oldEvent.entityType)}`} -> ${EVENT_TYPES[num(newEvent.entityType)] ?? `타입 ${str(newEvent.entityType)}`}`,
+                    `${t(locale, 'logSearchShared.legacy.typeChangedLabel')} ${t(locale, `logSearchShared.scheduledEvent.type.${EVENT_TYPES[num(oldEvent.entityType)] ?? 'unknown'}`)} -> ${t(locale, `logSearchShared.scheduledEvent.type.${EVENT_TYPES[num(newEvent.entityType)] ?? 'unknown'}`)}`,
                 );
             }
         } else {
-            eventDetails.push('(이전 이벤트 정보 없음)');
+            eventDetails.push(t(locale, 'logSearchShared.scheduledEvent.noPrevious'));
         }
     } else {
-        eventDetails.push('예약된 이벤트 정보 없음');
+        eventDetails.push(t(locale, 'logSearchShared.scheduledEvent.noInfo'));
     }
 
     let thumbnailComponent: ThumbnailBuilder | undefined;
@@ -174,7 +184,9 @@ const renderScheduledEventUpdate = async (
 
     return {
         eventSpecificsText:
-            eventDetails.length > 0 ? eventDetails.join('\n') : '예약된 이벤트 업데이트 정보 없음',
+            eventDetails.length > 0
+                ? eventDetails.join('\n')
+                : t(locale, 'logSearchShared.scheduledEvent.updateNoInfo'),
         thumbnailComponent,
     };
 };
@@ -182,13 +194,16 @@ const renderScheduledEventUpdate = async (
 const renderScheduledEventDelete = async (
     input: GroupRendererInput,
 ): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const eventDetails: string[] = [];
     const event = isJsonData(input.eventData.scheduledEvent)
         ? input.eventData.scheduledEvent
         : input.eventData;
 
     if (event) {
-        eventDetails.push(`**삭제된 이벤트 이름:** ${str(event.name, 'N/A')}`);
+        eventDetails.push(
+            `${t(locale, 'logSearchShared.scheduledEvent.deletedEventNameLabel')} ${str(event.name, 'N/A')}`,
+        );
         if (event.id) {
             eventDetails.push(`**ID:** ${str(event.id)}`);
         }
@@ -196,9 +211,13 @@ const renderScheduledEventDelete = async (
         if (creatorId) {
             try {
                 const creator = await input.interaction.client.users.fetch(creatorId);
-                eventDetails.push(`**생성자:** ${creator.tag} (<@${creatorId}>)`);
+                eventDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${creator.tag} (<@${creatorId}>)`,
+                );
             } catch {
-                eventDetails.push(`**생성자 ID:** ${creatorId}`);
+                eventDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.creatorIdLabel')} ${creatorId}`,
+                );
             }
         }
     }
@@ -210,25 +229,28 @@ const renderScheduledEventDelete = async (
 
     return {
         eventSpecificsText:
-            eventDetails.length > 0 ? eventDetails.join('\n') : '예약된 이벤트 삭제 정보 없음',
+            eventDetails.length > 0
+                ? eventDetails.join('\n')
+                : t(locale, 'logSearchShared.scheduledEvent.deleteNoInfo'),
         thumbnailComponent,
     };
 };
 
 const renderScheduledEventUserChange = async (
     input: GroupRendererInput,
-    userLabel: '참가 사용자' | '이탈 사용자',
+    userLabel: string,
     emptyMessage: string,
 ): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const eventId = str(input.eventData.scheduledEventId ?? input.eventData.eventId);
     const userId = str(input.eventData.userId);
     const eventName = str(input.eventData.eventName);
 
     if (eventName) {
-        details.push(`**이벤트:** ${eventName}`);
+        details.push(`${t(locale, 'logSearchShared.legacy.eventLabel')} ${eventName}`);
     } else if (eventId) {
-        details.push(`**이벤트 ID:** ${eventId}`);
+        details.push(`${t(locale, 'logSearchShared.scheduledEvent.eventIdLabel')} ${eventId}`);
     }
 
     if (userId) {
@@ -240,9 +262,13 @@ const renderScheduledEventUserChange = async (
         try {
             const guildEvent = await guild.scheduledEvents.fetch(eventId);
             if (guildEvent.name) {
-                details.unshift(`**이벤트:** ${guildEvent.name}`);
+                details.unshift(
+                    `${t(locale, 'logSearchShared.legacy.eventLabel')} ${guildEvent.name}`,
+                );
             } else if (guildEvent.id) {
-                details.unshift(`**이벤트 ID (이름 조회 불가):** ${guildEvent.id}`);
+                details.unshift(
+                    `${t(locale, 'logSearchShared.scheduledEvent.eventIdNameUnavailableLabel')} ${guildEvent.id}`,
+                );
             }
         } catch {
             /* empty */
@@ -273,6 +299,9 @@ const renderScheduledEventUserChange = async (
     };
 };
 
+/**
+ * 예약 이벤트 관련 타입별 렌더러를 분기 호출합니다.
+ */
 export async function renderScheduledEvent(
     input: GroupRendererInput,
 ): Promise<GroupRendererResult> {
@@ -286,16 +315,33 @@ export async function renderScheduledEvent(
         case 'guildScheduledEventUserAdd':
             return renderScheduledEventUserChange(
                 input,
-                '참가 사용자',
-                '예약된 이벤트 사용자 추가 정보 없음',
+                t(
+                    getInteractionLocale(input.interaction),
+                    'logSearchShared.scheduledEvent.joinedUserLabel',
+                ),
+                t(
+                    getInteractionLocale(input.interaction),
+                    'logSearchShared.scheduledEvent.userAddNoInfo',
+                ),
             );
         case 'guildScheduledEventUserRemove':
             return renderScheduledEventUserChange(
                 input,
-                '이탈 사용자',
-                '예약된 이벤트 사용자 제거 정보 없음',
+                t(
+                    getInteractionLocale(input.interaction),
+                    'logSearchShared.scheduledEvent.leftUserLabel',
+                ),
+                t(
+                    getInteractionLocale(input.interaction),
+                    'logSearchShared.scheduledEvent.userRemoveNoInfo',
+                ),
             );
         default:
-            return { eventSpecificsText: '(기록된 세부 정보 없음)' };
+            return {
+                eventSpecificsText: t(
+                    getInteractionLocale(input.interaction),
+                    'logSearchShared.legacy.noRecordedDetails',
+                ),
+            };
     }
 }

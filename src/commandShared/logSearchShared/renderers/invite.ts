@@ -1,7 +1,8 @@
 import { ThumbnailBuilder } from 'discord.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from './types.js';
+import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,
@@ -22,6 +23,9 @@ const buildUserThumbnail = async (
     }
 };
 
+/**
+ * 현재 길드 아이콘을 썸네일 컴포넌트로 생성합니다.
+ */
 const buildGuildIconThumbnail = (input: GroupRendererInput): ThumbnailBuilder | undefined => {
     const guildIconUrl = input.interaction.guild?.iconURL({ forceStatic: false, size: 64 });
     if (!guildIconUrl) {
@@ -35,17 +39,26 @@ const buildGuildIconThumbnail = (input: GroupRendererInput): ThumbnailBuilder | 
     });
 };
 
+/**
+ * invite payload에서 표준 invite 데이터 객체를 추출합니다.
+ */
 const getInviteData = (input: GroupRendererInput) =>
     isJsonData(input.eventData.invite) ? input.eventData.invite : input.eventData;
 
+/**
+ * inviteCreate 로그의 표시 텍스트와 썸네일을 생성합니다.
+ */
 const renderInviteCreate = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const inviteDetails: string[] = [];
     const invite = getInviteData(input);
     const inviter = isJsonData(invite.inviter) ? invite.inviter : undefined;
 
     if (invite) {
         if (invite.code) {
-            inviteDetails.push(`**초대 코드:** ${str(invite.code)}`);
+            inviteDetails.push(
+                `${t(locale, 'logSearchShared.invite.codeLabel')} ${str(invite.code)}`,
+            );
         }
         if (invite.url) {
             inviteDetails.push(`**URL:** ${str(invite.url)}`);
@@ -56,36 +69,46 @@ const renderInviteCreate = async (input: GroupRendererInput): Promise<GroupRende
         if (inviterId) {
             try {
                 const inviterUser = await input.interaction.client.users.fetch(inviterId);
-                inviteDetails.push(`**생성자:** ${inviterUser.tag} (<@${inviterId}>)`);
+                inviteDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${inviterUser.tag} (<@${inviterId}>)`,
+                );
             } catch {
-                inviteDetails.push(`**생성자:** ${inviterTag ?? inviterId}`);
+                inviteDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${inviterTag ?? inviterId}`,
+                );
             }
         }
 
         const inviteChannel = isJsonData(invite.channel) ? invite.channel : undefined;
         const channelId = str(invite.channelId ?? inviteChannel?.id);
         if (channelId) {
-            inviteDetails.push(`**채널:** <#${channelId}>`);
+            inviteDetails.push(
+                `${t(locale, 'logSearchShared.legacy.channelLabel')} <#${channelId}>`,
+            );
         }
         if (invite.uses !== undefined) {
-            inviteDetails.push(`**사용 횟수:** ${num(invite.uses)}`);
+            inviteDetails.push(
+                `${t(locale, 'logSearchShared.invite.usesLabel')} ${num(invite.uses)}`,
+            );
         }
         if (invite.maxUses !== undefined) {
             inviteDetails.push(
-                `**최대 사용:** ${num(invite.maxUses) === 0 ? '무제한' : num(invite.maxUses)}`,
+                `${t(locale, 'logSearchShared.invite.maxUsesLabel')} ${num(invite.maxUses) === 0 ? t(locale, 'logSearchShared.invite.unlimited') : num(invite.maxUses)}`,
             );
         }
         if (invite.maxAge !== undefined) {
             inviteDetails.push(
-                `**만료:** ${num(invite.maxAge) === 0 ? '없음' : `${num(invite.maxAge) / 60 / 60}시간`}`,
+                `${t(locale, 'logSearchShared.invite.expiresLabel')} ${num(invite.maxAge) === 0 ? t(locale, 'logSearchShared.legacy.none') : t(locale, 'logSearchShared.invite.hours', { hours: num(invite.maxAge) / 60 / 60 })}`,
             );
         }
         if (invite.temporary !== undefined) {
-            inviteDetails.push(`**임시 멤버십:** ${invite.temporary ? '예' : '아니오'}`);
+            inviteDetails.push(
+                `${t(locale, 'logSearchShared.invite.temporaryLabel')} ${invite.temporary ? t(locale, 'logSearchShared.legacy.yes') : t(locale, 'logSearchShared.legacy.no')}`,
+            );
         }
         if (invite.createdAt) {
             inviteDetails.push(
-                `**생성일:** <t:${Math.floor(new Date(str(invite.createdAt)).getTime() / 1000)}:R>`,
+                `${t(locale, 'logSearchShared.invite.createdAtLabel')} <t:${Math.floor(new Date(str(invite.createdAt)).getTime() / 1000)}:R>`,
             );
         }
     }
@@ -98,23 +121,33 @@ const renderInviteCreate = async (input: GroupRendererInput): Promise<GroupRende
 
     return {
         eventSpecificsText:
-            inviteDetails.length > 0 ? inviteDetails.join('\n') : '초대 생성 정보 없음',
+            inviteDetails.length > 0
+                ? inviteDetails.join('\n')
+                : t(locale, 'logSearchShared.invite.createNoInfo'),
         thumbnailComponent,
     };
 };
 
+/**
+ * inviteDelete 로그의 표시 텍스트와 썸네일을 생성합니다.
+ */
 const renderInviteDelete = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const inviteDetails: string[] = [];
     const invite = getInviteData(input);
     const inviteChannel = isJsonData(invite.channel) ? invite.channel : undefined;
 
     if (invite) {
         if (invite.code) {
-            inviteDetails.push(`**삭제된 초대 코드:** ${str(invite.code)}`);
+            inviteDetails.push(
+                `${t(locale, 'logSearchShared.invite.deletedCodeLabel')} ${str(invite.code)}`,
+            );
         }
         const channelId = str(invite.channelId ?? inviteChannel?.id);
         if (channelId) {
-            inviteDetails.push(`**채널:** <#${channelId}>`);
+            inviteDetails.push(
+                `${t(locale, 'logSearchShared.legacy.channelLabel')} <#${channelId}>`,
+            );
         }
     }
 
@@ -125,11 +158,16 @@ const renderInviteDelete = async (input: GroupRendererInput): Promise<GroupRende
 
     return {
         eventSpecificsText:
-            inviteDetails.length > 0 ? inviteDetails.join('\n') : '초대 삭제 정보 없음',
+            inviteDetails.length > 0
+                ? inviteDetails.join('\n')
+                : t(locale, 'logSearchShared.invite.deleteNoInfo'),
         thumbnailComponent,
     };
 };
 
+/**
+ * 초대 이벤트 타입별 렌더러를 분기 호출합니다.
+ */
 export async function renderInviteEvent(input: GroupRendererInput): Promise<GroupRendererResult> {
     switch (input.eventType) {
         case 'inviteCreate':
@@ -137,6 +175,11 @@ export async function renderInviteEvent(input: GroupRendererInput): Promise<Grou
         case 'inviteDelete':
             return renderInviteDelete(input);
         default:
-            return { eventSpecificsText: '(기록된 세부 정보 없음)' };
+            return {
+                eventSpecificsText: t(
+                    getInteractionLocale(input.interaction),
+                    'logSearchShared.legacy.noRecordedDetails',
+                ),
+            };
     }
 }

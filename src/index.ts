@@ -9,6 +9,7 @@ import { recoverMissedMessagesOnStartup } from './services/startupMessageRecover
 import { loadAlertSubscriptions } from './utils/alertManager.js';
 import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
 import { registerShutdownHandler, requestShutdown } from './utils/shutdownManager.js';
+import { getInteractionLocale, t } from './i18n/index.js';
 
 // 로더 임포트
 import { loadLegacyCommands } from './utils/loadLegacyCommands.js';
@@ -68,8 +69,12 @@ async function handleInteraction(interaction: Interaction) {
     const command = discordClient.commands!.get(interaction.commandName);
     if (!command) {
         logger.warn(`Unknown slash command received: ${interaction.commandName}`);
+        const locale = getInteractionLocale(interaction);
         try {
-            await interaction.reply({ content: '알 수 없는 명령어입니다.', ephemeral: true });
+            await interaction.reply({
+                content: t(locale, 'common.unknownCommand'),
+                ephemeral: true,
+            });
         } catch {
             /* empty */
         }
@@ -79,15 +84,16 @@ async function handleInteraction(interaction: Interaction) {
         await command.execute(interaction, discordClient); // client 전달
     } catch (error) {
         logger.error(`Error executing slash command ${interaction.commandName}:`, error);
+        const locale = getInteractionLocale(interaction);
         try {
             if (interaction.deferred || interaction.replied) {
                 await interaction.followUp({
-                    content: '명령어 실행 중 오류가 발생했습니다.',
+                    content: t(locale, 'common.commandError'),
                     ephemeral: true,
                 });
             } else {
                 await interaction.reply({
-                    content: '명령어 실행 중 오류가 발생했습니다.',
+                    content: t(locale, 'common.commandError'),
                     ephemeral: true,
                 });
             }

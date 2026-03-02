@@ -12,28 +12,36 @@ import {
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import type { SlashCommand } from '../types/commands.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()
         .setName('message-delete-number')
-        .setDescription('지정한 채널에서 최근 N개의 메시지를 삭제합니다.')
+        .setDescription(defaultText('messageCmd.deleteNumberDesc'))
         .addStringOption((option) =>
             option
                 .setName('channel_id')
-                .setDescription('메시지를 삭제할 채널의 ID')
+                .setDescription(defaultText('messageCmd.channelId'))
                 .setRequired(true),
         )
         .addIntegerOption((option) =>
-            option.setName('amount').setDescription('삭제할 메시지 수 (1-100)').setRequired(true),
+            option
+                .setName('amount')
+                .setDescription(defaultText('messageCmd.amount'))
+                .setRequired(true),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setContexts(InteractionContextType.Guild),
 
     async execute(interaction: CommandInteraction, client: Client) {
         if (!interaction.isChatInputCommand()) return;
+        const locale = getInteractionLocale(interaction);
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버 내에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuildStrict'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -45,7 +53,7 @@ export const command: SlashCommand = {
 
         if (devLevel < 3 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 관리자 또는 개발자만 사용할 수 있습니다.',
+                content: t(locale, 'common.adminOrDevOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -57,14 +65,14 @@ export const command: SlashCommand = {
         const amount = interaction.options.getInteger('amount', true);
         if (amount <= 0) {
             await interaction.reply({
-                content: '삭제할 메시지 수는 1 이상이어야 합니다.',
+                content: t(locale, 'messageCmd.amountMin'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
         }
         if (amount > 100) {
             await interaction.reply({
-                content: '한 번에 최대 100개의 메시지만 삭제할 수 있습니다.',
+                content: t(locale, 'messageCmd.amountMax'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -83,14 +91,14 @@ export const command: SlashCommand = {
                 !('guild' in fetched)
             ) {
                 await interaction.editReply(
-                    `오류: ID가 ${channelId}인 유효한 서버 채널을 찾을 수 없습니다.`,
+                    t(locale, 'messageCmd.invalidGuildChannel', { channelId }),
                 );
                 return;
             }
             channel = fetched as GuildTextBasedChannel;
         } catch (err) {
             logger.error(`${logPrefix} Failed to fetch channel`, err);
-            await interaction.editReply('채널 정보를 가져오는 중 오류가 발생했습니다.');
+            await interaction.editReply(t(locale, 'messageCmd.fetchChannelFailed'));
             return;
         }
 
@@ -100,7 +108,7 @@ export const command: SlashCommand = {
             !botPerms?.has(PermissionsBitField.Flags.ManageMessages)
         ) {
             await interaction.editReply(
-                `오류: 채널 #${channel.name}에서 메시지를 삭제할 권한이 없습니다.`,
+                t(locale, 'messageCmd.noDeletePermission', { channel: channel.name }),
             );
             return;
         }
@@ -133,12 +141,17 @@ export const command: SlashCommand = {
             }
 
             await interaction.editReply(
-                `✅ 채널 #${channel.name}에서 ${deletedCount}개의 메시지를 삭제했습니다.`,
+                t(locale, 'messageCmd.deletedCount', {
+                    channel: channel.name,
+                    count: deletedCount,
+                }),
             );
         } catch (err) {
             const error = err instanceof Error ? err : new Error(String(err));
             logger.error(`${logPrefix} Failed to delete messages:`, error);
-            await interaction.editReply(`오류 발생: ${error.message}`);
+            await interaction.editReply(
+                t(locale, 'messageCmd.genericError', { error: error.message }),
+            );
         }
     },
 };

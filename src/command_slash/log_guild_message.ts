@@ -13,15 +13,19 @@ import {
     NoAccessibleGuildChannelsError,
     runGuildMessageBackfill,
 } from '../services/logGuildMessagesService.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()
         .setName('log-guild-messages')
-        .setDescription('{guild_id} 서버의 모든 메시지를 가져와 DB에 기록합니다.')
+        .setDescription(defaultText('backfill.logGuildDesc'))
         .addStringOption((option) =>
             option
                 .setName('guild_id')
-                .setDescription('메시지를 기록할 서버의 ID')
+                .setDescription(defaultText('messageCmd.guildId'))
                 .setRequired(true),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -29,9 +33,10 @@ export const command: SlashCommand = {
 
     async execute(interaction: CommandInteraction, client: Client) {
         if (!interaction.isChatInputCommand()) return;
+        const locale = getInteractionLocale(interaction);
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버 내에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuildStrict'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -43,7 +48,7 @@ export const command: SlashCommand = {
 
         if (devLevel < 3 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 관리자 또는 개발자만 사용할 수 있습니다.',
+                content: t(locale, 'common.adminOrDevOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -66,22 +71,21 @@ export const command: SlashCommand = {
                 legacyCommandPrefixes,
             });
 
-            let finalReply = `✅ **메시지 기록 확인 완료**\n\n`;
-            finalReply += `> - **처리된 채널:** ${result.totalChannels}개\n`;
-            finalReply += `> - **확인된 메시지 (봇 제외):** ${result.processedCount}개\n`;
-            finalReply += `> - **새로 기록된 메시지:** ${result.newlyLoggedCount}개\n`;
-            finalReply += `> - **활동 유저 수 (추정):** ${result.uniqueUserCount}명\n`;
+            let finalReply = `${t(locale, 'backfill.completeTitle')}\n\n`;
+            finalReply += `${t(locale, 'backfill.processedChannels', { count: result.totalChannels })}\n`;
+            finalReply += `${t(locale, 'backfill.checkedMessages', { count: result.processedCount })}\n`;
+            finalReply += `${t(locale, 'backfill.newlyLogged', { count: result.newlyLoggedCount })}\n`;
+            finalReply += `${t(locale, 'backfill.activeUsers', { count: result.uniqueUserCount })}\n`;
             if (result.errorCount > 0) {
-                finalReply += `> - **오류 발생:** ⚠️ ${result.errorCount}개\n`;
+                finalReply += `${t(locale, 'backfill.errorCount', { count: result.errorCount })}\n`;
             }
-            finalReply += `> - **총 소요 시간:** ${result.durationSeconds.toFixed(2)}초\n\n`;
-            finalReply += `ℹ️ 자세한 채널별 내역은 봇 로그를 확인하세요.`;
+            finalReply += `${t(locale, 'backfill.duration', { seconds: result.durationSeconds.toFixed(2) })}\n\n`;
+            finalReply += t(locale, 'backfill.detailsInLog');
 
             if (result.durationSeconds > 900) {
                 await interaction.channel?.send(`${interaction.user.toString()} ${finalReply}`);
                 await interaction.editReply({
-                    content:
-                        '✅ 작업이 완료되었으나, 15분이 초과되어 현재 채널에 일반 메시지로 결과를 전송했습니다.',
+                    content: t(locale, 'backfill.timeoutChannelNotice'),
                 });
                 return;
             }
@@ -92,9 +96,7 @@ export const command: SlashCommand = {
             );
         } catch (error) {
             if (error instanceof NoAccessibleGuildChannelsError) {
-                await interaction.editReply(
-                    '오류: 이 서버에서 메시지 기록을 읽을 수 있는 채널을 찾을 수 없습니다. (봇 권한 확인 필요)',
-                );
+                await interaction.editReply(t(locale, 'backfill.noReadableChannels'));
                 return;
             }
 
@@ -103,7 +105,9 @@ export const command: SlashCommand = {
                 error,
             );
             const err = error as Error;
-            const errorMessage = `메시지 기록 확인/처리 중 심각한 오류가 발생했습니다: ${String(err.message || err).substring(0, 1800)}`;
+            const errorMessage = t(locale, 'backfill.criticalError', {
+                error: String(err.message || err).substring(0, 1800),
+            });
 
             if (interaction.deferred || interaction.replied) {
                 await interaction.followUp({

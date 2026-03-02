@@ -1,40 +1,15 @@
 import type { JsonData, JsonValue } from '../../types/json.js';
-import type { AttachmentLogData, LogEntry } from '../../types/logs.js';
+import type { JsonValueGuardHelpers } from '../../types/logSearchShared.js';
 
-export interface LogSearchRenderContext {
-    log: LogEntry;
-    eventData: JsonData;
-    friendlyEventName: string;
-}
-
-export interface RenderedEventDetails {
-    eventSpecificsText: string;
-    thumbnailUserId?: string;
-}
-
-export interface AttachmentRenderResult {
-    attachment: AttachmentLogData;
-    displayText?: string;
-    attachmentFilename?: string;
-}
-
-export interface LogRenderResult {
-    timestampContent: string;
-    infoTextContent: string;
-    eventDetails: RenderedEventDetails;
-    attachments: AttachmentRenderResult[];
-}
-
-export interface JsonValueGuardHelpers {
-    isJsonData(value: JsonValue | undefined): value is JsonData;
-    isJsonArray(value: JsonValue | undefined): value is JsonValue[];
-    isJsonString(value: JsonValue | undefined): value is string;
-    isJsonNumber(value: JsonValue | undefined): value is number;
-}
-
+/**
+ * JsonValue가 객체형 JsonData인지 판별하는 타입 가드입니다.
+ */
 export const isJsonData = (value: JsonValue | undefined): value is JsonData =>
     value != null && typeof value === 'object' && !Array.isArray(value);
 
+/**
+ * 로그 렌더러에서 공통으로 쓰는 JsonValue 타입 가드 모음입니다.
+ */
 export const jsonValueGuards: JsonValueGuardHelpers = {
     isJsonData,
     isJsonArray: (value): value is JsonValue[] => Array.isArray(value),

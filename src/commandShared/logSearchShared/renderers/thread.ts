@@ -1,7 +1,8 @@
 import { ThumbnailBuilder } from 'discord.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from './types.js';
+import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,
@@ -22,34 +23,47 @@ const buildUserThumbnail = async (
     }
 };
 
+/**
+ * thread payload에서 표준 스레드 데이터 객체를 추출합니다.
+ */
 const getThreadData = (input: GroupRendererInput) =>
     isJsonData(input.eventData.thread) ? input.eventData.thread : input.eventData;
 
+/**
+ * threadCreate 로그의 상세 텍스트와 썸네일을 생성합니다.
+ */
 const renderThreadCreate = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const thread = getThreadData(input);
 
     if (thread) {
         details.push(
-            `**스레드 이름:** ${str(thread.name, 'N/A')} (<#${str(thread.id, 'ID 없음')}>)`,
+            `${t(locale, 'logSearchShared.legacy.threadNameLabel')} ${str(thread.name, 'N/A')} (<#${str(thread.id, t(locale, 'logSearchShared.role.idMissing'))}>)`,
         );
         if (thread.id) {
             details.push(`**ID:** ${str(thread.id)}`);
         }
         if (thread.parentId) {
-            details.push(`**상위 채널:** <#${str(thread.parentId)}>`);
+            details.push(
+                `${t(locale, 'logSearchShared.legacy.parentChannelLabel')} <#${str(thread.parentId)}>`,
+            );
         }
         const ownerId = str(thread.ownerId);
         if (ownerId) {
             try {
                 const owner = await input.interaction.client.users.fetch(ownerId);
-                details.push(`**생성자:** ${owner.tag} (<@${ownerId}>)`);
+                details.push(
+                    `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${owner.tag} (<@${ownerId}>)`,
+                );
             } catch {
-                details.push(`**생성자 ID:** ${ownerId}`);
+                details.push(`${t(locale, 'logSearchShared.legacy.creatorIdLabel')} ${ownerId}`);
             }
         }
         if (thread.autoArchiveDuration) {
-            details.push(`**자동 보관:** ${num(thread.autoArchiveDuration) / 60}분`);
+            details.push(
+                `${t(locale, 'logSearchShared.legacy.autoArchiveLabel')} ${num(thread.autoArchiveDuration) / 60}${t(locale, 'logSearchShared.legacy.minuteShort')}`,
+            );
         }
     }
 
@@ -59,34 +73,52 @@ const renderThreadCreate = async (input: GroupRendererInput): Promise<GroupRende
         : undefined;
 
     return {
-        eventSpecificsText: details.length > 0 ? details.join('\n') : '스레드 생성 정보 없음',
+        eventSpecificsText:
+            details.length > 0
+                ? details.join('\n')
+                : t(locale, 'logSearchShared.thread.createNoInfo'),
         thumbnailComponent,
     };
 };
 
+/**
+ * threadDelete 로그의 상세 텍스트와 썸네일을 생성합니다.
+ */
 const renderThreadDelete = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const thread = getThreadData(input);
 
     if (thread) {
-        details.push(`**삭제된 스레드 이름:** ${str(thread.name, 'N/A')}`);
+        details.push(
+            `${t(locale, 'logSearchShared.legacy.deletedThreadNameLabel')} ${str(thread.name, 'N/A')}`,
+        );
         if (thread.id) {
             details.push(`**ID:** ${str(thread.id)}`);
         }
         if (thread.parentId) {
-            details.push(`**상위 채널:** <#${str(thread.parentId)}>`);
+            details.push(
+                `${t(locale, 'logSearchShared.legacy.parentChannelLabel')} <#${str(thread.parentId)}>`,
+            );
         }
     }
 
     return {
-        eventSpecificsText: details.length > 0 ? details.join('\n') : '스레드 삭제 정보 없음',
+        eventSpecificsText:
+            details.length > 0
+                ? details.join('\n')
+                : t(locale, 'logSearchShared.thread.deleteNoInfo'),
         thumbnailComponent: input.logUserId
             ? await buildUserThumbnail(input, input.logUserId)
             : undefined,
     };
 };
 
+/**
+ * threadUpdate 로그의 변경 요약 텍스트와 썸네일을 생성합니다.
+ */
 const renderThreadUpdate = async (input: GroupRendererInput): Promise<GroupRendererResult> => {
+    const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const oldThread = isJsonData(input.eventData.oldThread) ? input.eventData.oldThread : undefined;
     const newThreadCandidate = input.eventData.newThread ?? input.eventData.thread;
@@ -94,44 +126,50 @@ const renderThreadUpdate = async (input: GroupRendererInput): Promise<GroupRende
 
     if (newThread) {
         details.push(
-            `**스레드:** ${str(newThread.name, 'N/A')} (<#${str(newThread.id, 'ID 없음')}>)`,
+            `${t(locale, 'logSearchShared.legacy.threadLabel')} ${str(newThread.name, 'N/A')} (<#${str(newThread.id, t(locale, 'logSearchShared.role.idMissing'))}>)`,
         );
         if (oldThread) {
             if (oldThread.name !== newThread.name) {
                 details.push(
-                    `**이름 변경:** \\\`${str(oldThread.name)}\\\` -> \\\`${str(newThread.name)}\\\``,
+                    `${t(locale, 'logSearchShared.legacy.nameChangedLabel')} \\\`${str(oldThread.name)}\\\` -> \\\`${str(newThread.name)}\\\``,
                 );
             }
             if (oldThread.archived !== newThread.archived) {
                 details.push(
-                    `**보관 상태:** ${oldThread.archived ? '보관됨' : '활성'} -> ${newThread.archived ? '보관됨' : '활성'}`,
+                    `${t(locale, 'logSearchShared.legacy.archivedLabel')} ${oldThread.archived ? t(locale, 'logSearchShared.legacy.archived') : t(locale, 'logSearchShared.legacy.active')} -> ${newThread.archived ? t(locale, 'logSearchShared.legacy.archived') : t(locale, 'logSearchShared.legacy.active')}`,
                 );
             }
             if (oldThread.locked !== newThread.locked) {
                 details.push(
-                    `**잠금 상태:** ${oldThread.locked ? '잠김' : '해제'} -> ${newThread.locked ? '잠김' : '해제'}`,
+                    `${t(locale, 'logSearchShared.legacy.lockedLabel')} ${oldThread.locked ? t(locale, 'logSearchShared.legacy.locked') : t(locale, 'logSearchShared.legacy.disabled')} -> ${newThread.locked ? t(locale, 'logSearchShared.legacy.locked') : t(locale, 'logSearchShared.legacy.disabled')}`,
                 );
             }
             if (oldThread.autoArchiveDuration !== newThread.autoArchiveDuration) {
                 details.push(
-                    `**자동 보관 변경:** ${num(oldThread.autoArchiveDuration) / 60}분 -> ${num(newThread.autoArchiveDuration) / 60}분`,
+                    `${t(locale, 'logSearchShared.legacy.autoArchiveChangedLabel')} ${num(oldThread.autoArchiveDuration) / 60}${t(locale, 'logSearchShared.legacy.minuteShort')} -> ${num(newThread.autoArchiveDuration) / 60}${t(locale, 'logSearchShared.legacy.minuteShort')}`,
                 );
             }
         } else {
-            details.push('(이전 스레드 정보 없음)');
+            details.push(t(locale, 'logSearchShared.thread.noPrevious'));
         }
     } else {
-        details.push('스레드 정보 없음');
+        details.push(t(locale, 'logSearchShared.thread.noInfo'));
     }
 
     return {
-        eventSpecificsText: details.length > 0 ? details.join('\n') : '스레드 업데이트 정보 없음',
+        eventSpecificsText:
+            details.length > 0
+                ? details.join('\n')
+                : t(locale, 'logSearchShared.thread.updateNoInfo'),
         thumbnailComponent: input.logUserId
             ? await buildUserThumbnail(input, input.logUserId)
             : undefined,
     };
 };
 
+/**
+ * 스레드 이벤트 타입별 렌더러를 분기 호출합니다.
+ */
 export async function renderThreadEvent(input: GroupRendererInput): Promise<GroupRendererResult> {
     switch (input.eventType) {
         case 'threadCreate':
@@ -141,6 +179,11 @@ export async function renderThreadEvent(input: GroupRendererInput): Promise<Grou
         case 'threadUpdate':
             return renderThreadUpdate(input);
         default:
-            return { eventSpecificsText: '(기록된 세부 정보 없음)' };
+            return {
+                eventSpecificsText: t(
+                    getInteractionLocale(input.interaction),
+                    'logSearchShared.legacy.noRecordedDetails',
+                ),
+            };
     }
 }

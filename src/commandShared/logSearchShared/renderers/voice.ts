@@ -4,6 +4,7 @@ import {
     type MessageComponentInteraction,
 } from 'discord.js';
 import type { JsonData, JsonValue } from '../../../types/json.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { str } from '../formatters.js';
 import { isJsonData } from '../types.js';
 
@@ -17,14 +18,21 @@ interface VoiceRenderResult {
     thumbnailComponent?: ThumbnailBuilder;
 }
 
+/**
+ * 음성 상태 payload에서 안전하게 JsonData를 추출합니다.
+ */
 function getJsonData(value: JsonValue | undefined): JsonData | undefined {
     return isJsonData(value) ? value : undefined;
 }
 
+/**
+ * voiceStateUpdate 로그의 상세 텍스트와 썸네일을 생성합니다.
+ */
 export async function renderEvent(
     params: RenderVoiceStateUpdateEventParams,
 ): Promise<VoiceRenderResult> {
     const { data, interaction } = params;
+    const locale = getInteractionLocale(interaction);
     const details: string[] = [];
     const oldState = getJsonData(data.oldState);
     const newState = getJsonData(data.newState) ?? getJsonData(data.state);
@@ -36,57 +44,72 @@ export async function renderEvent(
     const userTag = str(memberUser?.tag) || str(data.userTag);
 
     if (userId) {
-        details.push(`**사용자:** ${userTag || `<@${userId}>`} (${userId})`);
+        details.push(
+            `${t(locale, 'logSearchShared.legacy.userLabel')} ${userTag || `<@${userId}>`} (${userId})`,
+        );
     }
 
     const oldChannelId = str(oldState?.channelId);
     const newChannelId = str(newState?.channelId);
 
     if (oldChannelId && !newChannelId) {
-        details.push(`음성 채널 <#${oldChannelId}> 나감`);
+        details.push(
+            t(locale, 'logSearchShared.voice.leftChannel', {
+                channelId: oldChannelId,
+            }),
+        );
     } else if (!oldChannelId && newChannelId) {
-        details.push(`음성 채널 <#${newChannelId}> 참가`);
+        details.push(
+            t(locale, 'logSearchShared.voice.joinedChannel', {
+                channelId: newChannelId,
+            }),
+        );
     } else if (oldChannelId && newChannelId && oldChannelId !== newChannelId) {
-        details.push(`음성 채널 <#${oldChannelId}> -> <#${newChannelId}> 이동`);
+        details.push(
+            t(locale, 'logSearchShared.voice.movedChannel', {
+                oldChannelId,
+                newChannelId,
+            }),
+        );
     } else if (!oldChannelId && !newChannelId && oldState && newState) {
         if (oldState.serverMute !== newState.serverMute) {
             details.push(
-                `**서버 음소거:** ${oldState.serverMute ? '설정' : '해제'} -> ${newState.serverMute ? '설정' : '해제'}`,
+                `${t(locale, 'logSearchShared.legacy.serverMuteLabel')} ${oldState.serverMute ? t(locale, 'logSearchShared.legacy.enabled') : t(locale, 'logSearchShared.legacy.disabled')} -> ${newState.serverMute ? t(locale, 'logSearchShared.legacy.enabled') : t(locale, 'logSearchShared.legacy.disabled')}`,
             );
         }
         if (oldState.serverDeaf !== newState.serverDeaf) {
             details.push(
-                `**서버 헤드셋음소거:** ${oldState.serverDeaf ? '설정' : '해제'} -> ${newState.serverDeaf ? '설정' : '해제'}`,
+                `${t(locale, 'logSearchShared.legacy.serverDeafLabel')} ${oldState.serverDeaf ? t(locale, 'logSearchShared.legacy.enabled') : t(locale, 'logSearchShared.legacy.disabled')} -> ${newState.serverDeaf ? t(locale, 'logSearchShared.legacy.enabled') : t(locale, 'logSearchShared.legacy.disabled')}`,
             );
         }
         if (oldState.selfMute !== newState.selfMute) {
             details.push(
-                `**개인 음소거:** ${oldState.selfMute ? '설정' : '해제'} -> ${newState.selfMute ? '설정' : '해제'}`,
+                `${t(locale, 'logSearchShared.legacy.selfMuteLabel')} ${oldState.selfMute ? t(locale, 'logSearchShared.legacy.enabled') : t(locale, 'logSearchShared.legacy.disabled')} -> ${newState.selfMute ? t(locale, 'logSearchShared.legacy.enabled') : t(locale, 'logSearchShared.legacy.disabled')}`,
             );
         }
         if (oldState.selfDeaf !== newState.selfDeaf) {
             details.push(
-                `**개인 헤드셋음소거:** ${oldState.selfDeaf ? '설정' : '해제'} -> ${newState.selfDeaf ? '설정' : '해제'}`,
+                `${t(locale, 'logSearchShared.legacy.selfDeafLabel')} ${oldState.selfDeaf ? t(locale, 'logSearchShared.legacy.enabled') : t(locale, 'logSearchShared.legacy.disabled')} -> ${newState.selfDeaf ? t(locale, 'logSearchShared.legacy.enabled') : t(locale, 'logSearchShared.legacy.disabled')}`,
             );
         }
         if (oldState.streaming !== newState.streaming) {
             details.push(
-                `**스트리밍:** ${oldState.streaming ? '시작' : '중지'} -> ${newState.streaming ? '시작' : '중지'}`,
+                `${t(locale, 'logSearchShared.legacy.streamingLabel')} ${oldState.streaming ? t(locale, 'logSearchShared.legacy.started') : t(locale, 'logSearchShared.legacy.stopped')} -> ${newState.streaming ? t(locale, 'logSearchShared.legacy.started') : t(locale, 'logSearchShared.legacy.stopped')}`,
             );
         }
         if (oldState.selfVideo !== newState.selfVideo) {
             details.push(
-                `**카메라:** ${oldState.selfVideo ? '켬' : '끔'} -> ${newState.selfVideo ? '켬' : '끔'}`,
+                `${t(locale, 'logSearchShared.legacy.cameraLabel')} ${oldState.selfVideo ? t(locale, 'logSearchShared.legacy.on') : t(locale, 'logSearchShared.legacy.off')} -> ${newState.selfVideo ? t(locale, 'logSearchShared.legacy.on') : t(locale, 'logSearchShared.legacy.off')}`,
             );
         }
     } else {
-        details.push('음성 상태 변경 (세부사항 불명확)');
+        details.push(t(locale, 'logSearchShared.voice.changedUnknown'));
     }
 
     if (details.length === 1 && userId) {
-        details.push('음성 상태 변경됨 (채널 변경 외)');
+        details.push(t(locale, 'logSearchShared.legacy.voiceChangedWithoutChannel'));
     } else if (details.length === 0) {
-        details.push('음성 상태 업데이트 정보 없음');
+        details.push(t(locale, 'logSearchShared.legacy.noVoiceStateInfo'));
     }
 
     let thumbnailComponent: ThumbnailBuilder | undefined;

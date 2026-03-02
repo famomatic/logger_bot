@@ -9,16 +9,21 @@ import { config } from '../config/config.js';
 import { fetchAlertSubscriptions } from '../db/database.js';
 import { categoryEventMap } from '../utils/alertManager.js';
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('log-alert-list')
-        .setDescription('현재 서버의 로그 알림 설정 목록을 보여줍니다.')
+        .setDescription(defaultText('logAlert.listDescription'))
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuild'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -29,7 +34,7 @@ export const command = {
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
         if (devLevel < 2 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 레벨2 이상 개발자 또는 관리자만 사용할 수 있습니다.',
+                content: t(locale, 'common.level2OrAdminOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -47,31 +52,42 @@ export const command = {
         if (guildRows.length > 0) {
             const lines = guildRows.slice(0, 25).map((row, index) => {
                 const events = categoryEventMap[row.category] ?? [];
-                return `${index + 1}. 카테고리: \`${row.category}\` | 채널: <#${row.channel_id}> | 이벤트 수: ${events.length}`;
+                return t(locale, 'logAlert.listSectionLine', {
+                    index: index + 1,
+                    category: row.category,
+                    channelId: row.channel_id,
+                    eventCount: events.length,
+                });
             });
             sections.push({
-                title: '구독 목록',
+                title: t(locale, 'logAlert.listSectionTitle'),
                 body: lines.join('\n'),
             });
 
             if (guildRows.length > 25) {
                 sections.push({
-                    title: '안내',
-                    body: `표시는 25개까지만 제공합니다. (총 ${guildRows.length.toLocaleString('ko-KR')}개)`,
+                    title: t(locale, 'logAlert.noticeTitle'),
+                    body: t(locale, 'logAlert.noticeBody', {
+                        count: guildRows.length.toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US'),
+                    }),
                 });
             }
         }
 
         await interaction.editReply(
             buildContainerMessage({
-                title: '로그 알림 구독 목록',
+                title: t(locale, 'logAlert.listTitle'),
                 description:
                     guildRows.length === 0
-                        ? '설정된 알림 구독이 없습니다.'
-                        : `총 ${guildRows.length.toLocaleString('ko-KR')}개`,
+                        ? t(locale, 'logAlert.noSubscriptions')
+                        : t(locale, 'logAlert.totalSubscriptions', {
+                              count: guildRows.length.toLocaleString(
+                                  locale === 'ko' ? 'ko-KR' : 'en-US',
+                              ),
+                          }),
                 accentColor: 0x5865f2,
                 sections,
-                footer: `요청자: ${interaction.user.tag}`,
+                footer: t(locale, 'logAlert.requesterFooter', { tag: interaction.user.tag }),
             }),
         );
     },

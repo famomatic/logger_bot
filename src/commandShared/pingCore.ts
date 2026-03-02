@@ -6,28 +6,43 @@ import {
     WebSocketShardStatus,
 } from 'discord.js';
 import type { PingMetrics } from '../types/ping.js';
+import type { SupportedLocale } from '../types/i18n.js';
+import { t } from '../i18n/index.js';
 
-export type { PingMetrics } from '../types/ping.js';
-
-export function createPendingPingReply() {
+/**
+ * 핑 측정 시작 시 표시할 임시 응답 payload를 생성합니다.
+ */
+export function createPendingPingReply(locale: SupportedLocale) {
     return {
         flags: MessageFlags.IsComponentsV2 as const,
-        components: [new TextDisplayBuilder().setContent('🏓 퐁! 지연시간 계산중...')],
+        components: [new TextDisplayBuilder().setContent(t(locale, 'ping.pending'))],
     };
 }
 
-export function createPingResultReply(metrics: PingMetrics) {
+/**
+ * 측정된 지연 시간 정보를 사용자 표시용 컴포넌트로 변환합니다.
+ */
+export function createPingResultReply(metrics: PingMetrics, locale: SupportedLocale) {
     return {
         components: [
-            new TextDisplayBuilder().setContent(`🏓 퐁! 현재 봇 지연시간: ${metrics.latency}ms`),
+            new TextDisplayBuilder().setContent(
+                t(locale, 'ping.latency', { latency: metrics.latency }),
+            ),
             new SeparatorBuilder(),
-            new TextDisplayBuilder().setContent(`API 지연시간: ${metrics.apiLatency}ms`),
+            new TextDisplayBuilder().setContent(
+                t(locale, 'ping.apiLatency', { apiLatency: metrics.apiLatency }),
+            ),
             new SeparatorBuilder(),
-            new TextDisplayBuilder().setContent(`웹소켓 상태: ${metrics.wsStatusString}`),
+            new TextDisplayBuilder().setContent(
+                t(locale, 'ping.wsStatus', { wsStatus: metrics.wsStatusString }),
+            ),
         ],
     };
 }
 
+/**
+ * 메시지/WS 핑 값을 읽어 핑 명령 응답용 메트릭을 계산합니다.
+ */
 export async function resolvePingMetrics(
     createdTimestamp: number,
     replyCreatedTimestamp: number,

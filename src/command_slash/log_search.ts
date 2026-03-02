@@ -11,48 +11,52 @@ import { logger } from '../utils/logger.js';
 import { config } from '../config/config.js';
 import { getEventTypeChoices, isValidEventType } from '../config/eventsConfig.js';
 import { parseDateString, fetchAndDisplayLogs } from '../commandShared/logSearchShared.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('log-search')
-        .setDescription(
-            '데이터베이스에서 메시지 로그를 검색합니다. 옵션 없이 실행 시 최신 로그를 보여줍니다.',
-        )
+        .setDescription(defaultText('logSearch.description'))
         .setDefaultMemberPermissions(PermissionFlagsBits.ViewAuditLog)
         .addUserOption((option) =>
-            option.setName('user').setDescription('검색할 사용자를 지정하세요.').setRequired(false),
+            option
+                .setName('user')
+                .setDescription(defaultText('logSearch.optUser'))
+                .setRequired(false),
         )
         .addStringOption((option) =>
             option
                 .setName('channel')
-                .setDescription('검색할 채널 ID를 입력하세요. (삭제된 채널도 가능)')
+                .setDescription(defaultText('logSearch.optChannel'))
                 .setRequired(false),
         )
         .addStringOption((option) =>
             option
                 .setName('start-date')
-                .setDescription('검색 시작일 (YYYY-MM-DD) (예: 2023-01-01)')
+                .setDescription(defaultText('logSearch.optStartDate'))
                 .setRequired(false),
         )
         .addStringOption((option) =>
             option
                 .setName('end-date')
-                .setDescription('검색 종료일 (YYYY-MM-DD) (예: 2023-01-31)')
+                .setDescription(defaultText('logSearch.optEndDate'))
                 .setRequired(false),
         )
         .addStringOption((option) =>
             option
                 .setName('event-type')
-                .setDescription(
-                    '검색할 이벤트 유형을 선택하거나 직접 입력하세요. (예: messageCreate)',
-                )
+                .setDescription(defaultText('logSearch.optEventType'))
                 .setRequired(false)
                 .addChoices(...getEventTypeChoices()),
         ),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
         if (!interaction.guildId) {
             await interaction.reply({
-                content: '이 명령어는 서버 내에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuildStrict'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -63,7 +67,7 @@ export const command = {
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
         if (devLevel < 2 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 레벨2 이상 개발자 또는 관리자만 사용할 수 있습니다.',
+                content: t(locale, 'common.level2OrAdminOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -85,7 +89,7 @@ export const command = {
             const isSnowflake = /^\d{17,20}$/.test(trimmed);
             if (!isSnowflake) {
                 await interaction.editReply({
-                    content: '오류: 채널은 ID로 입력해주세요. (예: 123456789012345678)',
+                    content: t(locale, 'common.invalidChannelIdInput'),
                     embeds: [],
                     components: [],
                 });
@@ -103,7 +107,9 @@ export const command = {
                 validatedEventType = rawEventType;
             } else {
                 await interaction.editReply({
-                    content: `오류: 유효하지 않은 이벤트 유형입니다: \`${rawEventType}\`. 올바른 이벤트 타입을 입력하거나 선택해주세요.`,
+                    content: t(locale, 'logSearch.invalidEventTypeDetailed', {
+                        eventType: rawEventType,
+                    }),
                     embeds: [],
                     components: [],
                 });
@@ -125,8 +131,7 @@ export const command = {
             const parsed = parseDateString(startDateString, false);
             if (!parsed) {
                 await interaction.editReply({
-                    content:
-                        '오류: 유효하지 않은 시작 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.',
+                    content: t(locale, 'common.invalidStartDate'),
                     embeds: [],
                     components: [],
                 });
@@ -138,8 +143,7 @@ export const command = {
             const parsed = parseDateString(endDateString, true);
             if (!parsed) {
                 await interaction.editReply({
-                    content:
-                        '오류: 유효하지 않은 종료 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요.',
+                    content: t(locale, 'common.invalidEndDate'),
                     embeds: [],
                     components: [],
                 });
@@ -149,7 +153,7 @@ export const command = {
         }
         if (startDate && endDate && startDate.getTime() > endDate.getTime()) {
             await interaction.editReply({
-                content: '오류: 검색 시작일이 종료일보다 늦을 수 없습니다.',
+                content: t(locale, 'common.startAfterEnd'),
                 embeds: [],
                 components: [],
             });

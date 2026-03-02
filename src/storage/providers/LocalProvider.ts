@@ -1,7 +1,10 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { StorageProvider } from '../StorageProvider.js';
+import type { StorageProvider } from '../../types/storage.js';
 
+/**
+ * 로컬 파일시스템 기반 첨부파일 스토리지 구현입니다.
+ */
 export class LocalStorageProvider implements StorageProvider {
     private basePath: string;
 

@@ -14,24 +14,31 @@ import {
     formatEventTypeCountList,
     formatLocalizedNumber,
 } from '../utils/reportFormatters.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('report-user')
-        .setDescription('특정 사용자의 로그 리포트를 보여줍니다.')
+        .setDescription(defaultText('reportCommand.userDescription'))
         .addUserOption((option) =>
-            option.setName('user').setDescription('리포트를 조회할 사용자').setRequired(true),
+            option
+                .setName('user')
+                .setDescription(defaultText('reportCommand.user'))
+                .setRequired(true),
         )
         .addBooleanOption((option) =>
-            option
-                .setName('ephemeral')
-                .setDescription('응답을 나만 보기로 표시할지 여부 (기본값: true)'),
+            option.setName('ephemeral').setDescription(defaultText('reportCommand.ephemeral')),
         )
         .setContexts(InteractionContextType.Guild),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
+        const numberLocale = locale === 'ko' ? 'ko-KR' : 'en-US';
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuild'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -42,7 +49,7 @@ export const command = {
         const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
         if (devLevel < 2 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 레벨2 이상 개발자 또는 관리자만 사용할 수 있습니다.',
+                content: t(locale, 'common.level2OrAdminOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -61,38 +68,80 @@ export const command = {
         const report = await getUserReport(interaction.guildId, user.id);
         const trendText =
             report.trendPercent === null
-                ? '신규 급증(비교 기준 0)'
+                ? t(locale, 'report.trendNew')
                 : `${report.trendPercent > 0 ? '+' : ''}${report.trendPercent}%`;
 
         await interaction.editReply(
             buildContainerMessage({
-                title: '사용자 로그 리포트',
-                description: `사용자: <@${user.id}> (${user.id})`,
+                title: t(locale, 'reportCommand.userTitle'),
+                description: t(locale, 'reportCommand.userDescriptionLine', { userId: user.id }),
                 accentColor: 0x57f287,
                 sections: [
                     {
-                        title: '핵심 지표',
+                        title: t(locale, 'reportCommand.sectionCore'),
                         body: [
-                            `총 로그 수: ${formatLocalizedNumber(report.totalLogs)}건`,
-                            `메시지 생성/수정/삭제: ${formatLocalizedNumber(report.messageCreateCount)} / ${formatLocalizedNumber(report.messageUpdateCount)} / ${formatLocalizedNumber(report.messageDeleteCount)}`,
-                            `운영 이벤트 수: ${formatLocalizedNumber(report.moderationActionCount)}건`,
-                            `첨부파일 수: ${formatLocalizedNumber(report.attachmentCount)}개`,
-                            `스티커 수: ${formatLocalizedNumber(report.stickerCount)}개`,
-                            `최근 활동: ${report.lastActivityAt ? `<t:${Math.floor(report.lastActivityAt.getTime() / 1000)}:F>` : '기록 없음'}`,
+                            t(locale, 'reportCommand.totalLogs', {
+                                count: formatLocalizedNumber(report.totalLogs, numberLocale),
+                            }),
+                            t(locale, 'reportCommand.msg3', {
+                                create: formatLocalizedNumber(
+                                    report.messageCreateCount,
+                                    numberLocale,
+                                ),
+                                update: formatLocalizedNumber(
+                                    report.messageUpdateCount,
+                                    numberLocale,
+                                ),
+                                delete: formatLocalizedNumber(
+                                    report.messageDeleteCount,
+                                    numberLocale,
+                                ),
+                            }),
+                            t(locale, 'reportCommand.moderation', {
+                                count: formatLocalizedNumber(
+                                    report.moderationActionCount,
+                                    numberLocale,
+                                ),
+                            }),
+                            t(locale, 'reportCommand.attachments', {
+                                count: formatLocalizedNumber(report.attachmentCount, numberLocale),
+                            }),
+                            t(locale, 'reportCommand.stickers', {
+                                count: formatLocalizedNumber(report.stickerCount, numberLocale),
+                            }),
+                            t(locale, 'reportCommand.lastActivity', {
+                                value: report.lastActivityAt
+                                    ? `<t:${Math.floor(report.lastActivityAt.getTime() / 1000)}:F>`
+                                    : t(locale, 'report.recordsNone'),
+                            }),
                         ].join('\n'),
                     },
                     {
-                        title: '추세/이상징후',
+                        title: t(locale, 'reportCommand.sectionAnomaly'),
                         body: [
-                            `최근 24시간 로그: ${formatLocalizedNumber(report.last24hCount)}건`,
-                            `그 이전 24시간 로그: ${formatLocalizedNumber(report.prev24hCount)}건`,
-                            `변화율: ${trendText}`,
-                            `상위 이벤트 타입:\n${formatEventTypeCountList(report.topEventTypes)}`,
-                            `상위 채널:\n${formatEntityCountList(report.topChannels, 'channel')}`,
+                            t(locale, 'reportCommand.last24h', {
+                                count: formatLocalizedNumber(report.last24hCount, numberLocale),
+                            }),
+                            t(locale, 'reportCommand.prev24h', {
+                                count: formatLocalizedNumber(report.prev24hCount, numberLocale),
+                            }),
+                            t(locale, 'reportCommand.trend', { value: trendText }),
+                            t(locale, 'reportCommand.topEventTypes', {
+                                value: formatEventTypeCountList(report.topEventTypes, {
+                                    locale: numberLocale,
+                                    emptyText: t(locale, 'report.none'),
+                                }),
+                            }),
+                            t(locale, 'reportCommand.topChannels', {
+                                value: formatEntityCountList(report.topChannels, 'channel', {
+                                    locale: numberLocale,
+                                    emptyText: t(locale, 'report.none'),
+                                }),
+                            }),
                         ].join('\n'),
                     },
                 ],
-                footer: `요청자: ${interaction.user.tag}`,
+                footer: t(locale, 'report.requester', { tag: interaction.user.tag }),
             }),
         );
     },

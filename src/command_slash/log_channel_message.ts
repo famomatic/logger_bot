@@ -17,6 +17,7 @@ import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import type { AttachmentData, SlashCommand } from '../types/commands.js';
 import type { MessageReactionSnapshot } from '../types/messageLog.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
 async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     let lastError: unknown = null;
@@ -37,14 +38,17 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     throw lastError;
 }
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command: SlashCommand = {
     data: new SlashCommandBuilder()
         .setName('log-channel-messages')
-        .setDescription('{channel_id} 채널의 모든 메시지를 확인하여 DB에 기록합니다.')
+        .setDescription(defaultText('backfill.logChannelDesc'))
         .addStringOption((option) =>
             option
                 .setName('channel_id')
-                .setDescription('메시지를 기록할 채널의 ID')
+                .setDescription(defaultText('messageCmd.channelId'))
                 .setRequired(true),
         )
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
@@ -52,9 +56,10 @@ export const command: SlashCommand = {
 
     async execute(interaction: CommandInteraction, client: Client) {
         if (!interaction.isChatInputCommand()) return;
+        const locale = getInteractionLocale(interaction);
         if (!interaction.inGuild()) {
             await interaction.reply({
-                content: '이 명령어는 서버 내에서만 사용할 수 있습니다.',
+                content: t(locale, 'common.onlyInGuildStrict'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -66,7 +71,7 @@ export const command: SlashCommand = {
 
         if (devLevel < 3 && !isAdmin) {
             await interaction.reply({
-                content: '이 명령어는 관리자 또는 개발자만 사용할 수 있습니다.',
+                content: t(locale, 'common.adminOrDevOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;
@@ -88,7 +93,7 @@ export const command: SlashCommand = {
                 !('guild' in fetched)
             ) {
                 await interaction.editReply(
-                    `오류: ID가 ${targetChannelId}인 유효한 서버 채널을 찾을 수 없습니다.`,
+                    t(locale, 'messageCmd.invalidGuildChannel', { channelId: targetChannelId }),
                 );
                 return;
             }
@@ -96,7 +101,7 @@ export const command: SlashCommand = {
         } catch (err) {
             logger.error(`${logPrefix} Failed to fetch channel`, err);
             await interaction.editReply(
-                `채널 ID ${targetChannelId}를 가져오는 중 오류가 발생했습니다.`,
+                t(locale, 'backfill.channelFetchFailed', { channelId: targetChannelId }),
             );
             return;
         }
@@ -104,7 +109,7 @@ export const command: SlashCommand = {
         const botPerms = channel.permissionsFor(channel.guild.members.me!);
         if (!botPerms?.has(PermissionsBitField.Flags.ReadMessageHistory)) {
             await interaction.editReply(
-                `오류: 채널 #${channel.name}의 메시지를 읽을 권한이 없습니다.`,
+                t(locale, 'backfill.channelReadDenied', { channel: channel.name }),
             );
             return;
         }
@@ -212,13 +217,19 @@ export const command: SlashCommand = {
             } catch (error) {
                 const err = error as Error;
                 logger.error(`${logPrefix} Failed to fetch messages:`, err);
-                await interaction.editReply(`메시지 조회 중 오류가 발생했습니다: ${err.message}`);
+                await interaction.editReply(
+                    t(locale, 'backfill.fetchMessagesFailed', { error: err.message }),
+                );
                 return;
             }
         }
 
         await interaction.editReply(
-            `✅ 채널 #${channel.name}의 메시지 확인이 완료되었습니다. 총 ${processed}개 중 ${newlyLogged}개가 새로 기록되었습니다.`,
+            t(locale, 'backfill.channelDone', {
+                channel: channel.name,
+                processed,
+                newlyLogged,
+            }),
         );
         logger.info(
             `${logPrefix} Finished logging. Processed ${processed} messages, newly logged ${newlyLogged}.`,

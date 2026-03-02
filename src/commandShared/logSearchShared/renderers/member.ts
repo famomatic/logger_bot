@@ -5,6 +5,7 @@ import {
 } from 'discord.js';
 import type { JsonData, JsonValue } from '../../../types/json.js';
 import type { LogEntry } from '../../../types/logs.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { str } from '../formatters.js';
 import { isJsonData } from '../types.js';
 
@@ -21,6 +22,9 @@ interface RenderMemberEventResult {
     thumbnailComponent: ThumbnailBuilder;
 }
 
+/**
+ * 역할 배열 데이터를 `roleId -> roleName` 맵으로 정규화합니다.
+ */
 function getRoleMap(rolesData: JsonValue | undefined): Map<string, string | undefined> {
     const map = new Map<string, string | undefined>();
     if (isJsonData(rolesData) && isJsonData(rolesData.cache)) {
@@ -40,6 +44,9 @@ function getRoleMap(rolesData: JsonValue | undefined): Map<string, string | unde
     return map;
 }
 
+/**
+ * 멤버 관련 이벤트 데이터를 읽어 상세 텍스트와 썸네일을 구성합니다.
+ */
 export async function renderEvent({
     interaction,
     log,
@@ -47,7 +54,8 @@ export async function renderEvent({
     eventData,
     thumbnailComponent,
 }: RenderMemberEventParams): Promise<RenderMemberEventResult> {
-    let eventSpecificsText = '(내용 없음)';
+    const locale = getInteractionLocale(interaction);
+    let eventSpecificsText = t(locale, 'logSearchShared.legacy.noContent');
     let nextThumbnailComponent = thumbnailComponent;
 
     if (!isJsonData(eventData)) {
@@ -62,29 +70,37 @@ export async function renderEvent({
             const memberAddDetails: string[] = [];
             if (eventData.memberTag) {
                 memberAddDetails.push(
-                    `**사용자:** ${str(eventData.memberTag)} (${str(eventData.memberId, 'ID 없음')})`,
+                    `${t(locale, 'logSearchShared.legacy.userLabel')} ${str(eventData.memberTag)} (${str(eventData.memberId, t(locale, 'logSearchShared.role.idMissing'))})`,
                 );
             } else if (eventData.memberId) {
-                memberAddDetails.push(`**사용자 ID:** ${str(eventData.memberId)}`);
+                memberAddDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.userIdLabel')} ${str(eventData.memberId)}`,
+                );
             }
 
             if (eventData.inviterId) {
                 try {
                     const inviter = await interaction.client.users.fetch(str(eventData.inviterId));
                     memberAddDetails.push(
-                        `**초대자:** ${inviter.tag} (${str(eventData.inviterId)})`,
+                        `${t(locale, 'logSearchShared.member.inviterLabel')} ${inviter.tag} (${str(eventData.inviterId)})`,
                     );
                 } catch {
-                    memberAddDetails.push(`**초대자 ID:** ${str(eventData.inviterId)}`);
+                    memberAddDetails.push(
+                        `${t(locale, 'logSearchShared.member.inviterIdLabel')} ${str(eventData.inviterId)}`,
+                    );
                 }
             }
 
             if (eventData.inviteCode) {
-                memberAddDetails.push(`**초대 코드:** ${str(eventData.inviteCode)}`);
+                memberAddDetails.push(
+                    `${t(locale, 'logSearchShared.invite.codeLabel')} ${str(eventData.inviteCode)}`,
+                );
             }
 
             eventSpecificsText =
-                memberAddDetails.length > 0 ? memberAddDetails.join('\n') : '멤버 참가 정보 없음';
+                memberAddDetails.length > 0
+                    ? memberAddDetails.join('\n')
+                    : t(locale, 'logSearchShared.member.addNoInfo');
 
             try {
                 const addedMemberUser = eventData.memberId
@@ -110,14 +126,18 @@ export async function renderEvent({
             const memberRemoveDetails: string[] = [];
             if (eventData.memberTag) {
                 memberRemoveDetails.push(
-                    `**사용자:** ${str(eventData.memberTag)} (${str(eventData.memberId, 'ID 없음')})`,
+                    `${t(locale, 'logSearchShared.legacy.userLabel')} ${str(eventData.memberTag)} (${str(eventData.memberId, t(locale, 'logSearchShared.role.idMissing'))})`,
                 );
             } else if (eventData.memberId) {
-                memberRemoveDetails.push(`**사용자 ID:** ${str(eventData.memberId)}`);
+                memberRemoveDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.userIdLabel')} ${str(eventData.memberId)}`,
+                );
             }
 
             if (eventData.reason) {
-                memberRemoveDetails.push(`**사유:** ${str(eventData.reason)}`);
+                memberRemoveDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.reasonLabel')} ${str(eventData.reason)}`,
+                );
             }
 
             if (eventData.executorId) {
@@ -126,17 +146,19 @@ export async function renderEvent({
                         str(eventData.executorId),
                     );
                     memberRemoveDetails.push(
-                        `**실행자:** ${executor.tag} (${str(eventData.executorId)})`,
+                        `${t(locale, 'logSearchShared.legacy.executorLabel')} ${executor.tag} (${str(eventData.executorId)})`,
                     );
                 } catch {
-                    memberRemoveDetails.push(`**실행자 ID:** ${str(eventData.executorId)}`);
+                    memberRemoveDetails.push(
+                        `${t(locale, 'logSearchShared.legacy.executorIdLabel')} ${str(eventData.executorId)}`,
+                    );
                 }
             }
 
             eventSpecificsText =
                 memberRemoveDetails.length > 0
                     ? memberRemoveDetails.join('\n')
-                    : '멤버 이탈 정보 없음';
+                    : t(locale, 'logSearchShared.member.removeNoInfo');
 
             try {
                 const removedMemberUser = eventData.memberId
@@ -173,7 +195,7 @@ export async function renderEvent({
 
             if (updatedMember) {
                 memberUpdateDetails.push(
-                    `**사용자:** ${str(eventData.memberTag) || str(updatedMember.tag) || `<@${str(updatedMember.id)}>`} (${str(updatedMember.id)})`,
+                    `${t(locale, 'logSearchShared.legacy.userLabel')} ${str(eventData.memberTag) || str(updatedMember.tag) || `<@${str(updatedMember.id)}>`} (${str(updatedMember.id)})`,
                 );
             }
 
@@ -188,7 +210,7 @@ export async function renderEvent({
                     const name =
                         roleName ??
                         interaction.guild?.roles.cache.get(roleId)?.name ??
-                        '알 수 없는 역할';
+                        t(locale, 'logSearchShared.member.unknownRole');
                     addedRoles.push(`${name} (<@&${roleId}>)`);
                 }
             }
@@ -199,16 +221,20 @@ export async function renderEvent({
                     const name =
                         roleName ??
                         interaction.guild?.roles.cache.get(roleId)?.name ??
-                        '알 수 없는 역할';
+                        t(locale, 'logSearchShared.member.unknownRole');
                     removedRoles.push(`${name} (<@&${roleId}>)`);
                 }
             }
 
             if (addedRoles.length > 0) {
-                memberUpdateDetails.push(`**추가된 역할:** ${addedRoles.join(', ')}`);
+                memberUpdateDetails.push(
+                    `${t(locale, 'logSearchShared.member.addedRolesLabel')} ${addedRoles.join(', ')}`,
+                );
             }
             if (removedRoles.length > 0) {
-                memberUpdateDetails.push(`**제거된 역할:** ${removedRoles.join(', ')}`);
+                memberUpdateDetails.push(
+                    `${t(locale, 'logSearchShared.member.removedRolesLabel')} ${removedRoles.join(', ')}`,
+                );
             }
 
             if (
@@ -217,32 +243,34 @@ export async function renderEvent({
                 eventData.oldNickname !== eventData.newNickname
             ) {
                 memberUpdateDetails.push(
-                    `**닉네임 변경:** \\\`${str(eventData.oldNickname, '(없음)')}\\\` -> \\\`${str(eventData.newNickname, '(없음)')}\\\``,
+                    `${t(locale, 'logSearchShared.member.nicknameChangedLabel')} \\\`${str(eventData.oldNickname, t(locale, 'logSearchShared.legacy.none'))}\\\` -> \\\`${str(eventData.newNickname, t(locale, 'logSearchShared.legacy.none'))}\\\``,
                 );
             }
             if (eventData.oldAvatar !== eventData.newAvatar && eventData.newAvatar) {
-                memberUpdateDetails.push(`**아바타 변경됨**`);
+                memberUpdateDetails.push(t(locale, 'logSearchShared.user.avatarChanged'));
             }
             if (
                 eventData.oldCommunicationDisabledUntil !== eventData.newCommunicationDisabledUntil
             ) {
                 const oldTimeout = eventData.oldCommunicationDisabledUntil
                     ? `<t:${Math.floor(new Date(str(eventData.oldCommunicationDisabledUntil)).getTime() / 1000)}:R>`
-                    : '없음';
+                    : t(locale, 'logSearchShared.legacy.none');
                 const newTimeout = eventData.newCommunicationDisabledUntil
                     ? `<t:${Math.floor(new Date(str(eventData.newCommunicationDisabledUntil)).getTime() / 1000)}:R>`
-                    : '해제됨';
-                memberUpdateDetails.push(`**타임아웃 변경:** ${oldTimeout} -> ${newTimeout}`);
+                    : t(locale, 'logSearchShared.member.timeoutCleared');
+                memberUpdateDetails.push(
+                    `${t(locale, 'logSearchShared.member.timeoutChangedLabel')} ${oldTimeout} -> ${newTimeout}`,
+                );
             }
 
             if (memberUpdateDetails.length === 1 && updatedMember) {
                 eventSpecificsText =
                     memberUpdateDetails.join('\n') +
-                    '\n(세부 변경 사항 감지 안됨, 역할/닉네임 외 변경 가능성 있음)';
+                    `\n${t(locale, 'logSearchShared.member.noDetailedChanges')}`;
             } else if (memberUpdateDetails.length > (updatedMember ? 1 : 0)) {
                 eventSpecificsText = memberUpdateDetails.join('\n');
             } else {
-                eventSpecificsText = '멤버 업데이트 (세부 정보 분석 중 오류 또는 변경 사항 없음)';
+                eventSpecificsText = t(locale, 'logSearchShared.member.updateNoInfo');
             }
 
             if (updatedMember?.id) {

@@ -5,6 +5,9 @@ import { fileURLToPath, URL } from 'url';
 import { logger } from './logger.js';
 import type { LegacyCommand } from '../types/commands.js';
 
+/**
+ * dist의 레거시 커맨드 모듈을 로드해 클라이언트 캐시에 등록합니다.
+ */
 export async function loadLegacyCommands(client: Client): Promise<void> {
     client.legacyCommands = new Collection<string, LegacyCommand>();
     const __filename = fileURLToPath(import.meta.url);
@@ -44,6 +47,9 @@ export async function loadLegacyCommands(client: Client): Promise<void> {
         logger.error('Error reading legacy commands directory:', error);
     }
 }
+/**
+ * 메모리에 적재된 레거시 커맨드 캐시를 초기화합니다.
+ */
 export function unloadLegacyCommands(client: Client): void {
     client.legacyCommands?.clear?.();
 }

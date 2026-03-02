@@ -1,5 +1,8 @@
 import { sanitizeFilename } from '../utils/sanitize.js';
 
+/**
+ * 첨부파일 저장 시 사용하는 표준 상대 경로를 생성합니다.
+ */
 export function createAttachmentStoragePath(
     guildId: string,
     channelId: string,

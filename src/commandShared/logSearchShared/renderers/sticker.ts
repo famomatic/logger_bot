@@ -4,6 +4,7 @@ import {
     type MessageComponentInteraction,
 } from 'discord.js';
 import type { JsonData, JsonValue } from '../../../types/json.js';
+import { getInteractionLocale, t } from '../../../i18n/index.js';
 import { STICKER_FORMAT_LABELS } from '../constants.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
@@ -23,10 +24,16 @@ interface StickerRenderResult {
     thumbnailComponent?: ThumbnailBuilder;
 }
 
+/**
+ * 스티커 이벤트 payload에서 안전하게 JsonData를 추출합니다.
+ */
 function getStickerData(value: JsonValue | undefined): JsonData | undefined {
     return isJsonData(value) ? value : undefined;
 }
 
+/**
+ * 스티커 태그 배열/문자열을 표시용 문자열로 포맷합니다.
+ */
 function formatStickerTags(tags: JsonValue | undefined): string {
     if (Array.isArray(tags)) {
         return tags.map((tag) => str(tag)).join(', ');
@@ -34,6 +41,9 @@ function formatStickerTags(tags: JsonValue | undefined): string {
     return str(tags);
 }
 
+/**
+ * 사용자 ID로 아바타 썸네일 컴포넌트를 조회/생성합니다.
+ */
 async function fetchUserThumbnail(
     interaction: ChatInputCommandInteraction | MessageComponentInteraction,
     userId: string,
@@ -53,35 +63,47 @@ async function fetchUserThumbnail(
     }
 }
 
+/**
+ * stickerCreate 로그의 표시 텍스트와 썸네일을 생성합니다.
+ */
 async function renderStickerCreateEvent(
     params: RenderStickerEventParams,
 ): Promise<StickerRenderResult> {
     const { data, interaction, logUserId, currentThumbnail } = params;
+    const locale = getInteractionLocale(interaction);
     const stickerDetails: string[] = [];
     const sticker = getStickerData(data.sticker) ?? data;
     let thumbnailComponent = currentThumbnail;
 
     if (sticker.id) {
-        stickerDetails.push(`**스티커 이름:** ${str(sticker.name, 'N/A')}`);
+        stickerDetails.push(
+            `${t(locale, 'logSearchShared.legacy.stickerNameLabel')} ${str(sticker.name, 'N/A')}`,
+        );
         stickerDetails.push(`**ID:** ${str(sticker.id)}`);
 
         const tags = sticker.tags;
         if (tags) {
-            stickerDetails.push(`**태그:** ${formatStickerTags(tags)}`);
+            stickerDetails.push(
+                `${t(locale, 'logSearchShared.legacy.tagsLabel')} ${formatStickerTags(tags)}`,
+            );
         }
 
         if (sticker.description) {
-            stickerDetails.push(`**설명:** ${str(sticker.description)}`);
+            stickerDetails.push(
+                `${t(locale, 'logSearchShared.legacy.descriptionLabel')} ${str(sticker.description)}`,
+            );
         }
 
         if (sticker.format_type !== undefined) {
             stickerDetails.push(
-                `**포맷:** ${STICKER_FORMAT_LABELS[num(sticker.format_type)] ?? `알 수 없는 포맷 (${str(sticker.format_type)})`}`,
+                `${t(locale, 'logSearchShared.legacy.formatLabel')} ${STICKER_FORMAT_LABELS[num(sticker.format_type)] ?? t(locale, 'logSearchShared.sticker.unknownFormat', { type: str(sticker.format_type) })}`,
             );
         }
 
         if (sticker.guildId) {
-            stickerDetails.push(`**서버 ID:** ${str(sticker.guildId)}`);
+            stickerDetails.push(
+                `${t(locale, 'logSearchShared.legacy.guildIdLabel')} ${str(sticker.guildId)}`,
+            );
         }
     }
 
@@ -104,15 +126,21 @@ async function renderStickerCreateEvent(
 
     return {
         eventSpecificsText:
-            stickerDetails.length > 0 ? stickerDetails.join('\n') : '스티커 생성 정보 없음',
+            stickerDetails.length > 0
+                ? stickerDetails.join('\n')
+                : t(locale, 'logSearchShared.sticker.createNoInfo'),
         thumbnailComponent,
     };
 }
 
+/**
+ * stickerUpdate 로그의 변경 요약 텍스트와 썸네일을 생성합니다.
+ */
 async function renderStickerUpdateEvent(
     params: RenderStickerEventParams,
 ): Promise<StickerRenderResult> {
     const { data, interaction, logUserId, currentThumbnail } = params;
+    const locale = getInteractionLocale(interaction);
     const stickerDetails: string[] = [];
     const oldSticker = getStickerData(data.oldSticker);
     const newSticker = getStickerData(data.newSticker) ?? getStickerData(data.sticker);
@@ -120,19 +148,19 @@ async function renderStickerUpdateEvent(
 
     if (newSticker?.id) {
         stickerDetails.push(
-            `**스티커:** ${str(newSticker.name, 'N/A')} (ID: ${str(newSticker.id)})`,
+            `${t(locale, 'logSearchShared.legacy.stickerLabel')} ${str(newSticker.name, 'N/A')} (ID: ${str(newSticker.id)})`,
         );
 
         if (oldSticker) {
             if (oldSticker.name !== newSticker.name) {
                 stickerDetails.push(
-                    `**이름 변경:** \\\`${str(oldSticker.name, '(없음)')}\\\` -> \\\`${str(newSticker.name, '(없음)')}\\\``,
+                    `${t(locale, 'logSearchShared.legacy.nameChangedLabel')} \\\`${str(oldSticker.name, t(locale, 'logSearchShared.legacy.none'))}\\\` -> \\\`${str(newSticker.name, t(locale, 'logSearchShared.legacy.none'))}\\\``,
                 );
             }
 
             if (oldSticker.description !== newSticker.description) {
                 stickerDetails.push(
-                    `**설명 변경:** \\\`${str(oldSticker.description, '(없음)')}\\\` -> \\\`${str(newSticker.description, '(없음)')}\\\``,
+                    `${t(locale, 'logSearchShared.sticker.descriptionChangedLabel')} \\\`${str(oldSticker.description, t(locale, 'logSearchShared.legacy.none'))}\\\` -> \\\`${str(newSticker.description, t(locale, 'logSearchShared.legacy.none'))}\\\``,
                 );
             }
 
@@ -147,23 +175,27 @@ async function renderStickerUpdateEvent(
 
             if (oldTagsText !== newTagsText) {
                 stickerDetails.push(
-                    `**태그 변경:** \\\`${oldTagsText || '(없음)'}\\\` -> \\\`${newTagsText || '(없음)'}\\\``,
+                    `${t(locale, 'logSearchShared.sticker.tagsChangedLabel')} \\\`${oldTagsText || t(locale, 'logSearchShared.legacy.none')}\\\` -> \\\`${newTagsText || t(locale, 'logSearchShared.legacy.none')}\\\``,
                 );
             }
         } else {
-            stickerDetails.push('(이전 스티커 정보 없음, 새 정보만 표시)');
+            stickerDetails.push(t(locale, 'logSearchShared.sticker.noPrevious'));
 
             if (newSticker.description) {
-                stickerDetails.push(`**설명:** ${str(newSticker.description)}`);
+                stickerDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.descriptionLabel')} ${str(newSticker.description)}`,
+                );
             }
 
             const newTags = newSticker.tags;
             if (newTags) {
-                stickerDetails.push(`**태그:** ${formatStickerTags(newTags)}`);
+                stickerDetails.push(
+                    `${t(locale, 'logSearchShared.legacy.tagsLabel')} ${formatStickerTags(newTags)}`,
+                );
             }
         }
     } else {
-        stickerDetails.push('스티커 정보 없음');
+        stickerDetails.push(t(locale, 'logSearchShared.sticker.noInfo'));
     }
 
     if (newSticker?.id && newSticker.format_type !== 3) {
@@ -185,25 +217,35 @@ async function renderStickerUpdateEvent(
 
     return {
         eventSpecificsText:
-            stickerDetails.length > 0 ? stickerDetails.join('\n') : '스티커 업데이트 정보 없음',
+            stickerDetails.length > 0
+                ? stickerDetails.join('\n')
+                : t(locale, 'logSearchShared.sticker.updateNoInfo'),
         thumbnailComponent,
     };
 }
 
+/**
+ * stickerDelete 로그의 표시 텍스트와 썸네일을 생성합니다.
+ */
 async function renderStickerDeleteEvent(
     params: RenderStickerEventParams,
 ): Promise<StickerRenderResult> {
     const { data, interaction, logUserId, currentThumbnail } = params;
+    const locale = getInteractionLocale(interaction);
     const stickerDetails: string[] = [];
     const sticker = getStickerData(data.sticker) ?? data;
     let thumbnailComponent = currentThumbnail;
 
     if (sticker.id) {
-        stickerDetails.push(`**삭제된 스티커 이름:** ${str(sticker.name, 'N/A')}`);
+        stickerDetails.push(
+            `${t(locale, 'logSearchShared.legacy.deletedStickerNameLabel')} ${str(sticker.name, 'N/A')}`,
+        );
         stickerDetails.push(`**ID:** ${str(sticker.id)}`);
         const tags = sticker.tags;
         if (tags) {
-            stickerDetails.push(`**태그:** ${formatStickerTags(tags)}`);
+            stickerDetails.push(
+                `${t(locale, 'logSearchShared.legacy.tagsLabel')} ${formatStickerTags(tags)}`,
+            );
         }
     }
 
@@ -216,11 +258,16 @@ async function renderStickerDeleteEvent(
 
     return {
         eventSpecificsText:
-            stickerDetails.length > 0 ? stickerDetails.join('\n') : '스티커 삭제 정보 없음',
+            stickerDetails.length > 0
+                ? stickerDetails.join('\n')
+                : t(locale, 'logSearchShared.sticker.deleteNoInfo'),
         thumbnailComponent,
     };
 }
 
+/**
+ * 스티커 이벤트 타입별 렌더러를 분기 호출합니다.
+ */
 export async function renderEvent(params: RenderStickerEventParams): Promise<StickerRenderResult> {
     switch (params.eventType) {
         case 'stickerCreate':

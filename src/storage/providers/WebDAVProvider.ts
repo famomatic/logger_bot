@@ -1,8 +1,11 @@
 import { createClient, WebDAVClient, WebDAVClientOptions } from 'webdav';
-import { StorageProvider } from '../StorageProvider.js';
+import type { StorageProvider } from '../../types/storage.js';
 import { setDefaultResultOrder } from 'node:dns';
 import { logger } from '../../utils/logger.js';
 
+/**
+ * WebDAV 서버 기반 첨부파일 스토리지 구현입니다.
+ */
 export class WebDAVProvider implements StorageProvider {
     private client: WebDAVClient;
     private basePath: string;

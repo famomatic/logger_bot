@@ -1,19 +1,25 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { logger } from '../utils/logger.js';
 import { buildStatusReply, collectStatusSnapshot } from '../commandShared/statusCore.js';
+import { getInteractionLocale, localizations, t } from '../i18n/index.js';
 
+/**
+ * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
+ */
 export const command = {
     data: new SlashCommandBuilder()
         .setName('status')
-        .setDescription('봇의 상세 상태 정보를 보여줍니다.'),
+        .setDescription(localizations('command.statusDescription').ko)
+        .setDescriptionLocalizations(localizations('command.statusDescription')),
     async execute(interaction: ChatInputCommandInteraction) {
+        const locale = getInteractionLocale(interaction);
         logger.info(`/status command executed by ${interaction.user.tag}`);
         try {
             await interaction.deferReply();
 
             const client = interaction.client;
-            const snapshot = await collectStatusSnapshot(client, 'slash');
-            const replyOptions = buildStatusReply(client, snapshot, 0x3498db);
+            const snapshot = await collectStatusSnapshot(client, 'slash', locale);
+            const replyOptions = buildStatusReply(client, snapshot, locale, 0x3498db);
 
             await interaction.editReply(replyOptions);
         } catch (error) {
@@ -23,7 +29,7 @@ export const command = {
                 'Full error object for slash status:',
                 JSON.stringify(err, Object.getOwnPropertyNames(err)),
             );
-            const errContent = `상태 정보를 가져오는 중 오류가 발생했습니다: ${err.message}`;
+            const errContent = t(locale, 'status.fetchError', { error: err.message });
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({
                     content: errContent,
