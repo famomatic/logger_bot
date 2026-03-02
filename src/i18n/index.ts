@@ -1,4 +1,4 @@
-import type { Message } from 'discord.js';
+import { Locale, type Message } from 'discord.js';
 import enLocale from './locales/en.js';
 import koLocale from './locales/ko.js';
 import type { LocaleDefinition, Primitive, SupportedLocale } from '../types/i18n.js';
@@ -20,6 +20,7 @@ for (const definition of localeDefinitions) {
 
 const fallbackLocaleCode =
     localeDefinitions.find((item) => item.metadata.fallback)?.metadata.code ?? 'en';
+const discordCommandLocales = new Set<string>(Object.values(Locale));
 
 /**
  * 점(.) 경로 키를 따라 locale 메시지 딕셔너리에서 문자열 값을 조회합니다.
@@ -120,7 +121,9 @@ export function localizations(key: string): Record<string, string> {
     for (const definition of localeDefinitions) {
         const value = t(definition.metadata.code, key);
         for (const compatible of definition.metadata.compatibleLocales) {
-            out[compatible] = value;
+            if (discordCommandLocales.has(compatible)) {
+                out[compatible] = value;
+            }
         }
     }
 

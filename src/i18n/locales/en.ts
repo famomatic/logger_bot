@@ -601,7 +601,7 @@ export const en = {
 export const locale = {
     metadata: {
         code: 'en',
-        compatibleLocales: ['en', 'en-US', 'en-GB'],
+        compatibleLocales: ['en-US', 'en-GB'],
         fallback: true,
     },
     messages: en,
