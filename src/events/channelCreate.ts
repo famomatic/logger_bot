@@ -1,6 +1,6 @@
 import { Events, GuildChannel, ChannelType, AuditLogEvent } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent } from '../db/database.js';
+import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 
 // 채널 타입 이름을 문자열로 변환하는 헬퍼 함수
 function getChannelTypeName(type: ChannelType): string {

@@ -1,100 +1,115 @@
-import fs from 'fs';
-import path from 'path';
 import { Client, Collection, Events } from 'discord.js'; // 필요한 타입 추가
-import { fileURLToPath, URL } from 'url';
 import { logger } from './logger.js';
 import type { LegacyCommand } from '../types/commands.js';
-import type { EventHandler } from '../types/events.js';
+import type { EventHandler, RegisteredEventListener } from '../types/events.js';
+import { loadModulesFromDirectory, resolveRuntimeSubdirectory } from './moduleLoader.js';
+
+const registeredEventListeners = new WeakMap<Client, RegisteredEventListener[]>();
+
+function isEventHandler(value: unknown): value is EventHandler {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const candidate = value as Partial<EventHandler>;
+    return typeof candidate.name === 'string' && typeof candidate.execute === 'function';
+}
 
 /**
  * dist 이벤트 모듈을 동적으로 로드해 Discord 클라이언트에 바인딩합니다.
  */
 export async function loadEvents(client: Client): Promise<void> {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    // 경로: 현재 파일(src/utils/) 기준 상위 폴더(src/)의 events
-    const eventsPath = path.join(__dirname, '..', 'events');
+    unloadEvents(client);
+    const eventsPath = resolveRuntimeSubdirectory(import.meta.url, 'events');
+    const loadedListeners: RegisteredEventListener[] = [];
 
-    try {
-        if (!fs.existsSync(eventsPath) || !fs.lstatSync(eventsPath).isDirectory()) {
-            logger.warn(`Events directory not found: ${eventsPath}`);
-            return;
-        }
-
-        const eventFiles = fs.readdirSync(eventsPath).filter((file) => file.endsWith('.js'));
-        let loadedCount = 0;
-
-        logger.info(`Loading ${eventFiles.length} events...`);
-
-        for (const file of eventFiles) {
-            const filePath = path.join(eventsPath, file);
-            try {
-                const resolvedPath = path.resolve(filePath);
-                const fileUrl = new URL(`file:///${resolvedPath.replace(/\\/g, '/')}`);
-                const eventModule = (await import(fileUrl.href)) as { default: EventHandler };
-                const event = eventModule.default;
-
-                if (event?.name && typeof event.execute === 'function') {
-                    // InteractionCreate는 로더에서 등록하지 않음 (index.ts에서 직접 처리)
-                    if (event.name === (Events.InteractionCreate as string)) {
-                        logger.debug(
-                            `Skipping dynamic loading for ${Events.InteractionCreate}, handled in index.ts.`,
-                        );
-                        continue;
-                    }
-
-                    /**
-                     * 이벤트 실행 중 예외를 공통 로깅 처리하는 래퍼 함수입니다.
-                     */
-                    const executeWrapper = async (...args: unknown[]) => {
-                        try {
-                            // messageCreate 특별 처리: legacyCommands 전달
-                            if (event.name === (Events.MessageCreate as string)) {
-                                const [message] = args;
-                                await event.execute(
-                                    message,
-                                    client,
-                                    client.legacyCommands ??
-                                        new Collection<string, LegacyCommand>(),
-                                );
-                            } else {
-                                await event.execute(...args, client);
-                            }
-                        } catch (error) {
-                            logger.error(`Error executing event ${event.name}:`, error);
-                        }
-                    };
-
-                    if (event.once) {
-                        client.once(event.name, (...args: unknown[]) => {
-                            void executeWrapper(...args);
-                        });
-                    } else {
-                        client.on(event.name, (...args: unknown[]) => {
-                            void executeWrapper(...args);
-                        });
-                    }
-
-                    logger.debug(`Loaded event: ${event.name}`);
-                    loadedCount++;
-                } else {
-                    logger.warn(`The event at ${filePath} is missing required properties.`);
-                }
-            } catch (fileLoadError: unknown) {
-                const errMsg =
-                    fileLoadError instanceof Error ? fileLoadError.message : String(fileLoadError);
-                const errStack = fileLoadError instanceof Error ? fileLoadError.stack : undefined;
-                logger.error(`Error loading event file ${filePath}:`, errMsg, errStack);
+    const result = await loadModulesFromDirectory<EventHandler>({
+        directoryPath: eventsPath,
+        onDiscoveredFiles: (totalFiles) => {
+            logger.info(`Loading ${totalFiles} events...`);
+        },
+        resolveModule: (moduleExports) => {
+            if (!moduleExports || typeof moduleExports !== 'object') {
+                return null;
             }
-        }
-        logger.success(`Successfully loaded ${loadedCount} events dynamically.`);
-    } catch (error) {
-        logger.error('Error reading events directory:', error);
+            const event = (moduleExports as { default?: unknown }).default;
+            return isEventHandler(event) ? event : null;
+        },
+        onModule: (event) => {
+            // InteractionCreate는 로더에서 등록하지 않음 (index.ts에서 직접 처리)
+            if (event.name === (Events.InteractionCreate as string)) {
+                logger.debug(
+                    `Skipping dynamic loading for ${Events.InteractionCreate}, handled in index.ts.`,
+                );
+                return;
+            }
+
+            /**
+             * 이벤트 실행 중 예외를 공통 로깅 처리하는 래퍼 함수입니다.
+             */
+            const executeWrapper = async (...args: unknown[]) => {
+                try {
+                    // messageCreate 특별 처리: legacyCommands 전달
+                    if (event.name === (Events.MessageCreate as string)) {
+                        const [message] = args;
+                        await event.execute(
+                            message,
+                            client,
+                            client.legacyCommands ?? new Collection<string, LegacyCommand>(),
+                        );
+                    } else {
+                        await event.execute(...args, client);
+                    }
+                } catch (error) {
+                    logger.error(`Error executing event ${event.name}:`, error);
+                }
+            };
+
+            const listener = (...args: unknown[]) => {
+                void executeWrapper(...args);
+            };
+            if (event.once) {
+                client.once(event.name, listener);
+            } else {
+                client.on(event.name, listener);
+            }
+            loadedListeners.push({
+                eventName: event.name,
+                listener,
+            });
+
+            logger.debug(`Loaded event: ${event.name}`);
+        },
+        onInvalidModule: ({ filePath }) => {
+            logger.warn(`The event at ${filePath} is missing required properties.`);
+        },
+        onModuleLoadError: ({ filePath }, fileLoadError) => {
+            const errMsg =
+                fileLoadError instanceof Error ? fileLoadError.message : String(fileLoadError);
+            const errStack = fileLoadError instanceof Error ? fileLoadError.stack : undefined;
+            logger.error(`Error loading event file ${filePath}:`, errMsg, errStack);
+        },
+    });
+
+    if (!result.directoryExists) {
+        logger.warn(`Events directory not found: ${eventsPath}`);
+        return;
     }
+
+    registeredEventListeners.set(client, loadedListeners);
+    logger.success(`Successfully loaded ${loadedListeners.length} events dynamically.`);
 }
 /**
  * 런타임에 바인딩된 이벤트 리스너를 해제합니다.
  */
 export function unloadEvents(client: Client): void {
-    client.removeAllListeners();
+    const listeners = registeredEventListeners.get(client);
+    if (!listeners || listeners.length === 0) {
+        return;
+    }
+
+    for (const { eventName, listener } of listeners) {
+        client.off(eventName, listener);
+    }
+    registeredEventListeners.delete(client);
 }

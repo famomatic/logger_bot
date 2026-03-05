@@ -7,7 +7,7 @@ import {
     AuditLogChange,
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent } from '../db/database.js';
+import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 
 // Enum 헬퍼 함수 (Create/Delete와 동일)
 // 실제 구현에서는 이 함수들을 별도 유틸리티 파일로 분리하는 것이 좋습니다.

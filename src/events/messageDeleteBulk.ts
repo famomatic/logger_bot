@@ -7,7 +7,7 @@ import {
     AuditLogEvent,
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent } from '../db/database.js';
+import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 
 const event = {
     name: Events.MessageBulkDelete,

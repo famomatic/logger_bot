@@ -7,7 +7,7 @@ import {
     GuildAuditLogsEntry,
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent, isGuildAuthorized } from '../db/database.js';
+import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
 
 const deleteBuffer: (Message | PartialMessage)[] = [];
 let bufferTimer: NodeJS.Timeout | null = null;
@@ -51,10 +51,7 @@ async function handleDelete(
     const messageId = message.id;
     const guildId = message.guild?.id;
 
-    if (!guildId || !isGuildAuthorized(guildId)) {
-        logger.warn(
-            `Unauthorized ${eventType} event logging on guild ${guildId ?? 'unknown'} skipped`,
-        );
+    if (!shouldLogForGuild(guildId, eventType)) {
         return;
     }
 
@@ -84,11 +81,6 @@ async function handleDelete(
                 executorId = deleteLog.executor?.id ?? null;
             }
         }
-    }
-
-    if (!guildId) {
-        logger.debug(`Ignoring ${eventType} for message ${messageId} because guildId is missing.`);
-        return;
     }
 
     const dataToStore = {

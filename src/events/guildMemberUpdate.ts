@@ -10,7 +10,7 @@ import {
     GuildAuditLogsEntry,
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent, isGuildAuthorized } from '../db/database.js';
+import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
 
 // --- Helper Function for Nickname Update (받은 로그 사용) ---
 async function handleNicknameUpdate(
@@ -26,11 +26,6 @@ async function handleNicknameUpdate(
     const oldNickname = oldMember.nickname ?? '(none)';
     const newNickname = newMember.nickname ?? '(none)';
     const executorId = nickLog?.executor?.id ?? null;
-
-    if (!isGuildAuthorized(guildId)) {
-        logger.warn(`Unauthorized ${eventType} event logging on guild ${guildId} skipped`);
-        return;
-    }
 
     const dataToStore = {
         targetUserId: targetId,
@@ -65,11 +60,6 @@ async function handleRoleUpdate(
     const timestamp = new Date();
     const oldRoles = oldMember.roles.cache;
     const newRoles = newMember.roles.cache;
-
-    if (!isGuildAuthorized(guildId)) {
-        logger.warn(`Unauthorized ${eventType} event logging on guild ${guildId} skipped`);
-        return;
-    }
 
     const addedRoles: Role[] = [];
     const removedRoles: Role[] = [];
@@ -120,11 +110,6 @@ async function handleAvatarUpdate(
     const newAvatarURL = newMember.displayAvatarURL();
     const executorId = avatarLog?.executor?.id ?? null;
 
-    if (!isGuildAuthorized(guildId)) {
-        logger.warn(`Unauthorized ${eventType} event logging on guild ${guildId} skipped`);
-        return;
-    }
-
     const dataToStore = {
         targetUserId: targetId,
         targetUserTag: targetUser.tag,
@@ -159,11 +144,6 @@ async function handleTimeoutUpdate(
     const now = Date.now();
 
     let eventType: string | null = null;
-
-    if (!guildId || !isGuildAuthorized(guildId)) {
-        logger.warn(`Unauthorized ${eventType} event logging on guild ${guildId} skipped`);
-        return;
-    }
 
     if ((!oldTimeoutEnd || oldTimeoutEnd < now) && newTimeoutEnd && newTimeoutEnd > now) {
         eventType = 'guildMemberTimeoutAdd';
@@ -206,13 +186,13 @@ async function handleTimeoutUpdate(
 const event = {
     name: Events.GuildMemberUpdate,
     async execute(oldMember: GuildMember | PartialGuildMember, newMember: GuildMember) {
+        const eventType = 'guildMemberUpdate';
         const guild = newMember.guild;
         const guildId = guild.id;
         const targetUser = newMember.user;
         const targetId = targetUser.id;
 
-        if (!guildId || !isGuildAuthorized(guildId)) {
-            logger.warn(`Unauthorized GuildMemberUpdate event logging on guild ${guildId} skipped`);
+        if (!shouldLogForGuild(guildId, eventType)) {
             return;
         }
 

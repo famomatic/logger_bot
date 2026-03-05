@@ -1,6 +1,6 @@
 import { Events, GuildMember, PartialGuildMember, User, AuditLogEvent } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent, isGuildAuthorized } from '../db/database.js';
+import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
 
 const event = {
     name: Events.GuildMemberRemove,
@@ -12,8 +12,7 @@ const event = {
         const targetId = member.id; // member.id는 항상 사용 가능
         const timestamp = new Date();
 
-        if (!guildId || !isGuildAuthorized(guildId)) {
-            logger.warn(`Unauthorized ${eventType} event logging on guild ${guildId} skipped`);
+        if (!shouldLogForGuild(guildId, eventType)) {
             return;
         }
 
