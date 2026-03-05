@@ -1,17 +1,16 @@
-import { Message, PermissionsBitField } from 'discord.js';
+import { Message } from 'discord.js';
 import type { LegacyCommand } from '../types/commands.js';
+import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
-import { canRunReload, executeReload } from '../commandShared/reloadCore.js';
+import { executeReload } from '../commandShared/reloadCore.js';
 import { getMessageLocale, t } from '../i18n/index.js';
 
 const command: LegacyCommand = {
     name: 'reload',
     async execute(message: Message) {
         const locale = getMessageLocale(message);
-        const memberPermissions = message.member?.permissions;
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-        if (!canRunReload(message.author.id, Boolean(isAdmin))) {
-            await message.reply(t(locale, 'common.adminOrDevOnly'));
+        if (!config.superAdminIds.includes(message.author.id)) {
+            await message.reply(t(locale, 'common.devOnly'));
             return;
         }
 

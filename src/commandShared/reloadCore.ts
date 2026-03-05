@@ -1,19 +1,11 @@
 import { Client, Events } from 'discord.js';
 import dotenv from 'dotenv';
-import { config, reloadConfig } from '../config/config.js';
+import { reloadConfig } from '../config/config.js';
 import { restartLogQueue } from '../queue/logEventQueue.js';
 import { loadLegacyCommands, unloadLegacyCommands } from '../utils/loadLegacyCommands.js';
 import { loadSlashCommands, unloadSlashCommands } from '../utils/loadSlashCommands.js';
 import { loadEvents, unloadEvents } from '../utils/loadEvents.js';
 import { logger } from '../utils/logger.js';
-
-/**
- * `reload` 명령 실행 권한(개발자 레벨 3 이상 또는 관리자)을 판별합니다.
- */
-export function canRunReload(userId: string, isAdmin: boolean): boolean {
-    const devLevel = config.getDevLevel(userId);
-    return devLevel >= 3 || isAdmin;
-}
 
 /**
  * 설정/명령어/이벤트/큐를 순차 재적재해 런타임 상태를 갱신합니다.

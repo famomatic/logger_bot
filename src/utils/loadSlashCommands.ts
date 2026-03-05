@@ -5,6 +5,7 @@ import { fileURLToPath, URL } from 'url';
 import { logger } from './logger.js';
 import { config } from '../config/config.js';
 import type { SlashCommand } from '../types/commands.js';
+import { setSlashPermissionCatalog } from '../commandShared/slashPermission.js';
 
 /**
  * dist의 슬래시 커맨드 모듈을 동적으로 로드하고 Discord에 등록합니다.
@@ -15,6 +16,7 @@ export async function loadSlashCommands(client: Client): Promise<void> {
     const __dirname = path.dirname(__filename);
     const commandsPath = path.join(__dirname, '..', 'command_slash');
     const commandDataToRegister: ReturnType<SlashCommandBuilder['toJSON']>[] = [];
+    const loadedSlashCommands: SlashCommand[] = [];
 
     try {
         if (!fs.existsSync(commandsPath) || !fs.lstatSync(commandsPath).isDirectory()) {
@@ -38,6 +40,7 @@ export async function loadSlashCommands(client: Client): Promise<void> {
                 if (command?.data && typeof command.execute === 'function') {
                     client.commands.set(command.data.name, command);
                     commandDataToRegister.push(command.data.toJSON());
+                    loadedSlashCommands.push(command);
                     logger.debug(`Loaded slash command: /${command.data.name}`);
                 } else {
                     logger.warn(`The slash command at ${filePath} is missing required properties.`);
@@ -46,6 +49,8 @@ export async function loadSlashCommands(client: Client): Promise<void> {
                 logger.error(`Error loading slash command file ${filePath}:`, fileLoadError);
             }
         }
+
+        setSlashPermissionCatalog(loadedSlashCommands);
 
         // --- 슬래시 커맨드 등록 (전역만) ---
         if (commandDataToRegister.length > 0) {
@@ -87,4 +92,5 @@ export async function loadSlashCommands(client: Client): Promise<void> {
  */
 export function unloadSlashCommands(client: Client): void {
     client.commands?.clear?.();
+    setSlashPermissionCatalog([]);
 }

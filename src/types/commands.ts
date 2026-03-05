@@ -12,10 +12,16 @@ export interface LegacyCommand {
     execute: (message: Message) => Promise<void>;
 }
 
+export interface SlashCommandPermissionMeta {
+    public?: boolean;
+    listable?: boolean;
+}
+
 export interface SlashCommand {
     data:
         | SlashCommandOptionsOnlyBuilder
         | Omit<SlashCommandBuilder, 'addSubcommand' | 'addSubcommandGroup'>;
+    permission?: SlashCommandPermissionMeta;
     execute: (interaction: CommandInteraction, client: Client) => Promise<void>;
 }
 

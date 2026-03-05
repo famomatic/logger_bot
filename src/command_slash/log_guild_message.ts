@@ -1,13 +1,12 @@
 import {
     SlashCommandBuilder,
     CommandInteraction,
-    PermissionsBitField,
     Client,
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import type { SlashCommand } from '../types/commands.js';
 import {
     NoAccessibleGuildChannelsError,
@@ -28,7 +27,6 @@ export const command: SlashCommand = {
                 .setDescription(defaultText('messageCmd.guildId'))
                 .setRequired(true),
         )
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setContexts(InteractionContextType.Guild),
 
     async execute(interaction: CommandInteraction, client: Client) {
@@ -41,16 +39,7 @@ export const command: SlashCommand = {
             });
             return;
         }
-
-        const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
-        const devLevel = config.getDevLevel(interaction.user.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-
-        if (devLevel < 3 && !isAdmin) {
-            await interaction.reply({
-                content: t(locale, 'common.adminOrDevOnly'),
-                flags: MessageFlags.Ephemeral,
-            });
+        if (!(await ensureSlashCommandPermission(interaction))) {
             return;
         }
 

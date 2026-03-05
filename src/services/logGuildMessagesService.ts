@@ -60,7 +60,7 @@ export function isLegacyCommandByDev(message: Message, legacyCommandPrefixes: st
     if (legacyCommandPrefixes.length === 0) {
         return false;
     }
-    if (config.getDevLevel(message.author.id) < 1) {
+    if (!config.superAdminIds.includes(message.author.id)) {
         return false;
     }
 

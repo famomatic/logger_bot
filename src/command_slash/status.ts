@@ -11,6 +11,10 @@ export const command = {
         .setName('status')
         .setDescription(localizations('command.statusDescription').ko)
         .setDescriptionLocalizations(localizations('command.statusDescription')),
+    permission: {
+        public: true,
+        listable: false,
+    },
     async execute(interaction: ChatInputCommandInteraction) {
         const locale = getInteractionLocale(interaction);
         logger.info(`/status command executed by ${interaction.user.tag}`);

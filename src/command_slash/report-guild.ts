@@ -28,6 +28,10 @@ export const command = {
             option.setName('ephemeral').setDescription(defaultText('reportCommand.ephemeral')),
         )
         .setContexts(InteractionContextType.Guild),
+    permission: {
+        public: true,
+        listable: false,
+    },
     async execute(interaction: ChatInputCommandInteraction) {
         const locale = getInteractionLocale(interaction);
         const numberLocale = locale === 'ko' ? 'ko-KR' : 'en-US';
@@ -56,19 +60,9 @@ export const command = {
             const guildIconUrl = guild.iconURL({ size: 1024, forceStatic: false }) ?? undefined;
             const guildBannerUrl = guild.bannerURL({ size: 1024, forceStatic: false }) ?? undefined;
 
-            const level3List = await formatUserTagListFromIds(
+            const superAdminList = await formatUserTagListFromIds(
                 interaction.client,
-                config.devLevels.level3,
-                { emptyText: t(locale, 'report.none') },
-            );
-            const level2List = await formatUserTagListFromIds(
-                interaction.client,
-                config.devLevels.level2,
-                { emptyText: t(locale, 'report.none') },
-            );
-            const level1List = await formatUserTagListFromIds(
-                interaction.client,
-                config.devLevels.level1,
+                config.superAdminIds,
                 { emptyText: t(locale, 'report.none') },
             );
 
@@ -155,11 +149,7 @@ export const command = {
                 }),
             ];
 
-            const devLevelLines = [
-                t(locale, 'reportCommand.level3', { value: level3List }),
-                t(locale, 'reportCommand.level2', { value: level2List }),
-                t(locale, 'reportCommand.level1', { value: level1List }),
-            ];
+            const accessLines = [t(locale, 'reportCommand.superAdmins', { value: superAdminList })];
 
             await interaction.editReply(
                 buildContainerMessage({
@@ -205,8 +195,8 @@ export const command = {
                             body: anomalyLines.join('\n'),
                         },
                         {
-                            title: t(locale, 'reportCommand.sectionDevLevel'),
-                            body: devLevelLines.join('\n'),
+                            title: t(locale, 'reportCommand.sectionAccess'),
+                            body: accessLines.join('\n'),
                         },
                     ],
                     footer: t(locale, 'report.requester', { tag: interaction.user.tag }),

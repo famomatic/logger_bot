@@ -40,9 +40,9 @@ const event = {
         }
 
         // --- 레거시 명령어 처리 ---
-        const devLevel = config.getDevLevel(message.author.id);
+        const isSuperAdmin = config.superAdminIds.includes(message.author.id);
         if (
-            devLevel >= 1 &&
+            isSuperAdmin &&
             message.content.startsWith(BOT_PREFIX) &&
             legacyCommands &&
             legacyCommands.size > 0

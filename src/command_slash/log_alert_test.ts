@@ -2,14 +2,13 @@ import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
     MessageFlags,
-    PermissionsBitField,
     ChannelType,
     GuildTextBasedChannel,
     InteractionContextType,
 } from 'discord.js';
-import { config } from '../config/config.js';
 import { categoryEventMap } from '../utils/alertManager.js';
 import { logger } from '../utils/logger.js';
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
 const choices = Object.keys(categoryEventMap)
@@ -52,15 +51,7 @@ export const command = {
             });
             return;
         }
-
-        const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
-        const devLevel = config.getDevLevel(interaction.user.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-        if (devLevel < 2 && !isAdmin) {
-            await interaction.reply({
-                content: t(locale, 'common.level2OrAdminOnly'),
-                flags: MessageFlags.Ephemeral,
-            });
+        if (!(await ensureSlashCommandPermission(interaction))) {
             return;
         }
 

@@ -93,6 +93,143 @@ export async function unauthorizeGuildId(guildId: string): Promise<void> {
     }
 }
 
+export interface CommandPermissionRow {
+    guildId: string;
+    commandName: string;
+    userId: string;
+}
+
+/**
+ * 명령어별 사용자 허용 권한을 추가합니다.
+ */
+export async function grantCommandPermission(
+    guildId: string,
+    commandName: string,
+    userId: string,
+): Promise<void> {
+    try {
+        await pool.query(
+            `
+            INSERT INTO command_permissions (guild_id, command_name, user_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (guild_id, command_name, user_id) DO NOTHING
+            `,
+            [guildId, commandName, userId],
+        );
+    } catch (error) {
+        logger.error(
+            `Failed to grant command permission guild=${guildId} command=${commandName} user=${userId}:`,
+            error,
+        );
+        throw error;
+    }
+}
+
+/**
+ * 명령어별 사용자 허용 권한을 제거합니다.
+ */
+export async function revokeCommandPermission(
+    guildId: string,
+    commandName: string,
+    userId: string,
+): Promise<void> {
+    try {
+        await pool.query(
+            `DELETE FROM command_permissions WHERE guild_id = $1 AND command_name = $2 AND user_id = $3`,
+            [guildId, commandName, userId],
+        );
+    } catch (error) {
+        logger.error(
+            `Failed to revoke command permission guild=${guildId} command=${commandName} user=${userId}:`,
+            error,
+        );
+        throw error;
+    }
+}
+
+/**
+ * 사용자가 길드에서 특정 명령어 실행 권한을 갖는지 확인합니다.
+ */
+export async function hasCommandPermission(
+    guildId: string,
+    commandName: string,
+    userId: string,
+): Promise<boolean> {
+    try {
+        const result = await pool.query<{ exists: boolean }>(
+            `
+            SELECT EXISTS (
+                SELECT 1
+                FROM command_permissions
+                WHERE guild_id = $1 AND command_name = $2 AND user_id = $3
+            ) AS exists
+            `,
+            [guildId, commandName, userId],
+        );
+        return result.rows[0]?.exists === true;
+    } catch (error) {
+        logger.error(
+            `Failed to check command permission guild=${guildId} command=${commandName} user=${userId}:`,
+            error,
+        );
+        return false;
+    }
+}
+
+/**
+ * 특정 사용자가 길드에서 허용된 명령어 목록을 조회합니다.
+ */
+export async function listCommandPermissionsByUser(
+    guildId: string,
+    userId: string,
+): Promise<string[]> {
+    try {
+        const result = await pool.query<{ command_name: string }>(
+            `
+            SELECT command_name
+            FROM command_permissions
+            WHERE guild_id = $1 AND user_id = $2
+            ORDER BY command_name ASC
+            `,
+            [guildId, userId],
+        );
+        return result.rows.map((row) => row.command_name);
+    } catch (error) {
+        logger.error(
+            `Failed to list command permissions for user=${userId} in guild=${guildId}:`,
+            error,
+        );
+        return [];
+    }
+}
+
+/**
+ * 특정 명령어를 길드에서 사용할 수 있는 사용자 목록을 조회합니다.
+ */
+export async function listCommandPermissionsByCommand(
+    guildId: string,
+    commandName: string,
+): Promise<string[]> {
+    try {
+        const result = await pool.query<{ user_id: string }>(
+            `
+            SELECT user_id
+            FROM command_permissions
+            WHERE guild_id = $1 AND command_name = $2
+            ORDER BY user_id ASC
+            `,
+            [guildId, commandName],
+        );
+        return result.rows.map((row) => row.user_id);
+    } catch (error) {
+        logger.error(
+            `Failed to list command permissions for command=${commandName} in guild=${guildId}:`,
+            error,
+        );
+        return [];
+    }
+}
+
 // --- Alert Subscriptions ---
 
 /**
@@ -603,6 +740,21 @@ export async function migrate() {
 
         // 다른 테이블 마이그레이션 (예: settings)
         // await client.query(`CREATE TABLE IF NOT EXISTS settings (...)`);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS command_permissions (
+                guild_id VARCHAR(30) NOT NULL,
+                command_name VARCHAR(100) NOT NULL,
+                user_id VARCHAR(30) NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                PRIMARY KEY (guild_id, command_name, user_id)
+            );
+        `);
+        await client.query(
+            `CREATE INDEX IF NOT EXISTS idx_command_permissions_guild_user ON command_permissions (guild_id, user_id);`,
+        );
+        await client.query(
+            `CREATE INDEX IF NOT EXISTS idx_command_permissions_guild_command ON command_permissions (guild_id, command_name);`,
+        );
 
         await client.query('COMMIT');
         logger.info('Database migration check completed successfully.');
