@@ -2,11 +2,10 @@ import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
     MessageFlags,
-    PermissionsBitField,
     InteractionContextType,
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { config } from '../config/config.js';
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { getChannelReport } from '../db/database.js';
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
 import {
@@ -43,15 +42,7 @@ export const command = {
             });
             return;
         }
-
-        const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
-        const devLevel = config.getDevLevel(interaction.user.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-        if (devLevel < 2 && !isAdmin) {
-            await interaction.reply({
-                content: t(locale, 'common.level2OrAdminOnly'),
-                flags: MessageFlags.Ephemeral,
-            });
+        if (!(await ensureSlashCommandPermission(interaction))) {
             return;
         }
 

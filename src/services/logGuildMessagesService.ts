@@ -1,13 +1,13 @@
 import { Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
 import axios from 'axios';
 import { config } from '../config/config.js';
-import { logEvent } from '../db/database.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import type { AttachmentData } from '../types/commands.js';
 import type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
 import type { ErrorWithCode } from '../types/errors.js';
 import type { BuildMessageCreateDataParams, MessageReactionSnapshot } from '../types/messageLog.js';
+import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -60,7 +60,7 @@ export function isLegacyCommandByDev(message: Message, legacyCommandPrefixes: st
     if (legacyCommandPrefixes.length === 0) {
         return false;
     }
-    if (config.getDevLevel(message.author.id) < 1) {
+    if (!config.superAdminIds.includes(message.author.id)) {
         return false;
     }
 

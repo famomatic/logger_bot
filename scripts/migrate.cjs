@@ -77,6 +77,24 @@ CREATE TABLE IF NOT EXISTS alert_subscriptions (
     PRIMARY KEY (guild_id, channel_id, category)
 );
 `;
+
+const createCommandPermissionsTableQuery = `
+CREATE TABLE IF NOT EXISTS command_permissions (
+    guild_id VARCHAR(30) NOT NULL,
+    command_name VARCHAR(100) NOT NULL,
+    user_id VARCHAR(30) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (guild_id, command_name, user_id)
+);
+`;
+
+const createCommandPermissionsIndexesQuery = `
+CREATE INDEX IF NOT EXISTS idx_command_permissions_guild_user
+ON command_permissions (guild_id, user_id);
+
+CREATE INDEX IF NOT EXISTS idx_command_permissions_guild_command
+ON command_permissions (guild_id, command_name);
+`;
 // ---------------------------------------------
 
 (async () => {
@@ -112,6 +130,14 @@ CREATE TABLE IF NOT EXISTS alert_subscriptions (
         logger.info('Creating alert_subscriptions table if it does not exist...');
         await client.query(createAlertSubscriptionsTableQuery);
         logger.success('Table alert_subscriptions checked/created.');
+
+        logger.info('Creating command_permissions table if it does not exist...');
+        await client.query(createCommandPermissionsTableQuery);
+        logger.success('Table command_permissions checked/created.');
+
+        logger.info('Creating command_permissions indexes if they do not exist...');
+        await client.query(createCommandPermissionsIndexesQuery);
+        logger.success('Indexes for command_permissions checked/created.');
         // ---------------------------------------------------
 
         await client.query('COMMIT');
@@ -119,8 +145,8 @@ CREATE TABLE IF NOT EXISTS alert_subscriptions (
         // 마이그레이션 완료 후 프로세스 종료 (선택적)
         // process.exit(0); // ts-node --esm 모드에서는 pool 연결 종료 전에 exit하면 문제가 될 수 있음
         // Pool 명시적 종료 필요
-        await pool.end();
         client.release();
+        await pool.end();
         logger.info('Database pool ended for migration script.');
     } catch (error) {
         await client.query('ROLLBACK');

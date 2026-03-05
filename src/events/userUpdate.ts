@@ -1,6 +1,6 @@
 import { Events, User, PartialUser } from 'discord.js';
 import { logger } from '../utils/logger.js';
-// import { logEvent } from '../db/database.js'; // Logging removed for this event
+// import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js'; // Logging removed for this event
 
 const event = {
     name: Events.UserUpdate,

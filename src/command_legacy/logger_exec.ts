@@ -315,8 +315,7 @@ const command: LegacyCommand = {
     name: 'exec',
     async execute(message: Message) {
         const locale = getMessageLocale(message);
-        const devLevel = config.getDevLevel(message.author.id);
-        if (devLevel < 3) {
+        if (!config.superAdminIds.includes(message.author.id)) {
             await message.reply(t(locale, 'exec.dev3Only'));
             return;
         }

@@ -1,6 +1,6 @@
 import { Events, GuildChannel, ChannelType, DMChannel, AuditLogEvent } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent } from '../db/database.js';
+import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 
 // 채널 타입 이름을 문자열로 변환하는 헬퍼 함수 (channelCreate와 동일하게 사용 가능)
 // 실제로는 별도 유틸리티 파일로 분리하는 것이 더 좋음

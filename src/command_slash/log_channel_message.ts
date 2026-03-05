@@ -9,34 +9,11 @@ import {
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import axios from 'axios';
-import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
-import { logEvent } from '../db/database.js';
-import { storageManager } from '../storage/StorageManager.js';
-import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
-import type { AttachmentData, SlashCommand } from '../types/commands.js';
-import type { MessageReactionSnapshot } from '../types/messageLog.js';
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
+import type { SlashCommand } from '../types/commands.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
-
-async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
-    let lastError: unknown = null;
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            logger.debug(`Downloading attachment: ${url} (try ${attempt}/${maxRetries})`);
-            const res = await axios.get(url, { responseType: 'arraybuffer' });
-            return Buffer.from(res.data);
-        } catch (err) {
-            lastError = err;
-            const errorMessage = err instanceof Error ? err.message : String(err);
-            logger.warn(`Failed to download ${url} on attempt ${attempt}: ${errorMessage}`);
-            if (attempt < maxRetries) {
-                await new Promise((r) => setTimeout(r, 1000 * attempt));
-            }
-        }
-    }
-    throw lastError;
-}
+import { processMessageCreateLog } from '../services/logGuildMessagesService.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -51,7 +28,6 @@ export const command: SlashCommand = {
                 .setDescription(defaultText('messageCmd.channelId'))
                 .setRequired(true),
         )
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setContexts(InteractionContextType.Guild),
 
     async execute(interaction: CommandInteraction, client: Client) {
@@ -64,16 +40,7 @@ export const command: SlashCommand = {
             });
             return;
         }
-
-        const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
-        const devLevel = config.getDevLevel(interaction.user.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-
-        if (devLevel < 3 && !isAdmin) {
-            await interaction.reply({
-                content: t(locale, 'common.adminOrDevOnly'),
-                flags: MessageFlags.Ephemeral,
-            });
+        if (!(await ensureSlashCommandPermission(interaction))) {
             return;
         }
 
@@ -138,77 +105,10 @@ export const command: SlashCommand = {
                     if (message.author.bot) continue;
                     processed++;
 
-                    const processedAttachments: AttachmentData[] = [];
-                    if (message.attachments.size > 0) {
-                        for (const attachment of message.attachments.values()) {
-                            let storagePath: string | null = null;
-                            let downloadError: string | null = null;
-                            if (config.storage.type) {
-                                try {
-                                    const fileBuffer = await downloadWithRetry(attachment.url, 3);
-                                    const relativePath = createAttachmentStoragePath(
-                                        channel.guild.id,
-                                        channel.id,
-                                        message.id,
-                                        attachment.id,
-                                        attachment.name,
-                                    );
-                                    storagePath = await storageManager.upload(
-                                        relativePath,
-                                        fileBuffer,
-                                    );
-                                } catch (error) {
-                                    const err = error as Error;
-                                    downloadError = err.message || 'Unknown error';
-                                    logger.error(
-                                        `${logPrefix} Failed to process attachment ${attachment.id}`,
-                                        err,
-                                    );
-                                }
-                            }
-                            processedAttachments.push({
-                                id: attachment.id,
-                                storagePath,
-                                downloadError,
-                                filename: attachment.name,
-                                size: attachment.size,
-                                contentType: attachment.contentType,
-                                discordUrl: attachment.url,
-                            });
-                        }
-                    }
-
-                    const reactions: MessageReactionSnapshot[] = message.reactions.cache.map(
-                        (r) => ({
-                            emojiName: r.emoji.name,
-                            emojiId: r.emoji.id,
-                            emojiAnimated: r.emoji.animated,
-                            count: r.count,
-                        }),
-                    );
-
-                    const dataToStore = {
-                        messageId: message.id,
-                        content: message.content,
-                        authorTag: message.author.tag,
-                        authorUsername: message.author.username,
-                        attachments: processedAttachments,
-                        stickers: message.stickers.map((s) => ({
-                            id: s.id,
-                            name: s.name,
-                            format: s.format,
-                        })),
-                        reactions: reactions,
-                    };
-
-                    const logged = await logEvent(
-                        'messageCreate',
+                    const logged = await processMessageCreateLog(
                         channel.guild.id,
-                        message.author.id,
                         channel.id,
-                        message.id,
-                        dataToStore,
-                        message.createdAt,
+                        message,
                     );
                     if (logged) newlyLogged++;
                 }

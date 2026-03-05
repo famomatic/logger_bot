@@ -17,6 +17,10 @@ export const command = {
         .setName('ping')
         .setDescription(localizations('command.pingDescription').ko)
         .setDescriptionLocalizations(localizations('command.pingDescription')),
+    permission: {
+        public: true,
+        listable: false,
+    },
     async execute(interaction: ChatInputCommandInteraction) {
         const locale = getInteractionLocale(interaction);
         logger.info(`/ping command executed by ${interaction.user.tag}`);

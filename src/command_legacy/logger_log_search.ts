@@ -1,7 +1,6 @@
 import type { LegacyCommand } from '../types/commands.js';
 import {
     Message,
-    PermissionsBitField,
     ComponentType,
     ChatInputCommandInteraction,
     InteractionEditReplyOptions,
@@ -29,17 +28,15 @@ const command: LegacyCommand = {
     name: 'log-search',
     async execute(message: Message) {
         const locale = getMessageLocale(message);
-        const memberPermissions = message.member?.permissions;
-        const devLevel = config.getDevLevel(message.author.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
+        const isSuperAdmin = config.superAdminIds.includes(message.author.id);
 
         if (!message.guildId) {
             await message.reply({ content: t(locale, 'common.onlyInGuildStrict') });
             return;
         }
 
-        if (devLevel < 2 && !isAdmin) {
-            await message.reply(t(locale, 'common.level2OrAdminOnly'));
+        if (!isSuperAdmin) {
+            await message.reply(t(locale, 'common.devOnly'));
             return;
         }
 
@@ -105,7 +102,11 @@ const command: LegacyCommand = {
         const noOptionsProvidedInitially =
             !userId && !channelId && !startDateString && !endDateString && !eventType;
 
-        const reply = await message.reply(t(locale, 'logSearch.searching'));
+        const reply = await message.reply({
+            flags: MessageFlags.IsComponentsV2,
+            components: [new TextDisplayBuilder().setContent(t(locale, 'logSearch.searching'))],
+            allowedMentions: { parse: [] },
+        });
 
         const pseudoInteraction = {
             client: message.client,

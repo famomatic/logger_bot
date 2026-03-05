@@ -10,6 +10,10 @@ import { loadAlertSubscriptions } from './utils/alertManager.js';
 import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
 import { registerShutdownHandler, requestShutdown } from './utils/shutdownManager.js';
 import { getInteractionLocale, t } from './i18n/index.js';
+import {
+    ensureSlashCommandPermission,
+    logPermissionCheckFailure,
+} from './commandShared/slashPermission.js';
 
 // 로더 임포트
 import { loadLegacyCommands } from './utils/loadLegacyCommands.js';
@@ -81,6 +85,21 @@ async function handleInteraction(interaction: Interaction) {
         return;
     }
     try {
+        try {
+            const allowed = await ensureSlashCommandPermission(interaction);
+            if (!allowed) {
+                return;
+            }
+        } catch (permissionError) {
+            logPermissionCheckFailure(interaction, permissionError);
+            const locale = getInteractionLocale(interaction);
+            await interaction.reply({
+                content: t(locale, 'common.commandError'),
+                ephemeral: true,
+            });
+            return;
+        }
+
         await command.execute(interaction, discordClient); // client 전달
     } catch (error) {
         logger.error(`Error executing slash command ${interaction.commandName}:`, error);

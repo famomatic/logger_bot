@@ -14,7 +14,7 @@ const command: LegacyCommand = {
     name: 'ping',
     async execute(message: Message) {
         const locale = getMessageLocale(message);
-        if (config.getDevLevel(message.author.id) < 1) {
+        if (!config.superAdminIds.includes(message.author.id)) {
             await message.reply(t(locale, 'common.devOnly'));
             return;
         }

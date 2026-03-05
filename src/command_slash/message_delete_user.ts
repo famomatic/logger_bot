@@ -9,9 +9,9 @@ import {
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import type { SlashCommand } from '../types/commands.js';
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 
 // 슬래시 커맨드 정의 및 실행 로직
@@ -40,7 +40,6 @@ export const command: SlashCommand = {
                 .setDescription(defaultText('messageCmd.channelId'))
                 .setRequired(false),
         )
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
         .setContexts(InteractionContextType.Guild),
 
     async execute(interaction: CommandInteraction, client: Client) {
@@ -55,16 +54,7 @@ export const command: SlashCommand = {
             return;
         }
 
-        // 개발자 ID 또는 관리자 권한 확인 (배열 사용)
-        const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>; // inGuild 보장되므로 member는 존재
-        const devLevel = config.getDevLevel(interaction.user.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-
-        if (devLevel < 3 && !isAdmin) {
-            await interaction.reply({
-                content: t(locale, 'common.adminOrDevOnly'),
-                flags: [MessageFlags.Ephemeral],
-            });
+        if (!(await ensureSlashCommandPermission(interaction))) {
             return;
         }
 

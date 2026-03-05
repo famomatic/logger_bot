@@ -13,6 +13,16 @@ export interface LogEventRecord {
     timestamp: Date;
 }
 
+export interface EventLogInput {
+    eventType: string;
+    guildId: string | null | undefined;
+    userId: string | null;
+    channelId: string | null;
+    targetId: string | null;
+    data: Record<string, unknown>;
+    timestamp: Date;
+}
+
 export interface RankedEventType {
     eventType: string;
     count: number;

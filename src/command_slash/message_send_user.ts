@@ -1,14 +1,13 @@
 import {
     SlashCommandBuilder,
     CommandInteraction,
-    PermissionsBitField,
     Client,
     User,
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import type { SlashCommand } from '../types/commands.js';
 import type { ErrorWithCode } from '../types/errors.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
@@ -31,8 +30,7 @@ export const command: SlashCommand = {
                 .setName('content')
                 .setDescription(defaultText('messageCmd.content'))
                 .setRequired(true),
-        )
-        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator) // 관리자만 사용 가능하도록 설정
+        ) // 관리자만 사용 가능하도록 설정
         .setContexts(InteractionContextType.Guild), // 서버 내에서만 사용 가능
 
     async execute(interaction: CommandInteraction, client: Client) {
@@ -47,14 +45,7 @@ export const command: SlashCommand = {
         }
 
         // 개발자 또는 관리자 권한 확인
-        const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
-        const devLevel = config.getDevLevel(interaction.user.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-        if (devLevel < 3 && !isAdmin) {
-            await interaction.reply({
-                content: t(locale, 'common.adminOrDevOnly'),
-                flags: MessageFlags.Ephemeral,
-            });
+        if (!(await ensureSlashCommandPermission(interaction))) {
             return;
         }
 

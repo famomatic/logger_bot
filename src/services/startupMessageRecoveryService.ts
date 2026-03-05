@@ -21,6 +21,9 @@ async function recoverGuildMessages(
     legacyCommandPrefixes: string[],
     maxPagesPerChannel: number,
 ): Promise<RecoverySummary> {
+    logger.info(
+        `[message-recovery] Starting guild recovery guild=${guild.id} name="${guild.name}" maxPagesPerChannel=${maxPagesPerChannel}.`,
+    );
     const checkpoints = await fetchLatestMessageCreateTargetIdsByChannel(guild.id);
     const channels = guild.channels.cache.filter(
         (ch): ch is GuildTextBasedChannel =>
@@ -29,6 +32,9 @@ async function recoverGuildMessages(
             ch.viewable &&
             (ch.permissionsFor(guild.members.me!)?.has('ReadMessageHistory') ?? false),
     );
+    logger.info(
+        `[message-recovery] Guild ${guild.id} has ${channels.size} accessible text channels (checkpoints=${checkpoints.size}).`,
+    );
 
     let channelsProcessed = 0;
     let messagesChecked = 0;
@@ -36,6 +42,9 @@ async function recoverGuildMessages(
     let errors = 0;
 
     for (const channel of channels.values()) {
+        logger.debug(
+            `[message-recovery] Scanning channel guild=${guild.id} channel=${channel.id} checkpoint=${checkpoints.get(channel.id) ?? 'none'}.`,
+        );
         channelsProcessed++;
         const checkpointMessageId = checkpoints.get(channel.id);
         let before: string | undefined = undefined;
@@ -118,6 +127,12 @@ export async function recoverMissedMessagesOnStartup(client: Client): Promise<vo
         : [];
 
     const authorizedGuilds = client.guilds.cache.filter((guild) => isGuildAuthorized(guild.id));
+    logger.info(
+        `[message-recovery] Startup recovery started (authorizedGuilds=${authorizedGuilds.size}, maxPagesPerChannel=${config.messageRecovery.maxPagesPerChannel}).`,
+    );
+    if (authorizedGuilds.size === 0) {
+        logger.info('[message-recovery] No authorized guilds to recover.');
+    }
 
     let guildsProcessed = 0;
     let channelsProcessed = 0;
@@ -131,6 +146,9 @@ export async function recoverMissedMessagesOnStartup(client: Client): Promise<vo
                 guild,
                 legacyCommandPrefixes,
                 config.messageRecovery.maxPagesPerChannel,
+            );
+            logger.info(
+                `[message-recovery] Guild completed guild=${guild.id} channels=${result.channelsProcessed} checked=${result.messagesChecked} recovered=${result.messagesRecovered} errors=${result.errors}.`,
             );
             guildsProcessed += result.guildsProcessed;
             channelsProcessed += result.channelsProcessed;

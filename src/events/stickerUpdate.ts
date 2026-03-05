@@ -1,6 +1,6 @@
 import { Events, Sticker, AuditLogEvent, AuditLogChange } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent } from '../db/database.js';
+import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 
 // 변경된 내용을 사람이 읽기 쉬운 형태로 변환하는 헬퍼 함수 (roleUpdate와 유사)
 function formatStickerChange(change: AuditLogChange): string {

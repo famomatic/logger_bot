@@ -1,6 +1,6 @@
 import { Events, Role, AuditLogEvent } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent, isGuildAuthorized } from '../db/database.js';
+import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
 
 const event = {
     name: Events.GuildRoleCreate,
@@ -11,8 +11,7 @@ const event = {
         const timestamp = role.createdAt ?? new Date();
         let executorId: string | null = null;
 
-        if (!guildId || !isGuildAuthorized(guildId)) {
-            logger.warn(`Unauthorized ${eventType} event logging on guild ${guildId} skipped`);
+        if (!shouldLogForGuild(guildId, eventType)) {
             return;
         }
 

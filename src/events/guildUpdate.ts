@@ -1,6 +1,6 @@
 import { Events, Guild, AuditLogEvent, AuditLogChange } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent } from '../db/database.js';
+import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 
 // 헬퍼 함수: 특정 키 변경에 대한 Audit Log 찾기
 async function findGuildUpdateLog(

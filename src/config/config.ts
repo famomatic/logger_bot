@@ -69,28 +69,10 @@ function loadConfig() {
         webdavUrl = `${protocol}://${webdavHost}${webdavPort ? ':' + webdavPort : ''}`;
     }
 
-    const level1Ids = (process.env.DEV_LVL1_IDS ?? '')
+    const superAdminIds = (process.env.SUPER_ADMIN_IDS ?? '')
         .split(',')
         .map((id) => id.trim())
         .filter((id) => id.length > 0);
-    const level2Ids = (process.env.DEV_LVL2_IDS ?? '')
-        .split(',')
-        .map((id) => id.trim())
-        .filter((id) => id.length > 0);
-    const level3Ids = (process.env.DEV_LVL3_IDS ?? '')
-        .split(',')
-        .map((id) => id.trim())
-        .filter((id) => id.length > 0);
-
-    /**
-     * 사용자 ID를 기준으로 개발자 권한 레벨(0~3)을 판별합니다.
-     */
-    function getDevLevel(userId: string): number {
-        if (level3Ids.includes(userId)) return 3;
-        if (level2Ids.includes(userId)) return 2;
-        if (level1Ids.includes(userId)) return 1;
-        return 0;
-    }
 
     return {
         discordBotToken: process.env.DISCORD_BOT_TOKEN!,
@@ -120,12 +102,7 @@ function loadConfig() {
         },
         sentryDsn: process.env.SENTRY_DSN,
         nodeEnv: process.env.NODE_ENV ?? 'development',
-        devLevels: {
-            level1: level1Ids,
-            level2: level2Ids,
-            level3: level3Ids,
-        },
-        getDevLevel,
+        superAdminIds,
 
         // 통합 스토리지 설정
         storage: {

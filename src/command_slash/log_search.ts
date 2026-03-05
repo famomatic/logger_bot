@@ -1,14 +1,12 @@
 import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
-    PermissionFlagsBits,
     ComponentType,
     MessageComponentInteraction,
     MessageFlags,
-    PermissionsBitField,
 } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { config } from '../config/config.js';
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { getEventTypeChoices, isValidEventType } from '../config/eventsConfig.js';
 import { parseDateString, fetchAndDisplayLogs } from '../commandShared/logSearchShared.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
@@ -20,7 +18,6 @@ export const command = {
     data: new SlashCommandBuilder()
         .setName('log-search')
         .setDescription(defaultText('logSearch.description'))
-        .setDefaultMemberPermissions(PermissionFlagsBits.ViewAuditLog)
         .addUserOption((option) =>
             option
                 .setName('user')
@@ -61,15 +58,7 @@ export const command = {
             });
             return;
         }
-
-        const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
-        const devLevel = config.getDevLevel(interaction.user.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-        if (devLevel < 2 && !isAdmin) {
-            await interaction.reply({
-                content: t(locale, 'common.level2OrAdminOnly'),
-                flags: MessageFlags.Ephemeral,
-            });
+        if (!(await ensureSlashCommandPermission(interaction))) {
             return;
         }
 

@@ -1,4 +1,4 @@
-import { Message, PermissionsBitField } from 'discord.js';
+import { Message } from 'discord.js';
 import { config } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import type { ClientWithLegacyCommands, LegacyCommand } from '../types/commands.js';
@@ -19,11 +19,8 @@ const command: LegacyCommand = {
             return;
         }
 
-        const memberPermissions = message.member?.permissions;
-        const devLevel = config.getDevLevel(message.author.id);
-        const isAdmin = memberPermissions?.has(PermissionsBitField.Flags.Administrator);
-        if (devLevel < 3 && !isAdmin) {
-            await message.reply(t(locale, 'common.adminOrDevOnly'));
+        if (!config.superAdminIds.includes(message.author.id)) {
+            await message.reply(t(locale, 'common.devOnly'));
             return;
         }
 

@@ -1,6 +1,6 @@
 import { Events, VoiceState, AuditLogEvent, Guild, AuditLogChange, User } from 'discord.js';
 import { logger } from '../utils/logger.js';
-import { logEvent } from '../db/database.js';
+import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 
 async function logVoiceEvent(
     eventType: string,

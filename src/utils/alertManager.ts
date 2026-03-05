@@ -10,7 +10,11 @@ import {
 import type { AlertSubscription } from '../types/alerts.js';
 import { resolveLocale } from '../i18n/index.js';
 
-const subscriptions: AlertSubscription[] = [];
+const subscriptions = new Map<string, AlertSubscription>();
+
+function subscriptionKey(guildId: string, category: string, channelId: string): string {
+    return `${guildId}:${category}:${channelId}`;
+}
 
 /**
  * 이벤트 카테고리별 DB 이벤트 타입 목록 매핑입니다.
@@ -29,18 +33,20 @@ export const categoryEventMap: Record<string, string[]> = (() => {
  */
 export async function loadAlertSubscriptions(): Promise<void> {
     try {
+        subscriptions.clear();
         const rows = await fetchAlertSubscriptions();
         for (const row of rows) {
             const types = categoryEventMap[row.category];
             if (!types) continue;
-            subscriptions.push({
+            const key = subscriptionKey(row.guild_id, row.category, row.channel_id);
+            subscriptions.set(key, {
                 guildId: row.guild_id,
                 channelId: row.channel_id,
                 category: row.category,
                 eventTypes: types,
             });
         }
-        logger.info(`Loaded ${subscriptions.length} alert subscriptions.`);
+        logger.info(`Loaded ${subscriptions.size} alert subscriptions.`);
     } catch (err) {
         logger.error('Failed to load alert subscriptions:', err);
     }
@@ -52,7 +58,11 @@ export async function loadAlertSubscriptions(): Promise<void> {
 export function addSubscription(guildId: string, category: string, channelId: string): boolean {
     const types = categoryEventMap[category];
     if (!types) return false;
-    subscriptions.push({ guildId, channelId, category, eventTypes: types });
+    const key = subscriptionKey(guildId, category, channelId);
+    if (subscriptions.has(key)) {
+        return true;
+    }
+    subscriptions.set(key, { guildId, channelId, category, eventTypes: types });
     addAlertSubscription(guildId, category, channelId).catch((err) => {
         logger.error('Failed to persist alert subscription:', err);
     });
@@ -63,11 +73,9 @@ export function addSubscription(guildId: string, category: string, channelId: st
  * 길드/카테고리/채널 기준 알림 구독을 제거하고 DB에 반영합니다.
  */
 export function removeSubscription(guildId: string, category: string, channelId: string): boolean {
-    const index = subscriptions.findIndex(
-        (s) => s.guildId === guildId && s.channelId === channelId && s.category === category,
-    );
-    if (index === -1) return false;
-    subscriptions.splice(index, 1);
+    const key = subscriptionKey(guildId, category, channelId);
+    if (!subscriptions.has(key)) return false;
+    subscriptions.delete(key);
     removeAlertSubscription(guildId, category, channelId).catch((err) => {
         logger.error('Failed to remove alert subscription:', err);
     });
@@ -87,7 +95,7 @@ export async function dispatchAlert(
     timestamp: Date,
     client: Client,
 ) {
-    for (const sub of subscriptions) {
+    for (const sub of subscriptions.values()) {
         if (sub.guildId !== guildId) continue;
         if (!sub.eventTypes.includes(eventType)) continue;
         try {
