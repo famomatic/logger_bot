@@ -5,6 +5,8 @@
 - Before answering implementation/design/bug questions, inspect the relevant source files first, then respond.
 - Do not answer based on assumptions when code can be checked in-repo.
 - If context is unclear, locate related modules with search (`rg`) and verify current behavior before proposing changes.
+- Always start work by creating and updating a plan with `functions.update_plan`.
+- For code edits, use `functions.apply_patch` whenever possible.
 
 ## Project Structure
 
@@ -44,12 +46,16 @@
 ## Coding Style & Naming
 
 - TypeScript strict mode is enabled; keep types explicit and safe.
-- 2-space indentation.
+- Follow the repository Prettier config in `.prettierrc` (4-space indentation, single quotes, semicolons, trailing commas, `printWidth: 100`, `endOfLine: lf`).
 - Avoid `any` (ESLint error). Prefer narrowing/type guards.
 - `@ts-ignore`, `@ts-nocheck`, `@ts-expect-error` are disallowed by lint rules.
-- Existing file naming is mixed by domain. Commands/events commonly use `snake_case` filenames.
-- Shared/utils/config/services commonly use `camelCase`.
-- Keep naming consistent with the folder you are editing instead of mass-renaming.
+- Keep file naming consistent with each directory's current pattern:
+- `src/command_slash/`, `src/command_legacy/`: primarily `snake_case` (some slash commands also use hyphenated names such as `report-guild.ts`).
+- `src/events/`: `camelCase` event filenames (for example `messageCreate.ts`, `voiceStateUpdate.ts`).
+- `src/utils/`, `src/services/`, `src/config/`, `src/queue/`, `src/commandShared/`: mostly `camelCase`.
+- `src/storage/providers/`: `PascalCase` provider class filenames.
+- `src/types/`: mostly `camelCase` with occasional kebab-case `.d.ts` files; match existing local convention.
+- Do not mass-rename files only for style consistency.
 
 ## Module Contracts (Important)
 
@@ -61,7 +67,7 @@
 ## Testing & Verification
 
 - There is currently no stable `npm test` script in `package.json`.
-- Minimum verification for changes: `npm run build` and `npm run lint`.
+- Required verification for changes: always run `npm run build`, `npm run lint`, and `npm run format`.
 - For risky logic changes, add focused tests under `src/**/__tests__` and document how to run them.
 
 ## PR / Commit Expectations

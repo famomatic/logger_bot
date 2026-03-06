@@ -1,80 +1,57 @@
-<div style="display: flex; justify-content: center; gap: 1rem; margin-top: 20px;">
-  <a href="/README.ko.md" style="text-decoration: none; cursor: pointer; font-weight: bold; color: inherit;">한국어</a>
-  <a href="/README.md" style="text-decoration: none; cursor: pointer; font-weight: bold; color: inherit;">English</a>
-</div>
+[한국어](./README.ko.md) | [English](./README.md)
 
 # Discord Logger Bot
 
-A TypeScript Discord bot that logs server activity to PostgreSQL. The bot can store attachments via WebDAV and exposes several slash commands for managing messages and searching the logs.
+Production-focused Discord logging bot built with TypeScript + Discord.js v14.  
+It captures high-volume guild events, stores them in PostgreSQL, and provides operational slash commands for search, export, alerts, reporting, and moderation workflows.
 
-## Features
+## Highlights
 
-- **Comprehensive logging** of messages, reactions, member events, voice events, roles, channels, threads and more.
-- **PostgreSQL storage** with per-guild partitions and duplicate prevention.
-- **Slash commands** for sending or deleting messages, bulk importing history and searching logs with filters.
-- **Legacy commands** (`logger ping`, `logger status`) for users with developer levels.
-- **WebDAV integration** to save message attachments outside the database.
-- **Sentry support** for error reporting.
-- Written in **TypeScript** using Discord.js v14.
+- Full-spectrum event logging: messages, edits/deletes, reactions, members, roles, channels, threads, voice, invites, scheduled events, stickers, and more.
+- PostgreSQL-first architecture with guild-aware storage patterns and duplicate-safe ingestion.
+- Queue-backed ingestion with optional Redis buffering for burst traffic.
+- Startup message recovery to backfill missed `messageCreate` logs after downtime.
+- Powerful slash command set:
+- Log operations: `log-search`, `log-export`, `log-alert-*`
+- Message operations: `message-send-*`, `message-delete-*`, `log-*-messages`
+- Reporting: `report-guild`, `report-channel`, `report-user`
+- Ops/admin: `status`, `reload`, `perm`
+- Multi-backend attachment storage: `local`, `webdav`, `s3`, `smb`.
+- Runtime safeguards: command permission checks, authorized-guild enforcement, graceful shutdown, and Sentry support.
+- Built-in i18n resources (`en`, `ko`).
 
-## Getting Started
+## Quick Start
 
-1. Install dependencies:
-    ```bash
-    npm install
-    ```
-2. Build the project:
-    ```bash
-    npm run build
-    ```
-3. Configure environment variables based on `.env.example`.
-4. Run database migrations:
-    ```bash
-    npm run db:migrate
-    ```
-5. Start the bot:
-    ```bash
-    npm start
-    ```
-6. The bot automatically handles sharding when started:
-    ```bash
-    npm start
-    ```
+1. Install dependencies.
+   ```bash
+   npm install
+   ```
+2. Create `.env` from `.env.example` and fill in required values.
+   ```bash
+   cp .env.example .env
+   ```
+3. Initialize or migrate DB schema.
+   ```bash
+   npm run db:setup
+   npm run db:migrate
+   ```
+4. Build and run.
+   ```bash
+   npm run build
+   npm start
+   ```
 
-## Environment Variables
+## Development Commands
 
-Key variables used by the bot:
+- `npm run dev`: build then run in dev mode.
+- `npm run dev:build:watch`: TypeScript watch build.
+- `npm run dev:run:watch`: watch and restart compiled runtime.
+- `npm run lint`: run ESLint.
+- `npm run format`: apply Prettier formatting.
+- `npm run type`: TypeScript type-check only.
+- `npm run verify:release`: strict release gate (lint/type/build/audit checks).
 
-```dotenv
-DISCORD_BOT_TOKEN=
-DISCORD_CLIENT_ID=
-BOT_DB_NAME=
-BOT_DB_USER=
-BOT_DB_PASSWORD=
-PG_HOST=
-PG_PORT=
-REDIS_ENABLED=
-REDIS_HOST=
-REDIS_PORT=
-REDIS_DB=
-REDIS_PASSWORD=
-REDIS_QUEUE_NAME=
-LOG_QUEUE_BATCH_SIZE=
-LOG_QUEUE_FLUSH_INTERVAL_MS=
-LOG_QUEUE_MAX_RETRIES=
-WEBDAV_HOST=
-WEBDAV_PORT=
-WEBDAV_HTTPS=
-WEBDAV_USERNAME=
-WEBDAV_PASSWORD=
-WEBDAV_BASE_PATH=
-SENTRY_DSN=
-DEV_LVL1_IDS=
-DEV_LVL2_IDS=
-DEV_LVL3_IDS=
-```
-
-See `.env.example` for the full list.
+Environment variable details are intentionally maintained only in `.env.example`.
 
 ## License
 
