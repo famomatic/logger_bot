@@ -122,7 +122,7 @@ export const command = {
 
         if (!canManagePermissions(interaction)) {
             await interaction.reply({
-                content: t(locale, 'common.adminOnly'),
+                content: t(locale, 'common.devOnly'),
                 flags: MessageFlags.Ephemeral,
             });
             return;

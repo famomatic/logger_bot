@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, MessageFlags, PermissionsBitField } from 'discord.js';
+import { ChatInputCommandInteraction, MessageFlags } from 'discord.js';
 import { config } from '../config/config.js';
 import { hasCommandPermission } from '../db/database.js';
 import { getInteractionLocale, t } from '../i18n/index.js';
@@ -38,13 +38,8 @@ export function isSuperAdmin(userId: string): boolean {
     return config.superAdminIds.includes(userId);
 }
 
-function hasAdminPermission(interaction: ChatInputCommandInteraction): boolean {
-    const memberPermissions = interaction.member?.permissions as Readonly<PermissionsBitField>;
-    return memberPermissions?.has(PermissionsBitField.Flags.Administrator) ?? false;
-}
-
 export function canManagePermissions(interaction: ChatInputCommandInteraction): boolean {
-    return isSuperAdmin(interaction.user.id) || hasAdminPermission(interaction);
+    return isSuperAdmin(interaction.user.id);
 }
 
 export async function ensureSlashCommandPermission(
@@ -71,7 +66,7 @@ export async function ensureSlashCommandPermission(
             return true;
         }
         await interaction.reply({
-            content: t(locale, 'common.adminOnly'),
+            content: t(locale, 'common.devOnly'),
             flags: MessageFlags.Ephemeral,
         });
         return false;
@@ -81,7 +76,7 @@ export async function ensureSlashCommandPermission(
         return true;
     }
 
-    if (isSuperAdmin(interaction.user.id) || hasAdminPermission(interaction)) {
+    if (isSuperAdmin(interaction.user.id)) {
         return true;
     }
 

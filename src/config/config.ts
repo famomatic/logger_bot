@@ -42,6 +42,23 @@ function parseInteger(input: string | undefined, fallback: number): number {
 }
 
 /**
+ * 불리언 환경변수를 파싱하고 값이 없으면 기본값을 반환합니다.
+ */
+function parseBoolean(input: string | undefined, fallback: boolean): boolean {
+    if (!input) {
+        return fallback;
+    }
+    const normalized = input.trim().toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'yes') {
+        return true;
+    }
+    if (normalized === 'false' || normalized === '0' || normalized === 'no') {
+        return false;
+    }
+    return fallback;
+}
+
+/**
  * 환경변수에서 런타임 설정을 구성하고 필수값 누락 시 예외를 던집니다.
  */
 function loadConfig() {
@@ -73,6 +90,9 @@ function loadConfig() {
         .split(',')
         .map((id) => id.trim())
         .filter((id) => id.length > 0);
+    const nodeEnv = process.env.NODE_ENV ?? 'development';
+    const dbSsl = parseBoolean(process.env.PG_SSL, nodeEnv === 'production');
+    const dbSslRejectUnauthorized = parseBoolean(process.env.PG_SSL_REJECT_UNAUTHORIZED, true);
 
     return {
         discordBotToken: process.env.DISCORD_BOT_TOKEN!,
@@ -82,6 +102,8 @@ function loadConfig() {
         dbPassword: process.env.BOT_DB_PASSWORD!,
         dbHost: process.env.PG_HOST ?? 'localhost',
         dbPort: parseInt(process.env.PG_PORT ?? '5432', 10),
+        dbSsl,
+        dbSslRejectUnauthorized,
         redis: {
             enabled: process.env.REDIS_ENABLED?.toLowerCase() === 'true',
             host: process.env.REDIS_HOST ?? '127.0.0.1',
@@ -101,7 +123,7 @@ function loadConfig() {
             ),
         },
         sentryDsn: process.env.SENTRY_DSN,
-        nodeEnv: process.env.NODE_ENV ?? 'development',
+        nodeEnv,
         superAdminIds,
 
         // 통합 스토리지 설정

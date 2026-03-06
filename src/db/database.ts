@@ -4,7 +4,6 @@ import { createHash, randomUUID } from 'crypto';
 import { logger } from '../utils/logger.js';
 import dotenv from 'dotenv';
 import { config } from '../config/config.js';
-import { sanitizeObjectStrings } from '../utils/sanitize.js';
 import discordClient from '../utils/discordClient.js';
 import { dispatchAlert } from '../utils/alertManager.js';
 import type { AlertSubscriptionRow } from '../types/alerts.js';
@@ -30,8 +29,7 @@ const pool = new Pool({
     host: config.dbHost,
     port: config.dbPort,
     database: config.dbName,
-    // ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false, // 필요시 SSL 설정 추가
-    ssl: false, // 로컬 개발용 임시
+    ssl: config.dbSsl ? { rejectUnauthorized: config.dbSslRejectUnauthorized } : false,
 });
 
 pool.on('connect', () => {
@@ -435,7 +433,6 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
     ON CONFLICT (guild_id, event_type, target_id) DO NOTHING
     RETURNING id;
   `;
-    const sanitizedData = sanitizeObjectStrings(event.data);
     const normalizedTargetId = normalizeTargetId(event.targetId);
     const values = [
         event.eventType,
@@ -443,7 +440,7 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
         event.userId,
         event.channelId,
         normalizedTargetId,
-        sanitizedData,
+        event.data,
         event.timestamp,
     ];
 
@@ -514,7 +511,7 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
             event.userId,
             event.channelId,
             normalizedTargetId,
-            sanitizeObjectStrings(event.data),
+            event.data,
             event.timestamp,
         );
         return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;

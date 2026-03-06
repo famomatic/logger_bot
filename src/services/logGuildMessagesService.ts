@@ -30,6 +30,8 @@ interface MessageBackfillOutcome {
     failed: boolean;
 }
 
+const BACKFILL_CONCURRENCY = 8;
+
 /**
  * 첨부파일 다운로드를 지수형 대기(1s, 2s, 3s...)로 재시도합니다.
  */
@@ -233,7 +235,7 @@ export async function runGuildMessageBackfill({
                 }
 
                 lastMessageId = messages.lastKey();
-                const tasks: Promise<MessageBackfillOutcome>[] = [];
+                const candidates: Message[] = [];
 
                 for (const message of messages.values()) {
                     uniqueUserIds.add(message.author.id);
@@ -247,29 +249,29 @@ export async function runGuildMessageBackfill({
 
                     processedCount++;
                     channelProcessedCount++;
-
-                    const task = (async (): Promise<MessageBackfillOutcome> => {
-                        try {
-                            const logged = await processMessageCreateLog(
-                                guild.id,
-                                channel.id,
-                                message,
-                            );
-                            return { logged, failed: false };
-                        } catch (logError) {
-                            logger.error(
-                                `Failed to log/check message ${message.id} from channel ${channel.id}:`,
-                                logError,
-                            );
-                            return { logged: false, failed: true };
-                        }
-                    })();
-
-                    tasks.push(task);
+                    candidates.push(message);
                 }
 
-                if (tasks.length > 0) {
-                    const outcomes = await Promise.all(tasks);
+                for (let start = 0; start < candidates.length; start += BACKFILL_CONCURRENCY) {
+                    const chunk = candidates.slice(start, start + BACKFILL_CONCURRENCY);
+                    const outcomes = await Promise.all(
+                        chunk.map(async (message): Promise<MessageBackfillOutcome> => {
+                            try {
+                                const logged = await processMessageCreateLog(
+                                    guild.id,
+                                    channel.id,
+                                    message,
+                                );
+                                return { logged, failed: false };
+                            } catch (logError) {
+                                logger.error(
+                                    `Failed to log/check message ${message.id} from channel ${channel.id}:`,
+                                    logError,
+                                );
+                                return { logged: false, failed: true };
+                            }
+                        }),
+                    );
                     for (const outcome of outcomes) {
                         if (outcome.logged) {
                             newlyLoggedCount++;

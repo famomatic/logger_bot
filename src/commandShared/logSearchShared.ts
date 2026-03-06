@@ -37,6 +37,7 @@ import { renderChannelEvent } from './logSearchShared/renderers/channel.js';
 import { renderThreadEvent } from './logSearchShared/renderers/thread.js';
 import { renderUserEvent } from './logSearchShared/renderers/user.js';
 import { getInteractionLocale, t } from '../i18n/index.js';
+import type { User } from 'discord.js';
 
 /** 로그 검색 명령에서 날짜 파서를 재사용할 수 있도록 re-export 합니다. */
 export { parseDateString } from './logSearchShared/date.js';
@@ -131,25 +132,32 @@ export async function fetchAndDisplayLogs(
         displayableComponents.push(new SeparatorBuilder()); // Add a separator after the summary
         let currentTextSize = summaryMessage.length;
         let logsDisplayed = 0;
+        const userCache = new Map<string, User | null>();
 
-        for (const log of logs) {
+        for (let logIndex = 0; logIndex < logs.length; logIndex++) {
+            const log = logs[logIndex];
             let thumbnailComponent;
-            try {
-                const logUser = log.user_id
-                    ? await interaction.client.users.fetch(log.user_id)
-                    : null;
-                thumbnailComponent = new ThumbnailBuilder({
-                    media: {
-                        url:
-                            logUser?.displayAvatarURL({ forceStatic: false, size: 64 }) ??
-                            `https://cdn.discordapp.com/embed/avatars/${parseInt(log.user_id ?? '0') % 5}.png`,
-                    },
-                });
-            } catch {
-                thumbnailComponent = new ThumbnailBuilder({
-                    media: { url: `https://cdn.discordapp.com/embed/avatars/0.png` },
-                });
+            const fallbackAvatarIndex = Number.parseInt(log.user_id ?? '0', 10) % 5;
+            let logUser: User | null = null;
+            if (log.user_id) {
+                if (userCache.has(log.user_id)) {
+                    logUser = userCache.get(log.user_id) ?? null;
+                } else {
+                    try {
+                        logUser = await interaction.client.users.fetch(log.user_id);
+                        userCache.set(log.user_id, logUser);
+                    } catch {
+                        userCache.set(log.user_id, null);
+                    }
+                }
             }
+            thumbnailComponent = new ThumbnailBuilder({
+                media: {
+                    url:
+                        logUser?.displayAvatarURL({ forceStatic: false, size: 64 }) ??
+                        `https://cdn.discordapp.com/embed/avatars/${Number.isNaN(fallbackAvatarIndex) ? 0 : fallbackAvatarIndex}.png`,
+                },
+            });
 
             const timestampContent = `<t:${Math.floor(new Date(log.timestamp).getTime() / 1000)}:F>`;
             const timestampText = new TextDisplayBuilder().setContent(timestampContent);
@@ -436,7 +444,7 @@ export async function fetchAndDisplayLogs(
                     }
                 }
             }
-            if (logs.indexOf(log) < logs.length - 1) {
+            if (logIndex < logs.length - 1) {
                 displayableComponents.push(new SeparatorBuilder());
             }
         }

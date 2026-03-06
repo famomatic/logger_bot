@@ -44,6 +44,13 @@ export const command: SlashCommand = {
         }
 
         const targetGuildId = interaction.options.getString('guild_id', true);
+        if (targetGuildId !== interaction.guildId) {
+            await interaction.reply({
+                content: t(locale, 'common.commandNotAllowed'),
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
         logger.info(
             `Initiating bulk message logging for guild ${targetGuildId} by ${interaction.user.tag} (${interaction.user.id})`,
         );

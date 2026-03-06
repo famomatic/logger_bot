@@ -49,6 +49,13 @@ export const command: SlashCommand = {
         logger.info(`/message-delete-guild command executed by ${interaction.user.tag}`);
 
         const targetGuildId = interaction.options.getString('guild_id', true);
+        if (targetGuildId !== interaction.guildId) {
+            await interaction.reply({
+                content: t(locale, 'common.commandNotAllowed'),
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
         const logPrefix = '[message-delete-guild]';
 
         // --- 사용자 확인 (버튼 방식) ---
