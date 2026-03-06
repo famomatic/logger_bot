@@ -61,6 +61,13 @@ export const command: SlashCommand = {
         logger.info(`/message-delete-user command executed by ${interaction.user.tag}`);
 
         const targetGuildIdOption = interaction.options.getString('guild_id');
+        if (targetGuildIdOption && targetGuildIdOption !== interaction.guildId) {
+            await interaction.reply({
+                content: t(locale, 'common.commandNotAllowed'),
+                flags: [MessageFlags.Ephemeral],
+            });
+            return;
+        }
         const targetChannelIdOption = interaction.options.getString('channel_id');
         const targetUserId = interaction.options.getString('user_id', true);
 
