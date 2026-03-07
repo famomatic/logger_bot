@@ -88,6 +88,8 @@ export const ko = {
         permListCommandResult: '`{command}` 허용 유저: {users}',
         permUnknownCommand:
             '권한 관리 대상이 아닌 명령어입니다: `{command}`. 사용 가능한 명령어: {available}',
+        logDlqRedriveDescription: '로그 큐 DLQ 항목을 대기열로 되돌립니다.',
+        logDlqRedriveCountDescription: '재처리할 DLQ 항목 수를 지정합니다.',
     },
     logAlert: {
         addDescription: '특정 이벤트 카테고리의 알림을 채널로 전송합니다.',

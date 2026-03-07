@@ -2,6 +2,7 @@ import { WebSocketShardStatus, version as djsVersion } from 'discord.js';
 
 import { buildContainerMessage } from './componentsV2.js';
 import { t } from '../i18n/index.js';
+import { getLogQueueStats } from '../queue/logEventQueue.js';
 import { logger } from '../utils/logger.js';
 
 import type { SupportedLocale } from '../types/i18n.js';
@@ -19,6 +20,9 @@ interface StatusSnapshot {
     memoryRssMb: string;
     memoryHeapTotalMb: string;
     memoryHeapUsedMb: string;
+    queuePending: number | null;
+    queueProcessing: number | null;
+    queueDlq: number | null;
 }
 
 /**
@@ -58,6 +62,7 @@ export async function collectStatusSnapshot(
     }
 
     const memoryUsage = process.memoryUsage();
+    const queueStats = await getLogQueueStats();
 
     return {
         uptime: formatUptime(process.uptime(), locale),
@@ -71,6 +76,9 @@ export async function collectStatusSnapshot(
         memoryRssMb: (memoryUsage.rss / 1024 / 1024).toFixed(2),
         memoryHeapTotalMb: (memoryUsage.heapTotal / 1024 / 1024).toFixed(2),
         memoryHeapUsedMb: (memoryUsage.heapUsed / 1024 / 1024).toFixed(2),
+        queuePending: queueStats?.pending ?? null,
+        queueProcessing: queueStats?.processing ?? null,
+        queueDlq: queueStats?.dlq ?? null,
     };
 }
 
@@ -107,7 +115,10 @@ export function buildStatusReply(
                 body:
                     `RSS: ${snapshot.memoryRssMb} MB\n` +
                     `Heap Total: ${snapshot.memoryHeapTotalMb} MB\n` +
-                    `Heap Used: ${snapshot.memoryHeapUsedMb} MB`,
+                    `Heap Used: ${snapshot.memoryHeapUsedMb} MB\n` +
+                    `Queue Pending: ${snapshot.queuePending ?? 'N/A'}\n` +
+                    `Queue Processing: ${snapshot.queueProcessing ?? 'N/A'}\n` +
+                    `Queue DLQ: ${snapshot.queueDlq ?? 'N/A'}`,
             },
             {
                 title: t(locale, 'status.guildStats'),

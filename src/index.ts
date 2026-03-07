@@ -9,7 +9,7 @@ import { destroyDatabase, loadAuthorizedGuildIds, testDatabaseConnection } from 
 import { getInteractionLocale, t } from './i18n/index.js';
 import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
 import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';
-import { loadAlertSubscriptions } from './utils/alertManager.js';
+import { flushAlertDispatchQueue, loadAlertSubscriptions } from './utils/alertManager.js';
 import { destroyDiscordClient, discordClient } from './utils/discordClient.js';
 import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
 import { loadEvents } from './utils/loadEvents.js';
@@ -140,6 +140,7 @@ function setupGracefulShutdown() {
             logger.error('Shutdown triggered by fatal error:', error);
         }
         try {
+            await flushAlertDispatchQueue();
             await shutdownLogQueue();
             await destroyDiscordClient();
             await destroyDatabase();

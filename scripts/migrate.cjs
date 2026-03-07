@@ -1,4 +1,4 @@
-const { default: pool } = require('../dist/db/database.js');
+const { pool } = require('../dist/db/database.js');
 const { logger } = require('../dist/utils/logger.js');
 
 const createEventLogsTableQuery = `
@@ -22,6 +22,75 @@ DROP CONSTRAINT IF EXISTS event_logs_unique_guild_event_target;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_event_logs_message_create_unique_target
 ON event_logs (guild_id, event_type, target_id)
 WHERE event_type = 'messageCreate';
+`;
+
+const dropLegacyEventLogsUniqueConstraintsQuery = `
+DO $$
+DECLARE
+    row_record RECORD;
+BEGIN
+    FOR row_record IN
+        WITH event_log_tables AS (
+            SELECT 'event_logs'::regclass::oid AS oid
+            UNION
+            SELECT inhrelid
+            FROM pg_inherits
+            WHERE inhparent = 'event_logs'::regclass
+        )
+        SELECT
+            ns.nspname AS schema_name,
+            cl.relname AS table_name,
+            con.conname AS constraint_name
+        FROM pg_constraint con
+        JOIN pg_class cl ON cl.oid = con.conrelid
+        JOIN pg_namespace ns ON ns.oid = cl.relnamespace
+        WHERE con.contype = 'u'
+          AND con.conrelid IN (SELECT oid FROM event_log_tables)
+          AND pg_get_constraintdef(con.oid) LIKE 'UNIQUE (guild_id, event_type, target_id)%'
+    LOOP
+        EXECUTE format(
+            'ALTER TABLE %I.%I DROP CONSTRAINT IF EXISTS %I',
+            row_record.schema_name,
+            row_record.table_name,
+            row_record.constraint_name
+        );
+    END LOOP;
+END $$;
+`;
+
+const dropLegacyEventLogsUniqueIndexesQuery = `
+DO $$
+DECLARE
+    row_record RECORD;
+BEGIN
+    FOR row_record IN
+        WITH event_log_tables AS (
+            SELECT 'event_logs'::regclass::oid AS oid
+            UNION
+            SELECT inhrelid
+            FROM pg_inherits
+            WHERE inhparent = 'event_logs'::regclass
+        )
+        SELECT
+            ns.nspname AS schema_name,
+            idx.relname AS index_name
+        FROM pg_index i
+        JOIN pg_class idx ON idx.oid = i.indexrelid
+        JOIN pg_class tbl ON tbl.oid = i.indrelid
+        JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+        WHERE i.indisunique = true
+          AND i.indrelid IN (SELECT oid FROM event_log_tables)
+          AND i.indpred IS NULL
+          AND pg_get_indexdef(idx.oid) LIKE 'CREATE UNIQUE INDEX % ON % (guild_id, event_type, target_id)%'
+          AND NOT EXISTS (
+              SELECT 1
+              FROM pg_constraint c
+              WHERE c.conindid = i.indexrelid
+          )
+    LOOP
+        EXECUTE format('DROP INDEX IF EXISTS %I.%I', row_record.schema_name, row_record.index_name);
+    END LOOP;
+END $$;
 `;
 
 const createIndexesQuery = `
@@ -115,6 +184,14 @@ ON command_permissions (guild_id, command_name);
         logger.info('Aligning event_logs dedup constraints/indexes...');
         await client.query(alignEventLogsDedupQuery);
         logger.success('event_logs dedup constraints/indexes aligned.');
+
+        logger.info('Dropping legacy event_logs UNIQUE constraints on partitions (if any)...');
+        await client.query(dropLegacyEventLogsUniqueConstraintsQuery);
+        logger.success('Legacy event_logs UNIQUE constraints cleanup completed.');
+
+        logger.info('Dropping legacy event_logs UNIQUE indexes on partitions (if any)...');
+        await client.query(dropLegacyEventLogsUniqueIndexesQuery);
+        logger.success('Legacy event_logs UNIQUE indexes cleanup completed.');
 
         logger.info('Creating event_logs indexes if they do not exist...');
         await client.query(createIndexesQuery);

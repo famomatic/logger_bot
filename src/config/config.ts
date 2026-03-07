@@ -46,6 +46,9 @@ interface RuntimeConfig {
         db: number;
         password: string | undefined;
         queueName: string;
+        clearOnStartup: boolean;
+        dlqRedriveOnStartup: boolean;
+        dlqRedriveBatchSize: number;
         batchSize: number;
         flushIntervalMs: number;
         maxRetries: number;
@@ -141,6 +144,12 @@ const buildConfigTemplate = (): RuntimeConfig => {
             db: parseInteger(process.env.REDIS_DB, 0),
             password: process.env.REDIS_PASSWORD,
             queueName: process.env.REDIS_QUEUE_NAME ?? 'logger:events',
+            clearOnStartup: parseBoolean(process.env.REDIS_CLEAR_ON_STARTUP, true),
+            dlqRedriveOnStartup: parseBoolean(process.env.REDIS_DLQ_REDRIVE_ON_STARTUP, false),
+            dlqRedriveBatchSize: Math.max(
+                1,
+                parseInteger(process.env.REDIS_DLQ_REDRIVE_BATCH_SIZE, 100),
+            ),
             batchSize: parseInteger(process.env.LOG_QUEUE_BATCH_SIZE, 100),
             flushIntervalMs: parseInteger(process.env.LOG_QUEUE_FLUSH_INTERVAL_MS, 1000),
             maxRetries: parseInteger(process.env.LOG_QUEUE_MAX_RETRIES, 3),

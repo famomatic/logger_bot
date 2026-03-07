@@ -15,6 +15,23 @@ import type { Client } from 'discord.js';
 const subscriptions = new Map<string, AlertSubscription>();
 const ALERT_DISPATCH_CONCURRENCY = 4;
 const ALERT_DISPATCH_TIMEOUT_MS = 4_000;
+const ALERT_QUEUE_MAX_SIZE = 5_000;
+const ALERT_QUEUE_BATCH_SIZE = 100;
+const ALERT_FLUSH_POLL_MS = 50;
+
+interface AlertDispatchJob {
+    eventType: string;
+    guildId: string;
+    userId: string | null;
+    channelId: string | null;
+    targetId: string | null;
+    data: Record<string, unknown>;
+    timestamp: Date;
+    client: Client;
+}
+
+const dispatchQueue: AlertDispatchJob[] = [];
+let dispatchLoopRunning = false;
 
 function subscriptionKey(guildId: string, category: string, channelId: string): string {
     return `${guildId}:${category}:${channelId}`;
@@ -86,19 +103,47 @@ export function removeSubscription(guildId: string, category: string, channelId:
     return true;
 }
 
-/**
- * 이벤트 타입에 맞는 구독 채널로 로그 알림 메시지를 전송합니다.
- */
-export async function dispatchAlert(
-    eventType: string,
-    guildId: string,
-    userId: string | null,
-    channelId: string | null,
-    targetId: string | null,
-    data: Record<string, unknown>,
-    timestamp: Date,
-    client: Client,
-) {
+function enqueueDispatchJob(job: AlertDispatchJob): boolean {
+    if (dispatchQueue.length >= ALERT_QUEUE_MAX_SIZE) {
+        logger.warn(
+            `Dropping alert dispatch job because queue is full (max=${ALERT_QUEUE_MAX_SIZE}).`,
+        );
+        return false;
+    }
+
+    dispatchQueue.push(job);
+    runDispatchLoop().catch((error) => {
+        logger.error('Alert dispatch loop failed to start:', error);
+    });
+    return true;
+}
+
+async function runDispatchLoop(): Promise<void> {
+    if (dispatchLoopRunning) {
+        return;
+    }
+    dispatchLoopRunning = true;
+
+    try {
+        while (dispatchQueue.length > 0) {
+            const jobs = dispatchQueue.splice(0, ALERT_QUEUE_BATCH_SIZE);
+            await mapWithConcurrency(jobs, ALERT_DISPATCH_CONCURRENCY, async (job) => {
+                await dispatchAlertNow(job);
+            });
+        }
+    } finally {
+        dispatchLoopRunning = false;
+        if (dispatchQueue.length > 0) {
+            runDispatchLoop().catch((error) => {
+                logger.error('Alert dispatch loop restart failed:', error);
+            });
+        }
+    }
+}
+
+async function dispatchAlertNow(job: AlertDispatchJob): Promise<void> {
+    const { eventType, guildId, userId, channelId, targetId, data, timestamp, client } = job;
+
     const targets = [...subscriptions.values()].filter(
         (sub) => sub.guildId === guildId && sub.eventTypes.includes(eventType),
     );
@@ -150,4 +195,45 @@ export async function dispatchAlert(
             logger.error('Failed to dispatch log alert:', err);
         }
     });
+}
+
+/**
+ * 이벤트 타입에 맞는 구독 채널로 로그 알림 전송 작업을 큐에 적재합니다.
+ */
+export function queueAlertDispatch(
+    eventType: string,
+    guildId: string,
+    userId: string | null,
+    channelId: string | null,
+    targetId: string | null,
+    data: Record<string, unknown>,
+    timestamp: Date,
+    client: Client,
+): boolean {
+    return enqueueDispatchJob({
+        eventType,
+        guildId,
+        userId,
+        channelId,
+        targetId,
+        data,
+        timestamp,
+        client,
+    });
+}
+
+/**
+ * 종료 시 큐에 남은 알림 전송 작업의 drain 완료를 대기합니다.
+ */
+export async function flushAlertDispatchQueue(timeoutMs = 5_000): Promise<void> {
+    const startedAt = Date.now();
+    while (dispatchLoopRunning || dispatchQueue.length > 0) {
+        if (Date.now() - startedAt > timeoutMs) {
+            logger.warn(
+                `Timed out while flushing alert dispatch queue (remaining=${dispatchQueue.length}).`,
+            );
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, ALERT_FLUSH_POLL_MS));
+    }
 }

@@ -89,6 +89,8 @@ export const en = {
         permListCommandResult: 'Allowed users for `{command}`: {users}',
         permUnknownCommand:
             'This command is not permission-manageable: `{command}`. Available commands: {available}',
+        logDlqRedriveDescription: 'Move log queue DLQ items back to pending.',
+        logDlqRedriveCountDescription: 'How many DLQ items to redrive.',
     },
     logAlert: {
         addDescription: 'Sends alert messages for a specific event category to a channel.',

@@ -1,5 +1,6 @@
 import { Events, AuditLogEvent } from 'discord.js';
 
+import { mapWithConcurrency } from '../utils/asyncControl.js';
 import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
@@ -8,9 +9,14 @@ import type { Message, PartialMessage, User, GuildAuditLogsEntry } from 'discord
 
 const deleteBuffer: (Message | PartialMessage)[] = [];
 let bufferTimer: NodeJS.Timeout | null = null;
+let bufferDrainRunning = false;
+let droppedDeleteEvents = 0;
 
-async function processBuffer() {
-    const items = deleteBuffer.splice(0);
+const DELETE_BUFFER_MAX_SIZE = 5_000;
+const DELETE_BUFFER_BATCH_SIZE = 500;
+const DELETE_PROCESS_CONCURRENCY_PER_GUILD = 8;
+
+async function processBufferBatch(items: (Message | PartialMessage)[]) {
     const guildMap = new Map<string, (Message | PartialMessage)[]>();
     for (const msg of items) {
         const gid = msg.guild?.id;
@@ -33,8 +39,32 @@ async function processBuffer() {
             logger.error(`Failed to fetch audit logs for guild ${gid}:`, err);
         }
 
-        for (const message of msgs) {
+        await mapWithConcurrency(msgs, DELETE_PROCESS_CONCURRENCY_PER_GUILD, async (message) => {
             await handleDelete(message, fetchedEntries);
+        });
+    }
+}
+
+async function drainDeleteBuffer(): Promise<void> {
+    if (bufferDrainRunning) {
+        return;
+    }
+
+    bufferDrainRunning = true;
+    try {
+        while (deleteBuffer.length > 0) {
+            const items = deleteBuffer.splice(0, DELETE_BUFFER_BATCH_SIZE);
+            await processBufferBatch(items);
+        }
+    } finally {
+        bufferDrainRunning = false;
+        if (deleteBuffer.length > 0) {
+            bufferTimer ??= setTimeout(() => {
+                bufferTimer = null;
+                drainDeleteBuffer().catch((error) => {
+                    logger.error('Failed to drain message delete buffer:', error);
+                });
+            }, 1000);
         }
     }
 }
@@ -119,11 +149,20 @@ const event = {
         if (!message.partial && message.author.bot) {
             return;
         }
+        if (deleteBuffer.length >= DELETE_BUFFER_MAX_SIZE) {
+            droppedDeleteEvents++;
+            if (droppedDeleteEvents % 100 === 1) {
+                logger.warn(
+                    `messageDelete buffer overflow: dropped=${droppedDeleteEvents}, max=${DELETE_BUFFER_MAX_SIZE}`,
+                );
+            }
+            return;
+        }
         deleteBuffer.push(message);
         bufferTimer ??= setTimeout(() => {
             bufferTimer = null;
-            processBuffer().catch((error) => {
-                logger.error('Failed to process message delete buffer:', error);
+            drainDeleteBuffer().catch((error) => {
+                logger.error('Failed to drain message delete buffer:', error);
             });
         }, 1000);
     },

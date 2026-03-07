@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import pkg from 'pg';
 
 import { config } from '../config/config.js';
-import { dispatchAlert } from '../utils/alertManager.js';
+import { queueAlertDispatch } from '../utils/alertManager.js';
 import { discordClient } from '../utils/discordClient.js';
 import { logger } from '../utils/logger.js';
 
@@ -472,7 +472,7 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
         const result = await pool.query(insertQuery, values);
         const inserted = (result.rowCount ?? 0) > 0;
         if (inserted) {
-            dispatchAlert(
+            queueAlertDispatch(
                 event.eventType,
                 event.guildId,
                 event.userId,
@@ -481,9 +481,7 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
                 event.data,
                 event.timestamp,
                 discordClient,
-            ).catch((alertError) => {
-                logger.error('Failed to dispatch alert after single log insert:', alertError);
-            });
+            );
         }
         return inserted;
     } catch (error: unknown) {
@@ -574,7 +572,7 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
         await runBatchInsert(otherEvents, { messageCreateOnly: false });
 
         for (const row of insertedRows) {
-            dispatchAlert(
+            queueAlertDispatch(
                 row.event_type,
                 row.guild_id,
                 row.user_id,
@@ -583,9 +581,7 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
                 row.data,
                 row.timestamp,
                 discordClient,
-            ).catch((alertError) => {
-                logger.error('Failed to dispatch alert after batch log insert:', alertError);
-            });
+            );
         }
 
         return insertedRows.length;
@@ -788,6 +784,85 @@ export async function migrate() {
         await client.query(
             `CREATE INDEX IF NOT EXISTS idx_event_logs_oldcontent_gin ON event_logs USING GIN ((data->>'oldContent') gin_trgm_ops);`,
         );
+
+        // Legacy cleanup:
+        // 과거 스키마에서 남아있을 수 있는 (guild_id, event_type, target_id) 전체 UNIQUE 제약/인덱스를
+        // event_logs 부모/파티션 전체에서 제거합니다.
+        const legacyConstraints = await client.query<{
+            schema_name: string;
+            table_name: string;
+            constraint_name: string;
+        }>(
+            `
+            WITH event_log_tables AS (
+                SELECT 'event_logs'::regclass::oid AS oid
+                UNION
+                SELECT inhrelid
+                FROM pg_inherits
+                WHERE inhparent = 'event_logs'::regclass
+            )
+            SELECT
+                ns.nspname AS schema_name,
+                cl.relname AS table_name,
+                con.conname AS constraint_name
+            FROM pg_constraint con
+            JOIN pg_class cl ON cl.oid = con.conrelid
+            JOIN pg_namespace ns ON ns.oid = cl.relnamespace
+            WHERE con.contype = 'u'
+              AND con.conrelid IN (SELECT oid FROM event_log_tables)
+              AND pg_get_constraintdef(con.oid) LIKE 'UNIQUE (guild_id, event_type, target_id)%'
+            `,
+        );
+
+        for (const row of legacyConstraints.rows) {
+            const qualifiedTable = `${quoteIdentifier(row.schema_name)}.${quoteIdentifier(row.table_name)}`;
+            const constraintName = quoteIdentifier(row.constraint_name);
+            await client.query(
+                `ALTER TABLE ${qualifiedTable} DROP CONSTRAINT IF EXISTS ${constraintName};`,
+            );
+            logger.warn(
+                `Dropped legacy UNIQUE constraint ${row.constraint_name} on ${row.schema_name}.${row.table_name}.`,
+            );
+        }
+
+        const legacyIndexes = await client.query<{
+            schema_name: string;
+            index_name: string;
+            index_def: string;
+        }>(
+            `
+            WITH event_log_tables AS (
+                SELECT 'event_logs'::regclass::oid AS oid
+                UNION
+                SELECT inhrelid
+                FROM pg_inherits
+                WHERE inhparent = 'event_logs'::regclass
+            )
+            SELECT
+                ns.nspname AS schema_name,
+                idx.relname AS index_name,
+                pg_get_indexdef(idx.oid) AS index_def
+            FROM pg_index i
+            JOIN pg_class idx ON idx.oid = i.indexrelid
+            JOIN pg_class tbl ON tbl.oid = i.indrelid
+            JOIN pg_namespace ns ON ns.oid = idx.relnamespace
+            WHERE i.indisunique = true
+              AND i.indrelid IN (SELECT oid FROM event_log_tables)
+              AND i.indpred IS NULL
+              AND pg_get_indexdef(idx.oid) LIKE 'CREATE UNIQUE INDEX % ON % (guild_id, event_type, target_id)%'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pg_constraint c
+                  WHERE c.conindid = i.indexrelid
+              )
+            `,
+        );
+
+        for (const row of legacyIndexes.rows) {
+            const qualifiedIndex = `${quoteIdentifier(row.schema_name)}.${quoteIdentifier(row.index_name)}`;
+            await client.query(`DROP INDEX IF EXISTS ${qualifiedIndex};`);
+            logger.warn(`Dropped legacy UNIQUE index ${row.schema_name}.${row.index_name}.`);
+        }
 
         // 다른 테이블 마이그레이션 (예: settings)
         // await client.query(`CREATE TABLE IF NOT EXISTS settings (...)`);
@@ -1157,6 +1232,7 @@ export async function searchLogs(
         countQueryText += ` AND "timestamp" <= $${countParamIndex}`;
         countQueryParams.push(endDate.toISOString());
         paramIndex++;
+        countParamIndex++;
     }
 
     // 키워드 검색 로직
@@ -1167,7 +1243,11 @@ export async function searchLogs(
             (data->>'newContent') ILIKE $${paramIndex} OR
             (data->>'oldContent') ILIKE $${paramIndex}
         )`;
-        const countKeywordCondition = keywordCondition;
+        const countKeywordCondition = `(
+            (data->>'content') ILIKE $${countParamIndex} OR
+            (data->>'newContent') ILIKE $${countParamIndex} OR
+            (data->>'oldContent') ILIKE $${countParamIndex}
+        )`;
 
         queryText += ` AND ${keywordCondition}`;
         queryParams.push(`%${keyword}%`);
