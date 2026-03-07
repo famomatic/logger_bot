@@ -1,15 +1,19 @@
-import { Message } from 'discord.js';
-import { spawn as spawnChildProcess } from 'child_process';
+import { spawn as spawnChildProcess } from 'node:child_process';
+import nodeProcess from 'node:process';
+
 import { spawn as spawnPty } from 'node-pty';
-import type { IPty } from 'node-pty';
+
+import { config } from '../config/config.js';
+import { defaultText, getMessageLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
 import type { LegacyCommand } from '../types/commands.js';
 import type { SupportedLocale } from '../types/i18n.js';
-import { config } from '../config/config.js';
-import { logger } from '../utils/logger.js';
-import { defaultText, getMessageLocale, t } from '../i18n/index.js';
+import type { Message } from 'discord.js';
+import type { IPty } from 'node-pty';
 
 const MAX_BLOCK_LENGTH = 1800;
-const PASSWORD_PROMPT_REGEX = /(password[^:]*:|sudo:)/i;
+const PASSWORD_PROMPT_REGEX = /(password[^:\n]{0,64}:|sudo:)/i;
 
 interface CommandResult {
     stdout: string;
@@ -20,7 +24,7 @@ interface CommandResult {
 
 function splitAtFirstWhitespace(input: string): { head: string; tail: string | null } {
     const match = /\s/.exec(input);
-    if (match?.index === undefined) {
+    if (!match) {
         return { head: input, tail: null };
     }
     const index = match.index;
@@ -67,18 +71,27 @@ function maskSensitive(text: string, secrets: string[]): string {
 }
 
 function parseDurationToMs(value: string): number | null {
-    const trimmed = value.trim();
-    const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)?$/i.exec(trimmed);
-    if (!match) {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) {
         return null;
     }
 
-    const amount = Number(match[1]);
-    if (Number.isNaN(amount)) {
+    let unit: 'ms' | 's' | 'm' | 'h' = 's';
+    let numericPart = trimmed;
+
+    for (const candidate of ['ms', 's', 'm', 'h'] as const) {
+        if (trimmed.endsWith(candidate)) {
+            unit = candidate;
+            numericPart = trimmed.slice(0, -candidate.length);
+            break;
+        }
+    }
+
+    const amount = Number(numericPart);
+    if (!Number.isFinite(amount) || numericPart.includes(' ')) {
         return null;
     }
 
-    const unit = (match[2] ?? 's').toLowerCase();
     const multiplier = unit === 'ms' ? 1 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 1_000;
 
     return Math.round(amount * multiplier);
@@ -93,7 +106,7 @@ function extractTimeoutOption(
 
     const timeoutMatch = /^--timeout(?:=(\S+)|\s+(\S+))(?:\s+|$)/i.exec(working);
     if (timeoutMatch) {
-        const timeoutValue = timeoutMatch[1] ?? timeoutMatch[2];
+        const timeoutValue = timeoutMatch[1] ? timeoutMatch[1] : timeoutMatch[2];
         if (!timeoutValue) {
             throw new Error('exec.timeoutValueRequired');
         }
@@ -126,7 +139,7 @@ async function fetchSudoPasswordFromCommand(command: string): Promise<string> {
     return new Promise((resolve, reject) => {
         try {
             const child = spawnChildProcess('bash', ['-lc', command], {
-                env: process.env,
+                env: nodeProcess.env,
             });
 
             let stdout = '';
@@ -195,7 +208,7 @@ async function runPtyProcess(
                 name: 'xterm-color',
                 cols: 200,
                 rows: 30,
-                env: options.env ?? process.env,
+                env: options.env ?? nodeProcess.env,
             });
         } catch (error) {
             reject(error instanceof Error ? error : new Error(String(error)));
@@ -276,7 +289,7 @@ async function runBashCommand(
     }
 
     return runPtyProcess('bash', ['-lc', command], {
-        env: process.env,
+        env: nodeProcess.env,
         timeoutMs: options.timeoutMs,
         sudoPassword: containsSudo ? options.sudoPassword : undefined,
         watchForSudo: containsSudo,
@@ -303,7 +316,7 @@ async function runPsqlCommand(
         ],
         {
             env: {
-                ...process.env,
+                ...nodeProcess.env,
                 PGPASSWORD: config.dbPassword,
             },
             timeoutMs: options.timeoutMs,
@@ -349,8 +362,8 @@ const command: LegacyCommand = {
 
         const reply = await message.reply(t(locale, 'exec.running'));
 
-        let timeoutMs = config.execCommandTimeoutMs;
-        let commandPayload = payload;
+        let timeoutMs: number | undefined;
+        let commandPayload: string;
 
         try {
             const timeoutResult = extractTimeoutOption(payload, config.execCommandTimeoutMs);
@@ -431,13 +444,13 @@ const command: LegacyCommand = {
             );
         } catch (error) {
             const err = error as Error;
-            const translatedMessage = err?.message?.startsWith('exec.')
+            const translatedMessage = err.message.startsWith('exec.')
                 ? t(locale, err.message)
-                : err?.message
+                : err.message
                   ? String(err.message)
                   : String(error);
             const messageToSend = maskSensitive(translatedMessage, secrets);
-            const stackToLog = err?.stack ? maskSensitive(String(err.stack), secrets) : undefined;
+            const stackToLog = err.stack ? maskSensitive(String(err.stack), secrets) : undefined;
 
             if (stackToLog) {
                 const sanitizedError = new Error(messageToSend);

@@ -154,6 +154,6 @@ ON command_permissions (guild_id, command_name);
         console.error('❌ Migration Error:', error);
         console.error('❌ Error type:', typeof error);
         console.error('❌ Error keys:', Object.getOwnPropertyNames(error));
-        process.exit(1);
+        throw error;
     }
 })();

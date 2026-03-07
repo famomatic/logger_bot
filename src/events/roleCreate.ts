@@ -1,6 +1,9 @@
-import { Events, Role, AuditLogEvent } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Role } from 'discord.js';
 
 const event = {
     name: Events.GuildRoleCreate,
@@ -8,7 +11,7 @@ const event = {
         const eventType = 'roleCreate';
         const guildId = role.guild.id;
         const targetId = role.id; // 생성된 역할 ID
-        const timestamp = role.createdAt ?? new Date();
+        const timestamp = role.createdAt;
         let executorId: string | null = null;
 
         if (!shouldLogForGuild(guildId, eventType)) {
@@ -24,8 +27,7 @@ const event = {
             const createLog = fetchedLogs.entries.first();
             // Audit Log의 target이 생성된 역할과 일치하는지 확인
             if (
-                createLog &&
-                createLog.target?.id === targetId &&
+                createLog?.target.id === targetId &&
                 Math.abs(Date.now() - createLog.createdTimestamp) < 5000
             ) {
                 executorId = createLog.executor?.id ?? null;
@@ -75,4 +77,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

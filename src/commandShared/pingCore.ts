@@ -1,13 +1,15 @@
 import {
-    Client,
     MessageFlags,
     SeparatorBuilder,
     TextDisplayBuilder,
     WebSocketShardStatus,
 } from 'discord.js';
-import type { PingMetrics } from '../types/ping.js';
-import type { SupportedLocale } from '../types/i18n.js';
+
 import { t } from '../i18n/index.js';
+
+import type { SupportedLocale } from '../types/i18n.js';
+import type { PingMetrics } from '../types/ping.js';
+import type { Client } from 'discord.js';
 
 /**
  * 핑 측정 시작 시 표시할 임시 응답 payload를 생성합니다.

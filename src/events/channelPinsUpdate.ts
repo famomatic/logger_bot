@@ -1,13 +1,16 @@
-import { Events, TextBasedChannel, AuditLogEvent } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { TextBasedChannel } from 'discord.js';
 
 const event = {
     name: Events.ChannelPinsUpdate,
     // time 파라미터는 핀이 마지막으로 업데이트된 시각 (Date)
     async execute(channel: TextBasedChannel, time: Date) {
         // DM 채널 등 길드가 없는 채널은 무시
-        if (!channel.isDMBased() && channel.guild) {
+        if (!channel.isDMBased()) {
             const guild = channel.guild;
             const guildId = guild.id;
             const channelId = channel.id;
@@ -33,7 +36,7 @@ const event = {
                                 entry.action === AuditLogEvent.MessageUnpin) &&
                             entry.extra &&
                             'channel' in entry.extra &&
-                            entry.extra.channel?.id === channelId,
+                            entry.extra.channel.id === channelId,
                     )
                     .sort((a, b) => b.createdTimestamp - a.createdTimestamp) // 최신 로그부터
                     .find((entry) => Math.abs(timestamp.getTime() - entry.createdTimestamp) < 5000); // 5초 이내
@@ -105,4 +108,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

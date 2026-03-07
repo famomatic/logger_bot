@@ -622,8 +622,3 @@ export const locale = {
     },
     messages: ko,
 } as const satisfies LocaleDefinition;
-
-/**
- * 한국어 로케일 번들의 기본 export 입니다.
- */
-export default locale;

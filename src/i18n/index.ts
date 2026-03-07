@@ -1,7 +1,10 @@
 import { Locale, type Message } from 'discord.js';
-import enLocale from './locales/en.js';
-import koLocale from './locales/ko.js';
+
+import { locale as enLocale } from './locales/en.js';
+import { locale as koLocale } from './locales/ko.js';
+
 import type { LocaleDefinition, Primitive, SupportedLocale } from '../types/i18n.js';
+
 export type { SupportedLocale } from '../types/i18n.js';
 
 const localeDefinitions: LocaleDefinition[] = [koLocale, enLocale];
@@ -89,7 +92,7 @@ export function getMessageLocale(message: Pick<Message, 'guild'>): SupportedLoca
 export function t(
     locale: SupportedLocale,
     key: string,
-    params: Record<string, Primitive> = {},
+    params: Partial<Record<string, Primitive>> = {},
 ): string {
     const current = localesByCode.get(locale) ?? localesByCode.get(fallbackLocaleCode);
     const fallback = localesByCode.get(fallbackLocaleCode);

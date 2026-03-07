@@ -1,17 +1,19 @@
 import {
     SlashCommandBuilder,
-    ChatInputCommandInteraction,
     MessageFlags,
     AttachmentBuilder,
     InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
+
+import { parseDateString } from '../commandShared/logSearchShared.js';
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { getEventTypeChoices, isValidEventType } from '../config/eventsConfig.js';
-import { parseDateString } from '../commandShared/logSearchShared.js';
 import { searchLogs } from '../db/database.js';
-import type { LogEntry } from '../types/logs.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { LogEntry } from '../types/logs.js';
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 type ExportFormat = 'json' | 'csv';
 const EXPORT_PAGE_SIZE = 500;
@@ -47,7 +49,7 @@ function toCsv(rows: LogEntry[]): string {
             row.channel_id ?? '',
             row.user_id ?? '',
             row.target_id ?? '',
-            JSON.stringify(row.event_data ?? {}),
+            JSON.stringify(row.event_data),
         ];
         return columns.map(escapeCsvCell).join(',');
     });

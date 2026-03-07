@@ -1,9 +1,8 @@
-import type { JsonValue } from '../../../types/json.js';
-import type { SupportedLocale } from '../../../types/i18n.js';
-import { t } from '../../../i18n/index.js';
-import { escapeCodeBlockContent } from '../../../utils/sanitize.js';
+import { t, escapeCodeBlockContent } from '../deps.js';
 import { formatStickerSummary, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
+
+import type { SupportedLocale, JsonValue } from '../deps.js';
 
 interface RenderMessageEventParams {
     eventType: string;

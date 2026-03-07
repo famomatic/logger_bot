@@ -1,17 +1,16 @@
 import {
     SlashCommandBuilder,
-    CommandInteraction,
     PermissionsBitField,
-    Client,
-    GuildTextBasedChannel,
-    Channel,
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
+
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
-import type { SlashCommand } from '../types/commands.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { SlashCommand } from '../types/commands.js';
+import type { CommandInteraction, Client, GuildTextBasedChannel, Channel } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -69,7 +68,7 @@ export const command: SlashCommand = {
             return;
         }
 
-        let targetChannel: Channel | null = null;
+        let targetChannel: Channel | null;
         try {
             // 채널 ID로 채널 객체 가져오기
             targetChannel = await client.channels.fetch(targetChannelId);
@@ -82,7 +81,6 @@ export const command: SlashCommand = {
             });
             return;
         }
-
         if (!targetChannel) {
             await interaction.editReply({
                 content: t(locale, 'messageCmd.channelNotFound', { channelId: targetChannelId }),
@@ -103,13 +101,6 @@ export const command: SlashCommand = {
         const textChannel = targetChannel as GuildTextBasedChannel;
         let botPermissions;
         try {
-            // 채널이 속한 길드 정보가 필요
-            if (!textChannel.guild) {
-                await interaction.editReply({
-                    content: t(locale, 'messageCmd.cannotGetGuildFromChannel'),
-                });
-                return;
-            }
             const botMember = await textChannel.guild.members.fetch(client.user!.id);
             botPermissions = textChannel.permissionsFor(botMember);
         } catch (permError) {
@@ -123,7 +114,7 @@ export const command: SlashCommand = {
             return;
         }
 
-        if (!botPermissions?.has(PermissionsBitField.Flags.SendMessages)) {
+        if (!botPermissions.has(PermissionsBitField.Flags.SendMessages)) {
             await interaction.editReply({
                 content: t(locale, 'messageCmd.noSendPermission', {
                     channel: textChannel.name,
@@ -134,7 +125,7 @@ export const command: SlashCommand = {
         }
         if (
             textChannel.isThread() &&
-            !botPermissions?.has(PermissionsBitField.Flags.SendMessagesInThreads)
+            !botPermissions.has(PermissionsBitField.Flags.SendMessagesInThreads)
         ) {
             await interaction.editReply({
                 content: t(locale, 'messageCmd.noThreadSendPermission', {

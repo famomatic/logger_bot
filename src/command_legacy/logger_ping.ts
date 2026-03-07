@@ -1,12 +1,13 @@
-import { Message } from 'discord.js';
-import type { LegacyCommand } from '../types/commands.js'; // LegacyCommand 인터페이스 임포트
-import { config } from '../config/config.js'; // config 임포트
 import {
     createPendingPingReply,
     createPingResultReply,
     resolvePingMetrics,
 } from '../commandShared/pingCore.js';
+import { config } from '../config/config.js'; // config 임포트
 import { getMessageLocale, t } from '../i18n/index.js';
+
+import type { LegacyCommand } from '../types/commands.js'; // LegacyCommand 인터페이스 임포트
+import type { Message } from 'discord.js';
 
 // const developerIds = ['YOUR_USER_ID']; // 이 줄은 삭제
 

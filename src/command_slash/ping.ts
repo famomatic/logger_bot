@@ -1,11 +1,14 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { SlashCommandBuilder } from 'discord.js';
+
 import {
     createPendingPingReply,
     createPingResultReply,
     resolvePingMetrics,
 } from '../commandShared/pingCore.js';
 import { getInteractionLocale, localizations } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 // 일반 사용자도 사용 가능하므로 별도 권한 확인 없음
 

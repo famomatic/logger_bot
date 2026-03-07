@@ -88,7 +88,7 @@ if (failures.length > 0) {
             );
         }
     }
-    process.exit(1);
+    throw new Error('Renderer newline check failed.');
 }
 
 console.log('Renderer newline check passed.');

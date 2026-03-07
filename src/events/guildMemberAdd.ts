@@ -1,6 +1,9 @@
-import { Events, GuildMember } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildMember } from 'discord.js';
 
 const event = {
     name: Events.GuildMemberAdd,
@@ -48,4 +51,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

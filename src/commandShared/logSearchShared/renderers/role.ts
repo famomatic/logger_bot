@@ -4,11 +4,12 @@ import {
     type ChatInputCommandInteraction,
     type MessageComponentInteraction,
 } from 'discord.js';
-import type { JsonValue } from '../../../types/json.js';
-import type { LogEntry } from '../../../types/logs.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
+import { getInteractionLocale, t } from '../deps.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
+
+import type { JsonValue, LogEntry } from '../deps.js';
 
 interface RenderRoleEventParams {
     interaction: ChatInputCommandInteraction | MessageComponentInteraction;
@@ -89,16 +90,14 @@ export async function renderEvent({
             if (log.user_id) {
                 try {
                     const executorUser = await interaction.client.users.fetch(log.user_id);
-                    if (executorUser) {
-                        nextThumbnailComponent = new ThumbnailBuilder({
-                            media: {
-                                url: executorUser.displayAvatarURL({
-                                    forceStatic: false,
-                                    size: 64,
-                                }),
-                            },
-                        });
-                    }
+                    nextThumbnailComponent = new ThumbnailBuilder({
+                        media: {
+                            url: executorUser.displayAvatarURL({
+                                forceStatic: false,
+                                size: 64,
+                            }),
+                        },
+                    });
                 } catch {
                     /* empty */
                 }
@@ -210,16 +209,14 @@ export async function renderEvent({
             if (log.user_id) {
                 try {
                     const executorUser = await interaction.client.users.fetch(log.user_id);
-                    if (executorUser) {
-                        nextThumbnailComponent = new ThumbnailBuilder({
-                            media: {
-                                url: executorUser.displayAvatarURL({
-                                    forceStatic: false,
-                                    size: 64,
-                                }),
-                            },
-                        });
-                    }
+                    nextThumbnailComponent = new ThumbnailBuilder({
+                        media: {
+                            url: executorUser.displayAvatarURL({
+                                forceStatic: false,
+                                size: 64,
+                            }),
+                        },
+                    });
                 } catch {
                     /* empty */
                 }
@@ -247,16 +244,14 @@ export async function renderEvent({
             if (log.user_id) {
                 try {
                     const executorUser = await interaction.client.users.fetch(log.user_id);
-                    if (executorUser) {
-                        nextThumbnailComponent = new ThumbnailBuilder({
-                            media: {
-                                url: executorUser.displayAvatarURL({
-                                    forceStatic: false,
-                                    size: 64,
-                                }),
-                            },
-                        });
-                    }
+                    nextThumbnailComponent = new ThumbnailBuilder({
+                        media: {
+                            url: executorUser.displayAvatarURL({
+                                forceStatic: false,
+                                size: 64,
+                            }),
+                        },
+                    });
                 } catch {
                     /* empty */
                 }

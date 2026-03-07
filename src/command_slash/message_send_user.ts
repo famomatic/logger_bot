@@ -1,16 +1,12 @@
-import {
-    SlashCommandBuilder,
-    CommandInteraction,
-    Client,
-    User,
-    MessageFlags,
-    InteractionContextType,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { SlashCommandBuilder, MessageFlags, InteractionContextType } from 'discord.js';
+
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
 import type { SlashCommand } from '../types/commands.js';
 import type { ErrorWithCode } from '../types/errors.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import type { CommandInteraction, Client, User } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -57,7 +53,7 @@ export const command: SlashCommand = {
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        let targetUser: User | null = null;
+        let targetUser: User;
         try {
             // 사용자 ID 유효성 검사
             if (!/^\d{17,19}$/.test(targetUserId)) {
@@ -71,14 +67,6 @@ export const command: SlashCommand = {
             targetUser = await client.users.fetch(targetUserId);
         } catch (error) {
             logger.warn(`${logPrefix} Failed to fetch user ${targetUserId}:`, error);
-            await interaction.editReply({
-                content: t(locale, 'messageCmd.userNotFound', { userId: targetUserId }),
-            });
-            return;
-        }
-
-        if (!targetUser) {
-            // 이 경우는 거의 없지만 안전을 위해 추가
             await interaction.editReply({
                 content: t(locale, 'messageCmd.userNotFound', { userId: targetUserId }),
             });

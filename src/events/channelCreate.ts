@@ -1,6 +1,9 @@
-import { Events, GuildChannel, ChannelType, AuditLogEvent } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, ChannelType, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildChannel } from 'discord.js';
 
 // 채널 타입 이름을 문자열로 변환하는 헬퍼 함수
 function getChannelTypeName(type: ChannelType): string {
@@ -41,7 +44,7 @@ const event = {
         const guild = channel.guild;
         const guildId = guild.id;
         const channelId = channel.id; // 생성된 채널 ID
-        const timestamp = channel.createdAt ?? new Date(); // 생성 시각 (없으면 현재 시각)
+        const timestamp = channel.createdAt;
         let executorId: string | null = null;
 
         // Audit Log 조회 시도 (채널 생성 실행자 확인)
@@ -53,7 +56,7 @@ const event = {
             // targetId가 생성된 채널 ID와 일치하는 로그 찾기
             const createLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target?.id === channelId &&
+                    entry.target.id === channelId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
             if (createLog) {
@@ -105,4 +108,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

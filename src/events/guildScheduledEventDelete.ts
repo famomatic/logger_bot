@@ -1,12 +1,14 @@
 import {
     Events,
-    GuildScheduledEvent,
     GuildScheduledEventEntityType,
     GuildScheduledEventStatus,
     AuditLogEvent,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildScheduledEvent } from 'discord.js';
 
 // Enum 헬퍼 함수
 // 실제 구현에서는 이 함수들을 별도 유틸리티 파일로 분리하는 것이 좋습니다.
@@ -83,8 +85,7 @@ const event = {
             });
             const deleteLog = fetchedLogs.entries.first();
             if (
-                deleteLog &&
-                deleteLog.target?.id === targetId &&
+                deleteLog?.target.id === targetId &&
                 Math.abs(Date.now() - deleteLog.createdTimestamp) < 5000
             ) {
                 executorId = deleteLog.executor?.id ?? null;
@@ -127,4 +128,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

@@ -1,11 +1,10 @@
+import { InteractionContextType, MessageFlags, SlashCommandBuilder } from 'discord.js';
+
 import {
-    ChatInputCommandInteraction,
-    InteractionContextType,
-    MessageFlags,
-    SlashCommandBuilder,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+    canManagePermissions,
+    isManagedSlashCommand,
+    managedCommandChoices,
+} from '../commandShared/slashPermission.js';
 import {
     authorizeGuildId,
     grantCommandPermission,
@@ -14,11 +13,10 @@ import {
     revokeCommandPermission,
     unauthorizeGuildId,
 } from '../db/database.js';
-import {
-    canManagePermissions,
-    isManagedSlashCommand,
-    managedCommandChoices,
-} from '../commandShared/slashPermission.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.

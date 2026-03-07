@@ -1,5 +1,7 @@
+import path from 'node:path';
+
 import SMB2 from '@marsaud/smb2';
-import path from 'path';
+
 import type { StorageProvider } from '../../types/storage.js';
 
 /**

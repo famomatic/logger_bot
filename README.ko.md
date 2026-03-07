@@ -23,23 +23,23 @@ TypeScript + Discord.js v14 기반의 운영형 로거 봇입니다.
 ## 빠른 시작
 
 1. 의존성을 설치합니다.
-   ```bash
-   npm install
-   ```
+    ```bash
+    npm install
+    ```
 2. `.env.example`를 복사해 `.env`를 만들고 값을 채웁니다.
-   ```bash
-   cp .env.example .env
-   ```
+    ```bash
+    cp .env.example .env
+    ```
 3. DB 스키마를 초기화/마이그레이션합니다.
-   ```bash
-   npm run db:setup
-   npm run db:migrate
-   ```
+    ```bash
+    npm run db:setup
+    npm run db:migrate
+    ```
 4. 빌드 후 실행합니다.
-   ```bash
-   npm run build
-   npm start
-   ```
+    ```bash
+    npm run build
+    npm start
+    ```
 
 ## 개발 명령어
 

@@ -10,7 +10,7 @@ const botDbPassword = process.env.BOT_DB_PASSWORD;
 
 if (!botDbName || !botDbUser || !botDbPassword) {
     console.error('Error: Missing required environment variables.');
-    process.exit(1);
+    throw new Error('Missing required environment variables.');
 }
 
 async function setupDatabase() {

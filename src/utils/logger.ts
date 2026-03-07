@@ -1,15 +1,16 @@
-import chalk from 'chalk';
-import { config } from '../config/config.js';
 import { inspect } from 'node:util';
 
 // Sentry 및 관련 모듈 import (ESM 방식)
 import * as Sentry from '@sentry/node';
 // Http 통합 기능은 @sentry/node에 포함되어 있을 수 있음
 // import { Http } from '@sentry/node'; // 필요시 명시적 import
+import { getDefaultIntegrations } from '@sentry/node';
 import { nodeProfilingIntegration } from '@sentry/profiling-node';
 // 기본 통합 기능 목록을 가져오는 함수 import
-import { getDefaultIntegrations } from '@sentry/node';
+import chalk from 'chalk';
+
 import { requestShutdown } from './shutdownManager.js';
+import { config } from '../config/config.js';
 
 // Sentry 초기화 (DSN이 설정된 경우에만)
 // --- Sentry 재활성화 ---
@@ -27,14 +28,14 @@ if (config.sentryDsn) {
             profilesSampleRate: 1.0,
             environment: config.nodeEnv,
         });
-        console.log(chalk.green('Sentry initialized (Pg integration disabled).'));
+        console.info(chalk.green('Sentry initialized (Pg integration disabled).'));
     } catch (error) {
         console.error(chalk.red('Failed to initialize Sentry:'), error);
-        console.log(chalk.yellow('Sentry integration disabled due to initialization error.'));
+        console.info(chalk.yellow('Sentry integration disabled due to initialization error.'));
         config.sentryDsn = undefined;
     }
 } else {
-    console.log(chalk.yellow('Sentry DSN not found, Sentry integration disabled.'));
+    console.info(chalk.yellow('Sentry DSN not found, Sentry integration disabled.'));
 }
 // --- -------------- ---
 // console.log(chalk.yellow('Sentry integration is temporarily disabled for debugging purposes.'));
@@ -68,13 +69,13 @@ const formatLogArg = (arg: unknown): unknown => {
 
 // 기본 로거 함수
 const log = (level: keyof typeof levelColors, ...args: unknown[]) => {
-    const color = levelColors[level] ?? chalk.white;
+    const color = levelColors[level];
     const timestamp = chalk.cyan(`[${getTimestamp()}]`);
     const levelTag = color(`[${level.toUpperCase()}]`);
 
     const formattedArgs = args.map(formatLogArg);
 
-    console.log(timestamp, levelTag, ...formattedArgs);
+    console.info(timestamp, levelTag, ...formattedArgs);
 };
 
 /**
@@ -86,7 +87,7 @@ export const logger = {
     error: (message: string, error?: unknown, ...args: unknown[]) => {
         log('error', message, error ?? '', ...args);
         // Sentry 재활성화
-        if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
+        if (config.sentryDsn && typeof Sentry.captureException === 'function') {
             const errorToCapture = error instanceof Error ? error : new Error(String(message));
             Sentry.captureException(errorToCapture, {
                 extra: { details: args },
@@ -105,38 +106,61 @@ export const logger = {
 process.on('uncaughtException', (err) => {
     logger.error('Uncaught Exception:', err);
     // Sentry 재활성화
-    if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
+    if (config.sentryDsn && typeof Sentry.captureException === 'function') {
         Sentry.captureException(err, (scope: Sentry.Scope) => {
             scope.setLevel('fatal');
             return scope;
         });
-        Promise.resolve(Sentry.close(2000))
+        Sentry.close(2000)
             .catch((closeErr) =>
                 console.error(chalk.red('Sentry close error on uncaughtException:'), closeErr),
             )
             .finally(() => {
-                void requestShutdown('uncaughtException', { error: err, exitCode: 1 });
+                requestShutdown('uncaughtException', { error: err, exitCode: 1 }).catch(
+                    (shutdownError) =>
+                        console.error(
+                            chalk.red('Shutdown request failed on uncaughtException:'),
+                            shutdownError,
+                        ),
+                );
             });
     } else {
-        void requestShutdown('uncaughtException', { error: err, exitCode: 1 });
+        requestShutdown('uncaughtException', { error: err, exitCode: 1 }).catch((shutdownError) =>
+            console.error(
+                chalk.red('Shutdown request failed on uncaughtException:'),
+                shutdownError,
+            ),
+        );
     }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
     logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
     // Sentry 재활성화
-    if (config.sentryDsn && Sentry && typeof Sentry.captureException === 'function') {
+    if (config.sentryDsn && typeof Sentry.captureException === 'function') {
         Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)), {
             extra: { promiseDetails: promise },
         });
-        Promise.resolve(Sentry.close(2000))
+        Sentry.close(2000)
             .catch((closeErr) =>
                 console.error(chalk.red('Sentry close error on unhandledRejection:'), closeErr),
             )
             .finally(() => {
-                void requestShutdown('unhandledRejection', { error: reason, exitCode: 1 });
+                requestShutdown('unhandledRejection', { error: reason, exitCode: 1 }).catch(
+                    (shutdownError) =>
+                        console.error(
+                            chalk.red('Shutdown request failed on unhandledRejection:'),
+                            shutdownError,
+                        ),
+                );
             });
     } else {
-        void requestShutdown('unhandledRejection', { error: reason, exitCode: 1 });
+        requestShutdown('unhandledRejection', { error: reason, exitCode: 1 }).catch(
+            (shutdownError) =>
+                console.error(
+                    chalk.red('Shutdown request failed on unhandledRejection:'),
+                    shutdownError,
+                ),
+        );
     }
 });

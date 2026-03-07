@@ -1,5 +1,6 @@
-import type { SupportedLocale } from '../../types/i18n.js';
 import { t } from '../../i18n/index.js';
+
+import type { SupportedLocale } from '../../types/i18n.js';
 
 /** 로그 검색 UI 1페이지당 표시 건수입니다. */
 export const PAGE_SIZE = 5;

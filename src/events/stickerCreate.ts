@@ -1,6 +1,9 @@
-import { Events, Sticker, StickerFormatType, AuditLogEvent } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, StickerFormatType, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Sticker } from 'discord.js';
 
 // StickerFormatType enum을 문자열로 변환하는 헬퍼
 function getStickerFormatName(formatType: StickerFormatType): string {
@@ -38,8 +41,7 @@ const event = {
             });
             const createLog = fetchedLogs.entries.first();
             if (
-                createLog &&
-                createLog.target?.id === targetId &&
+                createLog?.target.id === targetId &&
                 Math.abs(Date.now() - createLog.createdTimestamp) < 5000
             ) {
                 executorId = createLog.executor?.id ?? null;
@@ -89,4 +91,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

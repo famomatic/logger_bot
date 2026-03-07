@@ -1,6 +1,9 @@
-import { Events, MessageReaction, User, PartialUser, PartialMessageReaction } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { MessageReaction, User, PartialUser, PartialMessageReaction } from 'discord.js';
 
 const event = {
     name: Events.MessageReactionRemove,
@@ -66,7 +69,7 @@ const event = {
                 timestamp,
             );
             logger.debug(
-                `Logged ${eventType} by ${user.tag} on message ${messageId} in guild ${guildId}`,
+                `Logged ${eventType} by ${user.tag ?? user.id} on message ${messageId} in guild ${guildId}`,
             ); // Keep success log
         } catch (error) {
             logger.error(
@@ -80,4 +83,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

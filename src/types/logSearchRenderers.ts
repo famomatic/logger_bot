@@ -1,9 +1,9 @@
+import type { JsonData } from './json.js';
 import type {
     ChatInputCommandInteraction,
     MessageComponentInteraction,
     ThumbnailBuilder,
 } from 'discord.js';
-import type { JsonData } from './json.js';
 
 export type LogSearchInteraction = ChatInputCommandInteraction | MessageComponentInteraction;
 

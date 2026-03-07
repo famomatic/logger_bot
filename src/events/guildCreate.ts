@@ -1,7 +1,10 @@
-import { Events, Guild } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events } from 'discord.js';
+
 import { isGuildAuthorized } from '../db/database.js';
 import { leaveUnauthorizedGuild } from '../utils/guildAuthorization.js';
+import { logger } from '../utils/logger.js';
+
+import type { Guild } from 'discord.js';
 
 const event = {
     name: Events.GuildCreate,
@@ -19,4 +22,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

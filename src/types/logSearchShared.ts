@@ -1,5 +1,5 @@
-import type { AttachmentLogData, LogEntry } from './logs.js';
 import type { JsonData, JsonValue } from './json.js';
+import type { AttachmentLogData, LogEntry } from './logs.js';
 
 export interface LogSearchRenderContext {
     log: LogEntry;

@@ -1,15 +1,12 @@
-import {
-    SlashCommandBuilder,
-    ChatInputCommandInteraction,
-    ComponentType,
-    MessageComponentInteraction,
-    MessageFlags,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { SlashCommandBuilder, ComponentType, MessageFlags } from 'discord.js';
+
+import { parseDateString, fetchAndDisplayLogs } from '../commandShared/logSearchShared.js';
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { getEventTypeChoices, isValidEventType } from '../config/eventsConfig.js';
-import { parseDateString, fetchAndDisplayLogs } from '../commandShared/logSearchShared.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { ChatInputCommandInteraction, MessageComponentInteraction } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -178,8 +175,8 @@ export const command = {
                 time: 15 * 60 * 1000,
             });
 
-            collector?.on('collect', (i: MessageComponentInteraction) => {
-                void (async () => {
+            collector.on('collect', (i: MessageComponentInteraction) => {
+                (async () => {
                     if (!i.isButton()) return;
 
                     await i.deferUpdate();
@@ -204,7 +201,9 @@ export const command = {
                     } else if (action !== 'pageinfo') {
                         logger.warn(`Unknown button action or invalid offset: ${i.customId}`);
                     }
-                })();
+                })().catch((error) => {
+                    logger.error('Failed to process log search pagination interaction:', error);
+                });
             });
         } catch (fetchReplyError) {
             logger.error('Failed to fetch reply for collector setup:', fetchReplyError);

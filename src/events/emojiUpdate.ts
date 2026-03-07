@@ -1,6 +1,9 @@
-import { Events, GuildEmoji, AuditLogEvent, AuditLogChange } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildEmoji, AuditLogChange } from 'discord.js';
 
 const event = {
     name: Events.GuildEmojiUpdate,
@@ -25,8 +28,8 @@ const event = {
             // 가장 최근 EmojiUpdate 로그 확인 (대상이 변경된 이모지 ID이고, name 변경이 있는지)
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target?.id === targetId &&
-                    entry.changes?.some((c: AuditLogChange) => c.key === 'name') &&
+                    entry.target.id === targetId &&
+                    entry.changes.some((c: AuditLogChange) => c.key === 'name') &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
             if (updateLog) {
@@ -67,4 +70,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

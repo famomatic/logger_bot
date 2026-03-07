@@ -1,8 +1,10 @@
 import { ThumbnailBuilder } from 'discord.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
+import { getInteractionLocale, t } from '../deps.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
+
+import type { GroupRendererInput, GroupRendererResult } from '../deps.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,
@@ -43,7 +45,11 @@ const buildGuildIconThumbnail = (input: GroupRendererInput): ThumbnailBuilder | 
  * invite payload에서 표준 invite 데이터 객체를 추출합니다.
  */
 const getInviteData = (input: GroupRendererInput) =>
-    isJsonData(input.eventData.invite) ? input.eventData.invite : input.eventData;
+    isJsonData(input.eventData.invite)
+        ? input.eventData.invite
+        : isJsonData(input.eventData)
+          ? input.eventData
+          : undefined;
 
 /**
  * inviteCreate 로그의 표시 텍스트와 썸네일을 생성합니다.
@@ -52,65 +58,63 @@ const renderInviteCreate = async (input: GroupRendererInput): Promise<GroupRende
     const locale = getInteractionLocale(input.interaction);
     const inviteDetails: string[] = [];
     const invite = getInviteData(input);
+    if (!invite) {
+        return {
+            eventSpecificsText: t(locale, 'logSearchShared.invite.createNoInfo'),
+            thumbnailComponent: undefined,
+        };
+    }
     const inviter = isJsonData(invite.inviter) ? invite.inviter : undefined;
 
-    if (invite) {
-        if (invite.code) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.invite.codeLabel')} ${str(invite.code)}`,
-            );
-        }
-        if (invite.url) {
-            inviteDetails.push(`**URL:** ${str(invite.url)}`);
-        }
+    if (invite.code) {
+        inviteDetails.push(`${t(locale, 'logSearchShared.invite.codeLabel')} ${str(invite.code)}`);
+    }
+    if (invite.url) {
+        inviteDetails.push(`**URL:** ${str(invite.url)}`);
+    }
 
-        const inviterId = str(invite.inviterId ?? inviter?.id);
-        const inviterTag = str(inviter?.tag) || (inviterId ? `<@${inviterId}>` : null);
-        if (inviterId) {
-            try {
-                const inviterUser = await input.interaction.client.users.fetch(inviterId);
-                inviteDetails.push(
-                    `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${inviterUser.tag} (<@${inviterId}>)`,
-                );
-            } catch {
-                inviteDetails.push(
-                    `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${inviterTag ?? inviterId}`,
-                );
-            }
+    const inviterId = str(invite.inviterId ?? inviter?.id);
+    const inviterTag = str(inviter?.tag) || (inviterId ? `<@${inviterId}>` : null);
+    if (inviterId) {
+        try {
+            const inviterUser = await input.interaction.client.users.fetch(inviterId);
+            inviteDetails.push(
+                `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${inviterUser.tag} (<@${inviterId}>)`,
+            );
+        } catch {
+            inviteDetails.push(
+                `${t(locale, 'logSearchShared.legacy.creatorLabel')} ${inviterTag ?? inviterId}`,
+            );
         }
+    }
 
-        const inviteChannel = isJsonData(invite.channel) ? invite.channel : undefined;
-        const channelId = str(invite.channelId ?? inviteChannel?.id);
-        if (channelId) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.legacy.channelLabel')} <#${channelId}>`,
-            );
-        }
-        if (invite.uses !== undefined) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.invite.usesLabel')} ${num(invite.uses)}`,
-            );
-        }
-        if (invite.maxUses !== undefined) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.invite.maxUsesLabel')} ${num(invite.maxUses) === 0 ? t(locale, 'logSearchShared.invite.unlimited') : num(invite.maxUses)}`,
-            );
-        }
-        if (invite.maxAge !== undefined) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.invite.expiresLabel')} ${num(invite.maxAge) === 0 ? t(locale, 'logSearchShared.legacy.none') : t(locale, 'logSearchShared.invite.hours', { hours: num(invite.maxAge) / 60 / 60 })}`,
-            );
-        }
-        if (invite.temporary !== undefined) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.invite.temporaryLabel')} ${invite.temporary ? t(locale, 'logSearchShared.legacy.yes') : t(locale, 'logSearchShared.legacy.no')}`,
-            );
-        }
-        if (invite.createdAt) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.invite.createdAtLabel')} <t:${Math.floor(new Date(str(invite.createdAt)).getTime() / 1000)}:R>`,
-            );
-        }
+    const inviteChannel = isJsonData(invite.channel) ? invite.channel : undefined;
+    const channelId = str(invite.channelId ?? inviteChannel?.id);
+    if (channelId) {
+        inviteDetails.push(`${t(locale, 'logSearchShared.legacy.channelLabel')} <#${channelId}>`);
+    }
+    if (invite.uses !== undefined) {
+        inviteDetails.push(`${t(locale, 'logSearchShared.invite.usesLabel')} ${num(invite.uses)}`);
+    }
+    if (invite.maxUses !== undefined) {
+        inviteDetails.push(
+            `${t(locale, 'logSearchShared.invite.maxUsesLabel')} ${num(invite.maxUses) === 0 ? t(locale, 'logSearchShared.invite.unlimited') : num(invite.maxUses)}`,
+        );
+    }
+    if (invite.maxAge !== undefined) {
+        inviteDetails.push(
+            `${t(locale, 'logSearchShared.invite.expiresLabel')} ${num(invite.maxAge) === 0 ? t(locale, 'logSearchShared.legacy.none') : t(locale, 'logSearchShared.invite.hours', { hours: num(invite.maxAge) / 60 / 60 })}`,
+        );
+    }
+    if (invite.temporary !== undefined) {
+        inviteDetails.push(
+            `${t(locale, 'logSearchShared.invite.temporaryLabel')} ${invite.temporary ? t(locale, 'logSearchShared.legacy.yes') : t(locale, 'logSearchShared.legacy.no')}`,
+        );
+    }
+    if (invite.createdAt) {
+        inviteDetails.push(
+            `${t(locale, 'logSearchShared.invite.createdAtLabel')} <t:${Math.floor(new Date(str(invite.createdAt)).getTime() / 1000)}:R>`,
+        );
     }
 
     const inviterIdForThumbnail = str(invite.inviterId ?? inviter?.id);
@@ -135,20 +139,26 @@ const renderInviteDelete = async (input: GroupRendererInput): Promise<GroupRende
     const locale = getInteractionLocale(input.interaction);
     const inviteDetails: string[] = [];
     const invite = getInviteData(input);
+    if (!invite) {
+        const thumbnailFromExecutor = input.logUserId
+            ? await buildUserThumbnail(input, input.logUserId)
+            : undefined;
+        const thumbnailComponent = thumbnailFromExecutor ?? buildGuildIconThumbnail(input);
+        return {
+            eventSpecificsText: t(locale, 'logSearchShared.invite.deleteNoInfo'),
+            thumbnailComponent,
+        };
+    }
     const inviteChannel = isJsonData(invite.channel) ? invite.channel : undefined;
 
-    if (invite) {
-        if (invite.code) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.invite.deletedCodeLabel')} ${str(invite.code)}`,
-            );
-        }
-        const channelId = str(invite.channelId ?? inviteChannel?.id);
-        if (channelId) {
-            inviteDetails.push(
-                `${t(locale, 'logSearchShared.legacy.channelLabel')} <#${channelId}>`,
-            );
-        }
+    if (invite.code) {
+        inviteDetails.push(
+            `${t(locale, 'logSearchShared.invite.deletedCodeLabel')} ${str(invite.code)}`,
+        );
+    }
+    const channelId = str(invite.channelId ?? inviteChannel?.id);
+    if (channelId) {
+        inviteDetails.push(`${t(locale, 'logSearchShared.legacy.channelLabel')} <#${channelId}>`);
     }
 
     const thumbnailFromExecutor = input.logUserId

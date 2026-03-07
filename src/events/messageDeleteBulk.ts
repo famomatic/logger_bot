@@ -1,13 +1,9 @@
-import {
-    Events,
-    Collection,
-    Message,
-    PartialMessage,
-    GuildTextBasedChannel,
-    AuditLogEvent,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Collection, Message, PartialMessage, GuildTextBasedChannel } from 'discord.js';
 
 const event = {
     name: Events.MessageBulkDelete,
@@ -39,7 +35,7 @@ const event = {
             // 채널 ID가 같고, 삭제된 메시지 수가 일치하는 가장 최근 로그를 찾음
             // AuditLog는 약간의 지연이 있을 수 있음
             const deleteLog = fetchedLogs.entries.find(
-                (entry) => entry.targetId === channelId && entry.extra?.count === deletedCount,
+                (entry) => entry.targetId === channelId && entry.extra.count === deletedCount,
             );
 
             if (deleteLog) {
@@ -101,4 +97,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

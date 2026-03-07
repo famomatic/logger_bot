@@ -1,15 +1,15 @@
-import pkg from 'pg';
-const { Pool } = pkg;
-import { createHash, randomUUID } from 'crypto';
-import { logger } from '../utils/logger.js';
+import { createHash, randomUUID } from 'node:crypto';
+
 import dotenv from 'dotenv';
+import pkg from 'pg';
+
 import { config } from '../config/config.js';
-import discordClient from '../utils/discordClient.js';
 import { dispatchAlert } from '../utils/alertManager.js';
+import { discordClient } from '../utils/discordClient.js';
+import { logger } from '../utils/logger.js';
+
 import type { AlertSubscriptionRow } from '../types/alerts.js';
 import type { GuildLogStats } from '../types/database.js';
-import type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
-import type { PgError } from '../types/errors.js';
 import type {
     BatchInsertedLogRow,
     CountRow,
@@ -20,6 +20,10 @@ import type {
     RankedRow,
     ScopeSummaryRow,
 } from '../types/dbRows.js';
+import type { PgError } from '../types/errors.js';
+import type { LogEntry, LogEventRecord, LogScopeReport, SearchLogsParams } from '../types/logs.js';
+
+const { Pool } = pkg;
 
 dotenv.config();
 
@@ -448,7 +452,7 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
         const result = await pool.query(insertQuery, values);
         const inserted = (result.rowCount ?? 0) > 0;
         if (inserted) {
-            void dispatchAlert(
+            dispatchAlert(
                 event.eventType,
                 event.guildId,
                 event.userId,
@@ -457,7 +461,9 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
                 event.data,
                 event.timestamp,
                 discordClient,
-            );
+            ).catch((alertError) => {
+                logger.error('Failed to dispatch alert after single log insert:', alertError);
+            });
         }
         return inserted;
     } catch (error: unknown) {
@@ -528,7 +534,7 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
         const result = await pool.query<BatchInsertedLogRow>(insertQuery, values);
 
         for (const row of result.rows) {
-            void dispatchAlert(
+            dispatchAlert(
                 row.event_type,
                 row.guild_id,
                 row.user_id,
@@ -537,7 +543,9 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
                 row.data,
                 row.timestamp,
                 discordClient,
-            );
+            ).catch((alertError) => {
+                logger.error('Failed to dispatch alert after batch log insert:', alertError);
+            });
         }
 
         return result.rowCount ?? 0;
@@ -773,14 +781,13 @@ export async function countLogs(
 ): Promise<number> {
     let query = `SELECT COUNT(*) FROM event_logs WHERE guild_id = $1`;
     const params: string[] = [guildId];
-    let paramIndex = 2;
 
     if (filters.eventType) {
-        query += ` AND event_type = $${paramIndex++}`;
+        query += ` AND event_type = $${params.length + 1}`;
         params.push(filters.eventType);
     }
     if (filters.userId) {
-        query += ` AND user_id = $${paramIndex++}`;
+        query += ` AND user_id = $${params.length + 1}`;
         params.push(filters.userId);
     }
     // Add other filters as needed
@@ -820,15 +827,7 @@ export async function getGuildLogStats(guildId: string): Promise<GuildLogStats> 
     try {
         const result = await pool.query<GuildLogStatsRow>(query, [guildId]);
         const row = result.rows[0];
-        const empty: GuildLogStatsRow = {
-            total_logs: '0',
-            message_create_count: '0',
-            text_message_count: '0',
-            total_text_characters: '0',
-            attachment_count: '0',
-            sticker_count: '0',
-        };
-        const r = row ?? empty;
+        const r = row;
         return {
             totalLogs: Number(r.total_logs),
             messageCreateCount: Number(r.message_create_count),
@@ -926,15 +925,15 @@ async function getLogScopeReport(
             ]);
 
         const summaryRow = summaryResult.rows[0];
-        const totalLogs = toCount(summaryRow?.total_logs);
-        const messageCreateCount = toCount(summaryRow?.message_create_count);
-        const messageUpdateCount = toCount(summaryRow?.message_update_count);
-        const messageDeleteCount = toCount(summaryRow?.message_delete_count);
-        const moderationActionCount = toCount(summaryRow?.moderation_action_count);
-        const attachmentCount = toCount(summaryRow?.attachment_count);
-        const stickerCount = toCount(summaryRow?.sticker_count);
-        const last24hCount = toCount(summaryRow?.last_24h_count);
-        const prev24hCount = toCount(summaryRow?.prev_24h_count);
+        const totalLogs = toCount(summaryRow.total_logs);
+        const messageCreateCount = toCount(summaryRow.message_create_count);
+        const messageUpdateCount = toCount(summaryRow.message_update_count);
+        const messageDeleteCount = toCount(summaryRow.message_delete_count);
+        const moderationActionCount = toCount(summaryRow.moderation_action_count);
+        const attachmentCount = toCount(summaryRow.attachment_count);
+        const stickerCount = toCount(summaryRow.sticker_count);
+        const last24hCount = toCount(summaryRow.last_24h_count);
+        const prev24hCount = toCount(summaryRow.prev_24h_count);
 
         return {
             totalLogs,
@@ -944,7 +943,7 @@ async function getLogScopeReport(
             moderationActionCount,
             attachmentCount,
             stickerCount,
-            lastActivityAt: summaryRow?.last_activity_at ?? null,
+            lastActivityAt: summaryRow.last_activity_at ?? null,
             last24hCount,
             prev24hCount,
             trendPercent: computeTrendPercent(last24hCount, prev24hCount),
@@ -1112,7 +1111,6 @@ export async function searchLogs(
         countQueryText += ` AND "timestamp" <= $${countParamIndex}`;
         countQueryParams.push(endDate.toISOString());
         paramIndex++;
-        countParamIndex++;
     }
 
     // 키워드 검색 로직
@@ -1131,10 +1129,11 @@ export async function searchLogs(
 
         countQueryText += ` AND ${countKeywordCondition}`;
         countQueryParams.push(`%${keyword}%`);
-        countParamIndex++;
     }
 
-    queryText += ` ORDER BY "timestamp" DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    const limitParamIndex = paramIndex;
+    const offsetParamIndex = paramIndex + 1;
+    queryText += ` ORDER BY "timestamp" DESC LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`;
     queryParams.push(limit, offset);
 
     // logger.debug(`Executing searchLogs query: ${queryText} with params: ${JSON.stringify(queryParams)}`);
@@ -1173,6 +1172,6 @@ export async function searchLogs(
 // --- End of Log Search Functionality ---
 
 /**
- * 전역 PostgreSQL 커넥션 풀의 기본 export 입니다.
+ * 전역 PostgreSQL 커넥션 풀 export 입니다.
  */
-export default pool;
+export { pool };

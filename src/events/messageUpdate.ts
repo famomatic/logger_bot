@@ -1,6 +1,9 @@
-import { Events, Message, PartialMessage } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Message, PartialMessage } from 'discord.js';
 
 const event = {
     name: Events.MessageUpdate,
@@ -15,7 +18,7 @@ const event = {
             // 임베드 로딩 등 내용 외 변경은 무시
             return;
         }
-        if (newMessage.author?.bot) {
+        if (newMessage.author.bot) {
             // 봇 메시지 수정은 무시
             return;
         }
@@ -72,4 +75,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

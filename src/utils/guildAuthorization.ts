@@ -1,6 +1,9 @@
-import { Client, Guild, AuditLogEvent, DiscordAPIError } from 'discord.js';
-import { isGuildAuthorized } from '../db/database.js';
+import { AuditLogEvent, DiscordAPIError } from 'discord.js';
+
 import { logger } from './logger.js';
+import { isGuildAuthorized } from '../db/database.js';
+
+import type { Client, Guild } from 'discord.js';
 
 /**
  * 인증되지 않은 길드에 안내 메시지를 남긴 뒤 봇을 탈퇴시킵니다.

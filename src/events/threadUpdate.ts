@@ -1,6 +1,9 @@
-import { Events, ThreadChannel, AuditLogEvent, AuditLogChange } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { ThreadChannel, AuditLogChange } from 'discord.js';
 
 // 변경된 내용을 사람이 읽기 쉬운 형태로 변환하는 헬퍼 함수
 function formatThreadChange(change: AuditLogChange): string {
@@ -15,13 +18,9 @@ function formatThreadChange(change: AuditLogChange): string {
     const keyName = keyMap[change.key] ?? change.key;
 
     let oldValue =
-        typeof change.old === 'object' && change.old !== null
-            ? JSON.stringify(change.old)
-            : String(change.old ?? '');
+        typeof change.old === 'object' ? JSON.stringify(change.old) : String(change.old ?? '');
     let newValue =
-        typeof change.new === 'object' && change.new !== null
-            ? JSON.stringify(change.new)
-            : String(change.new ?? '');
+        typeof change.new === 'object' ? JSON.stringify(change.new) : String(change.new ?? '');
 
     // 예시: auto_archive_duration 값 변환 (분 단위)
     if (change.key === 'auto_archive_duration') {
@@ -52,8 +51,8 @@ const event = {
         const targetId = newThread.id; // 변경된 스레드 ID
         const parentChannelId = newThread.parentId;
         const timestamp = new Date();
-        let executorId: string | null = null;
-        let changesDescription = '';
+        let executorId: string | null;
+        let changesDescription: string;
 
         // Audit Log 조회 시도
         try {
@@ -63,16 +62,18 @@ const event = {
             });
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target?.id === targetId &&
+                    entry.target.id === targetId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 15000,
             );
 
             if (updateLog) {
                 executorId = updateLog.executor?.id ?? null;
-                changesDescription =
-                    updateLog.changes?.map(formatThreadChange).join('\n') ??
-                    '변경 내역을 Audit Log에서 찾을 수 없음';
+                changesDescription = updateLog.changes.map(formatThreadChange).join('\n');
+                if (!changesDescription) {
+                    changesDescription = '변경 내역을 Audit Log에서 찾을 수 없음';
+                }
             } else {
+                executorId = null;
                 logger.warn(
                     `Could not find exact Audit Log entry for ${eventType} (thread ${targetId}) in guild ${guildId}. Executor and precise changes might be missing.`,
                 );
@@ -81,36 +82,45 @@ const event = {
                 if (oldThread.name !== newThread.name)
                     detectedChanges.push(`이름: '${oldThread.name}' -> '${newThread.name}'`);
                 if (oldThread.archived !== newThread.archived)
-                    detectedChanges.push(`보관됨: ${oldThread.archived} -> ${newThread.archived}`);
+                    detectedChanges.push(
+                        `보관됨: ${String(oldThread.archived ?? '')} -> ${String(newThread.archived ?? '')}`,
+                    );
                 if (oldThread.locked !== newThread.locked)
-                    detectedChanges.push(`잠김: ${oldThread.locked} -> ${newThread.locked}`);
+                    detectedChanges.push(
+                        `잠김: ${String(oldThread.locked ?? '')} -> ${String(newThread.locked ?? '')}`,
+                    );
                 if (oldThread.autoArchiveDuration !== newThread.autoArchiveDuration)
                     detectedChanges.push(
-                        `자동 보관 기간: ${oldThread.autoArchiveDuration}분 -> ${newThread.autoArchiveDuration}분`,
+                        `자동 보관 기간: ${String(oldThread.autoArchiveDuration ?? '')}분 -> ${String(newThread.autoArchiveDuration ?? '')}분`,
                     );
                 if (oldThread.rateLimitPerUser !== newThread.rateLimitPerUser)
                     detectedChanges.push(
-                        `슬로우 모드: ${oldThread.rateLimitPerUser}초 -> ${newThread.rateLimitPerUser}초`,
+                        `슬로우 모드: ${String(oldThread.rateLimitPerUser ?? '')}초 -> ${String(newThread.rateLimitPerUser ?? '')}초`,
                     );
                 changesDescription = detectedChanges.join('\n');
             }
         } catch (error) {
+            executorId = null;
             logger.error(`Failed to fetch Audit Logs for ${eventType} in guild ${guildId}:`, error);
             // 에러 시 직접 비교 결과 사용
             const detectedChanges: string[] = [];
             if (oldThread.name !== newThread.name)
                 detectedChanges.push(`이름: '${oldThread.name}' -> '${newThread.name}'`);
             if (oldThread.archived !== newThread.archived)
-                detectedChanges.push(`보관됨: ${oldThread.archived} -> ${newThread.archived}`);
+                detectedChanges.push(
+                    `보관됨: ${String(oldThread.archived ?? '')} -> ${String(newThread.archived ?? '')}`,
+                );
             if (oldThread.locked !== newThread.locked)
-                detectedChanges.push(`잠김: ${oldThread.locked} -> ${newThread.locked}`);
+                detectedChanges.push(
+                    `잠김: ${String(oldThread.locked ?? '')} -> ${String(newThread.locked ?? '')}`,
+                );
             if (oldThread.autoArchiveDuration !== newThread.autoArchiveDuration)
                 detectedChanges.push(
-                    `자동 보관 기간: ${oldThread.autoArchiveDuration}분 -> ${newThread.autoArchiveDuration}분`,
+                    `자동 보관 기간: ${String(oldThread.autoArchiveDuration ?? '')}분 -> ${String(newThread.autoArchiveDuration ?? '')}분`,
                 );
             if (oldThread.rateLimitPerUser !== newThread.rateLimitPerUser)
                 detectedChanges.push(
-                    `슬로우 모드: ${oldThread.rateLimitPerUser}초 -> ${newThread.rateLimitPerUser}초`,
+                    `슬로우 모드: ${String(oldThread.rateLimitPerUser ?? '')}초 -> ${String(newThread.rateLimitPerUser ?? '')}초`,
                 );
             changesDescription = detectedChanges.join('\n');
         }
@@ -155,4 +165,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

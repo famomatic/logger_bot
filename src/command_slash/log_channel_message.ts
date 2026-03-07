@@ -1,19 +1,23 @@
 import {
     SlashCommandBuilder,
-    CommandInteraction,
     PermissionsBitField,
+    MessageFlags,
+    InteractionContextType,
+} from 'discord.js';
+
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { processMessageCreateLog } from '../services/logGuildMessagesService.js';
+import { logger } from '../utils/logger.js';
+
+import type { SlashCommand } from '../types/commands.js';
+import type {
+    CommandInteraction,
     GuildTextBasedChannel,
     Collection,
     Message,
     Client,
-    MessageFlags,
-    InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
-import type { SlashCommand } from '../types/commands.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
-import { processMessageCreateLog } from '../services/logGuildMessagesService.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -74,7 +78,7 @@ export const command: SlashCommand = {
         }
 
         const botPerms = channel.permissionsFor(channel.guild.members.me!);
-        if (!botPerms?.has(PermissionsBitField.Flags.ReadMessageHistory)) {
+        if (!botPerms.has(PermissionsBitField.Flags.ReadMessageHistory)) {
             await interaction.editReply(
                 t(locale, 'backfill.channelReadDenied', { channel: channel.name }),
             );

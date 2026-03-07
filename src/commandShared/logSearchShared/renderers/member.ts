@@ -3,11 +3,12 @@ import {
     type ChatInputCommandInteraction,
     type MessageComponentInteraction,
 } from 'discord.js';
-import type { JsonData, JsonValue } from '../../../types/json.js';
-import type { LogEntry } from '../../../types/logs.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
+import { getInteractionLocale, t } from '../deps.js';
 import { str } from '../formatters.js';
 import { isJsonData } from '../types.js';
+
+import type { JsonData, JsonValue, LogEntry } from '../deps.js';
 
 interface RenderMemberEventParams {
     interaction: ChatInputCommandInteraction | MessageComponentInteraction;
@@ -278,16 +279,14 @@ export async function renderEvent({
                     const memberUser = await interaction.client.users.fetch(
                         log.user_id ?? str(updatedMember.id),
                     );
-                    if (memberUser) {
-                        nextThumbnailComponent = new ThumbnailBuilder({
-                            media: {
-                                url: memberUser.displayAvatarURL({
-                                    forceStatic: false,
-                                    size: 64,
-                                }),
-                            },
-                        });
-                    }
+                    nextThumbnailComponent = new ThumbnailBuilder({
+                        media: {
+                            url: memberUser.displayAvatarURL({
+                                forceStatic: false,
+                                size: 64,
+                            }),
+                        },
+                    });
                 } catch {
                     /* Keep original or default thumbnail */
                 }

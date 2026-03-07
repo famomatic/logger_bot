@@ -1,14 +1,16 @@
-import { Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
 import axios from 'axios';
+
 import { config } from '../config/config.js';
-import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
-import type { AttachmentData } from '../types/commands.js';
-import type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
-import type { ErrorWithCode } from '../types/errors.js';
-import type { BuildMessageCreateDataParams, MessageReactionSnapshot } from '../types/messageLog.js';
+import { storageManager } from '../storage/StorageManager.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
+
+import type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
+import type { AttachmentData } from '../types/commands.js';
+import type { ErrorWithCode } from '../types/errors.js';
+import type { BuildMessageCreateDataParams, MessageReactionSnapshot } from '../types/messageLog.js';
+import type { Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
 
 /**
  * 백필 대상 길드에서 읽을 수 있는 텍스트 채널이 없을 때 발생시키는 오류입니다.
@@ -93,7 +95,7 @@ export async function buildAttachmentData(
     for (const attachment of message.attachments.values()) {
         let storagePath: string | null = null;
         let downloadError: string | null = null;
-        if (config.storage.type) {
+        {
             try {
                 const fileBuffer = await downloadWithRetry(attachment.url, 3);
                 const relativePath = createAttachmentStoragePath(
@@ -207,7 +209,7 @@ export async function runGuildMessageBackfill({
             ch.isTextBased() &&
             !ch.isThread() &&
             ch.viewable &&
-            (ch.permissionsFor(guild.members.me!)?.has('ReadMessageHistory') ?? false),
+            ch.permissionsFor(guild.members.me!).has('ReadMessageHistory'),
     );
 
     if (channels.size === 0) {
@@ -297,7 +299,7 @@ export async function runGuildMessageBackfill({
                 }
 
                 logger.error(
-                    `Failed to fetch messages in channel ${channel.id}: ${fetchError.message}`,
+                    `Failed to fetch messages in channel ${channel.id}: ${String(fetchError.message)}`,
                 );
                 errorCount++;
                 fetchMore = false;

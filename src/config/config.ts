@@ -1,5 +1,5 @@
-import dotenv from 'dotenv';
 import chalk from 'chalk';
+import dotenv from 'dotenv';
 
 dotenv.config();
 
@@ -16,17 +16,25 @@ function parseDurationToMs(input?: string | null): number | undefined {
         return undefined;
     }
 
-    const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)?$/i.exec(trimmed);
-    if (!match) {
+    const lowered = trimmed.toLowerCase();
+    let unit: 'ms' | 's' | 'm' | 'h' = 's';
+    let numericPart = lowered;
+    for (const candidate of ['ms', 's', 'm', 'h'] as const) {
+        if (lowered.endsWith(candidate)) {
+            unit = candidate;
+            numericPart = lowered.slice(0, -candidate.length);
+            break;
+        }
+    }
+    if (!numericPart || numericPart.includes(' ')) {
         return undefined;
     }
 
-    const value = Number(match[1]);
+    const value = Number(numericPart);
     if (Number.isNaN(value)) {
         return undefined;
     }
 
-    const unit = (match[2] ?? 's').toLowerCase();
     const multiplier = unit === 'ms' ? 1 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 1_000;
 
     return Math.round(value * multiplier);
@@ -58,10 +66,72 @@ function parseBoolean(input: string | undefined, fallback: boolean): boolean {
     return fallback;
 }
 
+interface RuntimeConfig {
+    discordBotToken: string;
+    clientId: string;
+    dbName: string;
+    dbUser: string;
+    dbPassword: string;
+    dbHost: string;
+    dbPort: number;
+    dbSsl: boolean;
+    dbSslRejectUnauthorized: boolean;
+    redis: {
+        enabled: boolean;
+        host: string;
+        port: number;
+        db: number;
+        password: string | undefined;
+        queueName: string;
+        batchSize: number;
+        flushIntervalMs: number;
+        maxRetries: number;
+    };
+    messageRecovery: {
+        enabled: boolean;
+        maxPagesPerChannel: number;
+    };
+    sentryDsn: string | undefined;
+    nodeEnv: string;
+    superAdminIds: string[];
+    storage: {
+        type: 'webdav' | 's3' | 'smb' | 'local';
+        local: {
+            path: string;
+        };
+        webdav: {
+            enabled: boolean;
+            url: string | null;
+            host: string | undefined;
+            port: string | undefined;
+            https: boolean;
+            username: string | undefined;
+            password: string | undefined;
+            basePath: string;
+        };
+        s3: {
+            region: string;
+            bucket: string;
+            accessKeyId: string;
+            secretAccessKey: string;
+            endpoint: string | undefined;
+        };
+        smb: {
+            url: string;
+            domain: string;
+            username: string;
+            password: string;
+        };
+    };
+    sudoPassword: string | undefined;
+    sudoPasswordCommand: string | undefined;
+    execCommandTimeoutMs: number | undefined;
+}
+
 /**
  * 환경변수에서 런타임 설정을 구성하고 필수값 누락 시 예외를 던집니다.
  */
-function loadConfig() {
+const buildConfigTemplate = (): RuntimeConfig => {
     const requiredEnvVars = [
         'DISCORD_BOT_TOKEN',
         'DISCORD_CLIENT_ID',
@@ -166,7 +236,9 @@ function loadConfig() {
             process.env.EXEC_COMMAND_TIMEOUT ?? process.env.EXEC_COMMAND_TIMEOUT_MS,
         ),
     };
-}
+};
+const buildConfig = (): ReturnType<typeof buildConfigTemplate> => buildConfigTemplate();
+const loadConfig = (): ReturnType<typeof buildConfig> => buildConfig();
 
 // 설정 객체 내보내기
 export let config = loadConfig();

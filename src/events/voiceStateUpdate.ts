@@ -1,6 +1,9 @@
-import { Events, VoiceState, AuditLogEvent, Guild, AuditLogChange, User } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { VoiceState, Guild, AuditLogChange, User } from 'discord.js';
 
 async function logVoiceEvent(
     eventType: string,
@@ -38,7 +41,7 @@ async function logVoiceEvent(
             );
         } else {
             logger.debug(
-                `Skipped logging duplicate ${eventType} for user ${userId} (${user.tag}) in channel ${channelId}`,
+                `Skipped logging duplicate ${eventType} for user ${userId} (${user.tag}) in channel ${channelId ?? 'unknown'}`,
             );
         }
     } catch (error) {
@@ -116,7 +119,7 @@ const event = {
                     const stateLog = fetchedLogs.entries.find(
                         (entry) =>
                             entry.target?.id === user.id &&
-                            entry.changes?.some((c: AuditLogChange) => c.key === changeKey) &&
+                            entry.changes.some((c: AuditLogChange) => c.key === changeKey) &&
                             Math.abs(Date.now() - entry.createdTimestamp) < 5000,
                     );
                     if (stateLog) {
@@ -215,4 +218,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

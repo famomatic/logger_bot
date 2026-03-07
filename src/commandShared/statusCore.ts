@@ -1,8 +1,11 @@
-import { Client, WebSocketShardStatus, version as djsVersion } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { WebSocketShardStatus, version as djsVersion } from 'discord.js';
+
 import { buildContainerMessage } from './componentsV2.js';
-import type { SupportedLocale } from '../types/i18n.js';
 import { t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { SupportedLocale } from '../types/i18n.js';
+import type { Client } from 'discord.js';
 
 interface StatusSnapshot {
     uptime: string;
@@ -47,10 +50,10 @@ export async function collectStatusSnapshot(
     if (client.application) {
         try {
             const fetchedCommands = await client.application.commands.fetch();
-            slashCommandsCount = fetchedCommands?.size ?? 0;
+            slashCommandsCount = fetchedCommands.size;
         } catch (fetchError) {
             logger.warn(`Failed to fetch application commands for ${source} status:`, fetchError);
-            slashCommandsCount = client.application.commands.cache.size ?? 0;
+            slashCommandsCount = client.application.commands.cache.size;
         }
     }
 
@@ -59,7 +62,7 @@ export async function collectStatusSnapshot(
     return {
         uptime: formatUptime(process.uptime(), locale),
         apiLatency,
-        wsStatus: WebSocketShardStatus[client.ws.status] ?? client.ws.status.toString(),
+        wsStatus: WebSocketShardStatus[client.ws.status] || client.ws.status.toString(),
         guilds: client.guilds.cache.size,
         users: client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0),
         nodeVersion: process.version,

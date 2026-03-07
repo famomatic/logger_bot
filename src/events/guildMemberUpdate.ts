@@ -1,16 +1,9 @@
-import {
-    Events,
-    GuildMember,
-    PartialGuildMember,
-    AuditLogEvent,
-    Role,
-    User,
-    AuditLogChange,
-    Collection,
-    GuildAuditLogsEntry,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, GuildMember, AuditLogEvent, User, Collection } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { PartialGuildMember, Role, AuditLogChange, GuildAuditLogsEntry } from 'discord.js';
 
 // --- Helper Function for Nickname Update (받은 로그 사용) ---
 async function handleNicknameUpdate(
@@ -230,7 +223,7 @@ const event = {
         if (oldMember instanceof GuildMember) {
             if (oldMember.nickname !== newMember.nickname) {
                 const nickLog = memberUpdateLogs.find((entry: GuildAuditLogsEntry) =>
-                    entry.changes?.some((change: AuditLogChange) => change.key === 'nick'),
+                    entry.changes.some((change: AuditLogChange) => change.key === 'nick'),
                 );
                 await handleNicknameUpdate(
                     oldMember,
@@ -254,7 +247,7 @@ const event = {
             }
             if (oldMember.avatar !== newMember.avatar) {
                 const avatarLog = memberUpdateLogs.find((entry: GuildAuditLogsEntry) =>
-                    entry.changes?.some((change: AuditLogChange) => change.key === 'avatar_hash'),
+                    entry.changes.some((change: AuditLogChange) => change.key === 'avatar_hash'),
                 );
                 await handleAvatarUpdate(
                     oldMember,
@@ -272,7 +265,7 @@ const event = {
             newMember.communicationDisabledUntilTimestamp
         ) {
             const timeoutLog = memberUpdateLogs.find((entry: GuildAuditLogsEntry) =>
-                entry.changes?.some(
+                entry.changes.some(
                     (change: AuditLogChange) => change.key === 'communication_disabled_until',
                 ),
             );
@@ -291,4 +284,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

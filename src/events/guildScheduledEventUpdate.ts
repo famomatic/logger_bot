@@ -1,13 +1,14 @@
 import {
     Events,
-    GuildScheduledEvent,
     GuildScheduledEventEntityType,
     GuildScheduledEventStatus,
     AuditLogEvent,
-    AuditLogChange,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildScheduledEvent, AuditLogChange } from 'discord.js';
 
 // Enum 헬퍼 함수 (Create/Delete와 동일)
 // 실제 구현에서는 이 함수들을 별도 유틸리티 파일로 분리하는 것이 좋습니다.
@@ -52,13 +53,9 @@ function formatScheduledEventChange(change: AuditLogChange): string {
     };
     const keyName = keyMap[change.key] ?? change.key;
     let oldValue =
-        typeof change.old === 'object' && change.old !== null
-            ? JSON.stringify(change.old)
-            : String(change.old ?? '없음');
+        typeof change.old === 'object' ? JSON.stringify(change.old) : String(change.old ?? '없음');
     let newValue =
-        typeof change.new === 'object' && change.new !== null
-            ? JSON.stringify(change.new)
-            : String(change.new ?? '없음');
+        typeof change.new === 'object' ? JSON.stringify(change.new) : String(change.new ?? '없음');
 
     if (change.key === 'status') {
         if (change.old != null)
@@ -118,8 +115,8 @@ const event = {
         const targetId = newGuildScheduledEvent.id;
         const channelId = newGuildScheduledEvent.channelId;
         const timestamp = new Date();
-        let executorId: string | null = null;
-        let changesDescription = '';
+        let executorId: string | null;
+        let changesDescription: string;
 
         try {
             const fetchedLogs = await guild.fetchAuditLogs({
@@ -128,7 +125,7 @@ const event = {
             });
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target?.id === targetId &&
+                    entry.target.id === targetId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
 
@@ -138,6 +135,7 @@ const event = {
                 if (!changesDescription)
                     changesDescription = '변경 내역을 Audit Log에서 파싱할 수 없음';
             } else {
+                executorId = null;
                 logger.warn(
                     `Could not find exact Audit Log entry or changes for ${eventType} (event ${targetId}) in guild ${guildId}. Executor and precise changes might be missing.`,
                 );
@@ -181,6 +179,7 @@ const event = {
                 changesDescription = detectedChanges.join('\n');
             }
         } catch (error) {
+            executorId = null;
             logger.error(`Failed to fetch Audit Logs for ${eventType} in guild ${guildId}:`, error);
             // 오류 발생 시에도 직접 비교한 내용 fallback 적용
             const detectedChanges: string[] = [];
@@ -232,4 +231,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

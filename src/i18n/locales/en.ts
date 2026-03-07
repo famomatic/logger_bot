@@ -622,8 +622,3 @@ export const locale = {
     },
     messages: en,
 } as const satisfies LocaleDefinition;
-
-/**
- * 영어 로케일 번들의 기본 export 입니다.
- */
-export default locale;

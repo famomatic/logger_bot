@@ -52,17 +52,25 @@
         "xregexp": "^5.1.2"
     },
     "devDependencies": {
-        "@eslint-community/eslint-plugin-eslint-comments": "^4.6.0",
+        "@eslint-community/eslint-plugin-eslint-comments": "^4.7.1",
         "@eslint/eslintrc": "^3.3.3",
+        "@eslint/js": "^10.0.1",
         "@types/node": "^20.12.12",
         "@types/path-browserify": "^1.0.3",
         "@types/pg": "^8.16.0",
-        "eslint": "^9.39.2",
+        "eslint": "^9.39.4",
         "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-import": "^2.32.0",
+        "eslint-plugin-n": "^17.24.0",
+        "eslint-plugin-promise": "^7.2.1",
+        "eslint-plugin-regexp": "^3.0.0",
+        "eslint-plugin-security": "^4.0.0",
+        "eslint-plugin-unicorn": "^63.0.0",
+        "globals": "^17.4.0",
         "prettier": "^3.8.1",
         "tsx": "^4.21.0",
         "typescript": "^5.9.3",
-        "typescript-eslint": "^8.55.0"
+        "typescript-eslint": "^8.56.1"
     },
     "overrides": {
         "undici": "^6.23.0",

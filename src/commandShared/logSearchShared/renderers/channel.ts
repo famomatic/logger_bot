@@ -1,8 +1,10 @@
 import { ChannelType, ThumbnailBuilder } from 'discord.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
+import { getInteractionLocale, t } from '../deps.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
+
+import type { GroupRendererInput, GroupRendererResult } from '../deps.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,
@@ -43,7 +45,11 @@ const buildGuildIconThumbnail = (input: GroupRendererInput): ThumbnailBuilder | 
  * channel payload에서 표준 채널 데이터 객체를 추출합니다.
  */
 const getChannelData = (input: GroupRendererInput) =>
-    isJsonData(input.eventData.channel) ? input.eventData.channel : input.eventData;
+    isJsonData(input.eventData.channel)
+        ? input.eventData.channel
+        : isJsonData(input.eventData)
+          ? input.eventData
+          : undefined;
 
 /**
  * channelCreate 로그의 상세 텍스트와 썸네일을 생성합니다.
@@ -52,32 +58,38 @@ const renderChannelCreate = async (input: GroupRendererInput): Promise<GroupRend
     const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const channel = getChannelData(input);
+    if (!channel) {
+        return {
+            eventSpecificsText: t(locale, 'logSearchShared.channel.createNoInfo'),
+            thumbnailComponent: input.logUserId
+                ? await buildUserThumbnail(input, input.logUserId)
+                : undefined,
+        };
+    }
 
-    if (channel) {
+    details.push(
+        `${t(locale, 'logSearchShared.legacy.channelNameLabel')} ${str(channel.name, 'N/A')} (<#${str(channel.id, t(locale, 'logSearchShared.role.idMissing'))}>)`,
+    );
+    if (channel.id) {
+        details.push(`**ID:** ${str(channel.id)}`);
+    }
+    const typeText =
+        channel.type !== undefined
+            ? (ChannelType[num(channel.type)] ??
+              t(locale, 'logSearchShared.channel.unknownTypeNumber', {
+                  type: str(channel.type),
+              }))
+            : t(locale, 'logSearchShared.legacy.unknown');
+    details.push(`${t(locale, 'logSearchShared.legacy.typeLabel')} ${typeText}`);
+    if (channel.parentId) {
         details.push(
-            `${t(locale, 'logSearchShared.legacy.channelNameLabel')} ${str(channel.name, 'N/A')} (<#${str(channel.id, t(locale, 'logSearchShared.role.idMissing'))}>)`,
+            `${t(locale, 'logSearchShared.legacy.categoryLabel')} <#${str(channel.parentId)}>`,
         );
-        if (channel.id) {
-            details.push(`**ID:** ${str(channel.id)}`);
-        }
-        const typeText =
-            channel.type !== undefined
-                ? (ChannelType[num(channel.type)] ??
-                  t(locale, 'logSearchShared.channel.unknownTypeNumber', {
-                      type: str(channel.type),
-                  }))
-                : t(locale, 'logSearchShared.legacy.unknown');
-        details.push(`${t(locale, 'logSearchShared.legacy.typeLabel')} ${typeText}`);
-        if (channel.parentId) {
-            details.push(
-                `${t(locale, 'logSearchShared.legacy.categoryLabel')} <#${str(channel.parentId)}>`,
-            );
-        }
-        if (channel.topic) {
-            details.push(
-                `${t(locale, 'logSearchShared.legacy.topicLabel')} ${str(channel.topic).substring(0, 100)}${str(channel.topic).length > 100 ? '...' : ''}`,
-            );
-        }
+    }
+    if (channel.topic) {
+        details.push(
+            `${t(locale, 'logSearchShared.legacy.topicLabel')} ${str(channel.topic).substring(0, 100)}${str(channel.topic).length > 100 ? '...' : ''}`,
+        );
     }
 
     return {
@@ -98,23 +110,31 @@ const renderChannelDelete = async (input: GroupRendererInput): Promise<GroupRend
     const locale = getInteractionLocale(input.interaction);
     const details: string[] = [];
     const channel = getChannelData(input);
-
-    if (channel) {
-        details.push(
-            `${t(locale, 'logSearchShared.legacy.deletedChannelNameLabel')} ${str(channel.name, 'N/A')}`,
-        );
-        if (channel.id) {
-            details.push(`**ID:** ${str(channel.id)}`);
-        }
-        const typeText =
-            channel.type !== undefined
-                ? (ChannelType[num(channel.type)] ??
-                  t(locale, 'logSearchShared.channel.unknownTypeNumber', {
-                      type: str(channel.type),
-                  }))
-                : t(locale, 'logSearchShared.legacy.unknown');
-        details.push(`${t(locale, 'logSearchShared.legacy.typeLabel')} ${typeText}`);
+    if (!channel) {
+        const thumbnailFromExecutor = input.logUserId
+            ? await buildUserThumbnail(input, input.logUserId)
+            : undefined;
+        const thumbnailComponent = thumbnailFromExecutor ?? buildGuildIconThumbnail(input);
+        return {
+            eventSpecificsText: t(locale, 'logSearchShared.channel.deleteNoInfo'),
+            thumbnailComponent,
+        };
     }
+
+    details.push(
+        `${t(locale, 'logSearchShared.legacy.deletedChannelNameLabel')} ${str(channel.name, 'N/A')}`,
+    );
+    if (channel.id) {
+        details.push(`**ID:** ${str(channel.id)}`);
+    }
+    const typeText =
+        channel.type !== undefined
+            ? (ChannelType[num(channel.type)] ??
+              t(locale, 'logSearchShared.channel.unknownTypeNumber', {
+                  type: str(channel.type),
+              }))
+            : t(locale, 'logSearchShared.legacy.unknown');
+    details.push(`${t(locale, 'logSearchShared.legacy.typeLabel')} ${typeText}`);
 
     const thumbnailFromExecutor = input.logUserId
         ? await buildUserThumbnail(input, input.logUserId)

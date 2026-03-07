@@ -23,23 +23,23 @@ It captures high-volume guild events, stores them in PostgreSQL, and provides op
 ## Quick Start
 
 1. Install dependencies.
-   ```bash
-   npm install
-   ```
+    ```bash
+    npm install
+    ```
 2. Create `.env` from `.env.example` and fill in required values.
-   ```bash
-   cp .env.example .env
-   ```
+    ```bash
+    cp .env.example .env
+    ```
 3. Initialize or migrate DB schema.
-   ```bash
-   npm run db:setup
-   npm run db:migrate
-   ```
+    ```bash
+    npm run db:setup
+    npm run db:migrate
+    ```
 4. Build and run.
-   ```bash
-   npm run build
-   npm start
-   ```
+    ```bash
+    npm run build
+    npm start
+    ```
 
 ## Development Commands
 

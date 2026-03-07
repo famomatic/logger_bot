@@ -1,9 +1,10 @@
-import { Client, Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
+import { isLegacyCommandByDev, processMessageCreateLog } from './logGuildMessagesService.js';
 import { config } from '../config/config.js';
 import { fetchLatestMessageCreateTargetIdsByChannel, isGuildAuthorized } from '../db/database.js';
-import type { ErrorWithCode } from '../types/errors.js';
 import { logger } from '../utils/logger.js';
-import { isLegacyCommandByDev, processMessageCreateLog } from './logGuildMessagesService.js';
+
+import type { ErrorWithCode } from '../types/errors.js';
+import type { Client, Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
 
 interface RecoverySummary {
     guildsProcessed: number;
@@ -30,7 +31,7 @@ async function recoverGuildMessages(
             ch.isTextBased() &&
             !ch.isThread() &&
             ch.viewable &&
-            (ch.permissionsFor(guild.members.me!)?.has('ReadMessageHistory') ?? false),
+            ch.permissionsFor(guild.members.me!).has('ReadMessageHistory'),
     );
     logger.info(
         `[message-recovery] Guild ${guild.id} has ${channels.size} accessible text channels (checkpoints=${checkpoints.size}).`,

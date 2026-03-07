@@ -1,14 +1,15 @@
-import { Client } from 'discord.js';
-import { eventConfigurations, getFriendlyEventName } from '../config/eventsConfig.js';
-import { escapeCodeBlockContent } from './sanitize.js';
 import { logger } from './logger.js';
+import { escapeCodeBlockContent } from './sanitize.js';
+import { eventConfigurations, getFriendlyEventName } from '../config/eventsConfig.js';
 import {
     addAlertSubscription,
     removeAlertSubscription,
     fetchAlertSubscriptions,
 } from '../db/database.js';
-import type { AlertSubscription } from '../types/alerts.js';
 import { resolveLocale } from '../i18n/index.js';
+
+import type { AlertSubscription } from '../types/alerts.js';
+import type { Client } from 'discord.js';
 
 const subscriptions = new Map<string, AlertSubscription>();
 
@@ -19,11 +20,11 @@ function subscriptionKey(guildId: string, category: string, channelId: string): 
 /**
  * 이벤트 카테고리별 DB 이벤트 타입 목록 매핑입니다.
  */
-export const categoryEventMap: Record<string, string[]> = (() => {
-    const map: Record<string, string[]> = {};
+export const categoryEventMap: Partial<Record<string, string[]>> = (() => {
+    const map: Partial<Record<string, string[]>> = {};
     for (const cfg of Object.values(eventConfigurations)) {
-        if (!map[cfg.category]) map[cfg.category] = [];
-        map[cfg.category].push(cfg.dbEventType);
+        const eventTypes = map[cfg.category] ?? (map[cfg.category] = []);
+        eventTypes.push(cfg.dbEventType);
     }
     return map;
 })();

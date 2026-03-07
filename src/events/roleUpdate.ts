@@ -1,6 +1,9 @@
-import { Events, Role, AuditLogEvent, AuditLogChange, PermissionsBitField } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent, PermissionsBitField } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Role, AuditLogChange } from 'discord.js';
 
 // 변경된 내용을 사람이 읽기 쉬운 형태로 변환하는 헬퍼 함수 (선택적)
 function formatChange(change: AuditLogChange): string {
@@ -35,11 +38,11 @@ function formatChange(change: AuditLogChange): string {
         newValue = `#${change.new.toString(16).padStart(6, '0')}`;
     } else {
         oldValue =
-            typeof change.old === 'object' && change.old !== null
+            typeof change.old === 'object'
                 ? JSON.stringify(change.old)
                 : String(change.old ?? '없음');
         newValue =
-            typeof change.new === 'object' && change.new !== null
+            typeof change.new === 'object'
                 ? JSON.stringify(change.new)
                 : String(change.new ?? '없음');
     }
@@ -54,8 +57,8 @@ const event = {
         const guildId = newRole.guild.id;
         const targetId = newRole.id; // 변경된 역할 ID
         const timestamp = new Date();
-        let executorId: string | null = null;
-        let changesDescription = ''; // 변경 내용 요약 문자열
+        let executorId: string | null;
+        let changesDescription: string; // 변경 내용 요약 문자열
 
         const significantChange =
             oldRole.name !== newRole.name ||
@@ -77,7 +80,7 @@ const event = {
             // 가장 최근 RoleUpdate 로그 중 대상이 일치하는 로그 찾기
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target?.id === targetId &&
+                    entry.target.id === targetId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
 
@@ -85,10 +88,12 @@ const event = {
                 executorId = updateLog.executor?.id ?? null;
                 // timestamp = updateLog.createdAt;
                 // Audit Log에서 실제 변경 내용 가져오기
-                changesDescription =
-                    updateLog.changes?.map(formatChange).join('\n') ??
-                    '변경 내역을 Audit Log에서 찾을 수 없음';
+                changesDescription = updateLog.changes.map(formatChange).join('\n');
+                if (!changesDescription) {
+                    changesDescription = '변경 내역을 Audit Log에서 찾을 수 없음';
+                }
             } else {
+                executorId = null;
                 logger.warn(
                     `Could not find exact Audit Log entry for ${eventType} (role ${targetId}) in guild ${guildId}. Executor and precise changes might be missing.`,
                 );
@@ -111,6 +116,7 @@ const event = {
                 if (!changesDescription) return; // 감지된 변경 사항 없으면 종료
             }
         } catch (error) {
+            executorId = null;
             logger.error(`Failed to fetch Audit Logs for ${eventType} in guild ${guildId}:`, error);
             // 에러 발생 시에도 직접 비교 시도
             const detectedChanges: string[] = [];
@@ -162,4 +168,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

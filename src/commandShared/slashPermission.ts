@@ -1,9 +1,12 @@
-import { ChatInputCommandInteraction, MessageFlags } from 'discord.js';
+import { MessageFlags } from 'discord.js';
+
 import { config } from '../config/config.js';
 import { hasCommandPermission } from '../db/database.js';
 import { getInteractionLocale, t } from '../i18n/index.js';
 import { logger } from '../utils/logger.js';
+
 import type { SlashCommand } from '../types/commands.js';
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 interface SlashPermissionCatalogEntry {
     name: string;
@@ -107,7 +110,7 @@ export function logPermissionCheckFailure(
     error: unknown,
 ): void {
     logger.error(
-        `Permission check failed command=${interaction.commandName} guild=${interaction.guildId} user=${interaction.user.id}`,
+        `Permission check failed command=${interaction.commandName} guild=${interaction.guildId ?? 'dm'} user=${interaction.user.id}`,
         error,
     );
 }

@@ -1,5 +1,5 @@
-import { isGuildAuthorized, logEvent as writeLogEvent } from '../db/database.js';
 import { logger } from './logger.js';
+import { isGuildAuthorized, logEvent as writeLogEvent } from '../db/database.js';
 
 export function shouldLogForGuild(
     guildId: string | null | undefined,
@@ -44,7 +44,7 @@ export async function logEventIfAuthorized(
         );
     } catch (error) {
         logger.error(
-            `Error logging ${eventType} for target ${targetId ?? 'N/A'} in guild ${guildId ?? 'unknown'}:`,
+            `Error logging ${eventType} for target ${targetId ?? 'N/A'} in guild ${guildId}:`,
             error,
         );
         return false;

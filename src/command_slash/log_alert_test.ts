@@ -1,15 +1,11 @@
-import {
-    SlashCommandBuilder,
-    ChatInputCommandInteraction,
-    MessageFlags,
-    ChannelType,
-    GuildTextBasedChannel,
-    InteractionContextType,
-} from 'discord.js';
-import { categoryEventMap } from '../utils/alertManager.js';
-import { logger } from '../utils/logger.js';
+import { SlashCommandBuilder, MessageFlags, ChannelType, InteractionContextType } from 'discord.js';
+
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { categoryEventMap } from '../utils/alertManager.js';
+import { logger } from '../utils/logger.js';
+
+import type { ChatInputCommandInteraction, GuildTextBasedChannel } from 'discord.js';
 
 const choices = Object.keys(categoryEventMap)
     .map((cat) => ({ name: cat, value: cat }))
@@ -56,14 +52,7 @@ export const command = {
         }
 
         const category = interaction.options.getString('event_type', true);
-        const eventTypes = categoryEventMap[category];
-        if (!eventTypes) {
-            await interaction.reply({
-                content: t(locale, 'logAlert.invalidCategory'),
-                flags: MessageFlags.Ephemeral,
-            });
-            return;
-        }
+        const eventTypes = categoryEventMap[category] ?? [];
 
         const optionChannel = interaction.options.getChannel('channel', true);
         if (!('isTextBased' in optionChannel) || !optionChannel.isTextBased()) {

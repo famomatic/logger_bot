@@ -1,12 +1,14 @@
 import {
     Events,
-    GuildScheduledEvent,
     GuildScheduledEventEntityType,
     GuildScheduledEventStatus,
     AuditLogEvent,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildScheduledEvent } from 'discord.js';
 
 // Enum 값들을 문자열로 변환하는 헬퍼
 function getEntityTypeString(type: GuildScheduledEventEntityType): string {
@@ -53,7 +55,7 @@ const event = {
         const timestamp = guildScheduledEvent.createdTimestamp
             ? new Date(guildScheduledEvent.createdTimestamp)
             : new Date();
-        let executorId: string | null = null;
+        let executorId: string | null;
 
         try {
             const fetchedLogs = await guild.fetchAuditLogs({
@@ -62,8 +64,7 @@ const event = {
             });
             const createLog = fetchedLogs.entries.first();
             if (
-                createLog &&
-                createLog.target?.id === targetId &&
+                createLog?.target.id === targetId &&
                 Math.abs(Date.now() - createLog.createdTimestamp) < 5000
             ) {
                 executorId = createLog.executor?.id ?? null;
@@ -123,4 +124,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

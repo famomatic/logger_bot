@@ -1,12 +1,14 @@
 import { Redis as RedisClient } from 'ioredis';
+
 import { config } from '../config/config.js';
 import {
     insertLogEventDirectNow,
     insertLogEventsBatch,
     setLogEventDispatcher,
 } from '../db/database.js';
-import type { LogEventRecord } from '../types/logs.js';
 import { logger } from '../utils/logger.js';
+
+import type { LogEventRecord } from '../types/logs.js';
 
 interface QueuedLogEvent {
     event: Omit<LogEventRecord, 'timestamp'> & { timestamp: string };
@@ -106,7 +108,7 @@ class RedisLogQueue {
 
     private async recoverProcessingQueue(): Promise<void> {
         let recovered = 0;
-        while (true) {
+        for (;;) {
             const moved = await this.redis.lmove(
                 this.processingKey,
                 this.pendingKey,
@@ -157,7 +159,7 @@ class RedisLogQueue {
     private parsePayload(raw: string): QueuedLogEvent | null {
         try {
             const parsed = JSON.parse(raw) as QueuedLogEvent;
-            if (!parsed?.event?.guildId || !parsed.event.eventType || !parsed.event.targetId) {
+            if (!parsed.event.guildId || !parsed.event.eventType || !parsed.event.targetId) {
                 logger.warn('Discarding malformed queued log event payload.');
                 return null;
             }
@@ -171,7 +173,9 @@ class RedisLogQueue {
     private ensureFlushTimer(): void {
         if (this.flushTimer) return;
         this.flushTimer = setTimeout(() => {
-            void this.flush('time');
+            this.flush('time').catch((error) => {
+                logger.error('Failed to flush log queue on timer:', error);
+            });
         }, this.flushIntervalMs);
     }
 

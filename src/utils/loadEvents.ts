@@ -1,8 +1,11 @@
-import { Client, Collection, Events } from 'discord.js'; // 필요한 타입 추가
+import { Collection, Events } from 'discord.js'; // 필요한 타입 추가
+
 import { logger } from './logger.js';
+import { loadModulesFromDirectory, resolveRuntimeSubdirectory } from './moduleLoader.js';
+
 import type { LegacyCommand } from '../types/commands.js';
 import type { EventHandler, RegisteredEventListener } from '../types/events.js';
-import { loadModulesFromDirectory, resolveRuntimeSubdirectory } from './moduleLoader.js';
+import type { Client } from 'discord.js';
 
 const registeredEventListeners = new WeakMap<Client, RegisteredEventListener[]>();
 
@@ -32,8 +35,13 @@ export async function loadEvents(client: Client): Promise<void> {
             if (!moduleExports || typeof moduleExports !== 'object') {
                 return null;
             }
-            const event = (moduleExports as { default?: unknown }).default;
-            return isEventHandler(event) ? event : null;
+            const event = (moduleExports as { event?: unknown; default?: unknown }).event;
+            if (isEventHandler(event)) {
+                return event;
+            }
+
+            const defaultEvent = (moduleExports as { default?: unknown }).default;
+            return isEventHandler(defaultEvent) ? defaultEvent : null;
         },
         onModule: (event) => {
             // InteractionCreate는 로더에서 등록하지 않음 (index.ts에서 직접 처리)
@@ -66,7 +74,9 @@ export async function loadEvents(client: Client): Promise<void> {
             };
 
             const listener = (...args: unknown[]) => {
-                void executeWrapper(...args);
+                executeWrapper(...args).catch((error) => {
+                    logger.error(`Unhandled executeWrapper rejection for ${event.name}:`, error);
+                });
             };
             if (event.once) {
                 client.once(event.name, listener);

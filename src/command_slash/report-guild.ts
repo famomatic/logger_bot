@@ -1,21 +1,23 @@
 import {
     SlashCommandBuilder,
-    ChatInputCommandInteraction,
     GuildPremiumTier,
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
+
+import { buildContainerMessage } from '../commandShared/componentsV2.js';
 import { config } from '../config/config.js';
 import { getGuildReport, isGuildAuthorized } from '../db/database.js';
-import { buildContainerMessage } from '../commandShared/componentsV2.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
 import {
     formatEntityCountList,
     formatEventTypeCountList,
     formatLocalizedNumber,
     formatUserTagListFromIds,
 } from '../utils/reportFormatters.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -66,7 +68,7 @@ export const command = {
                 { emptyText: t(locale, 'report.none') },
             );
 
-            const premiumTierName = GuildPremiumTier[guild.premiumTier] ?? guild.premiumTier;
+            const premiumTierName = GuildPremiumTier[guild.premiumTier];
 
             const infoLines = [
                 `**ID:** ${guild.id}`,
@@ -79,10 +81,7 @@ export const command = {
                     value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:F>`,
                 }),
                 t(locale, 'reportCommand.memberCount', {
-                    value:
-                        guild.memberCount !== null && guild.memberCount !== undefined
-                            ? formatLocalizedNumber(guild.memberCount, numberLocale)
-                            : t(locale, 'reportCommand.unknown'),
+                    value: formatLocalizedNumber(guild.memberCount, numberLocale),
                 }),
                 t(locale, 'reportCommand.boostLevel', { value: premiumTierName }),
             ];

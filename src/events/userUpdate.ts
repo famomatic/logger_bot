@@ -1,5 +1,8 @@
-import { Events, User, PartialUser } from 'discord.js';
+import { Events, User } from 'discord.js';
+
 import { logger } from '../utils/logger.js';
+
+import type { PartialUser } from 'discord.js';
 // import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js'; // Logging removed for this event
 
 const event = {
@@ -67,4 +70,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

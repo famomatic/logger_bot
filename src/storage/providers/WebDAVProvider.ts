@@ -1,7 +1,11 @@
-import { createClient, WebDAVClient, WebDAVClientOptions } from 'webdav';
-import type { StorageProvider } from '../../types/storage.js';
 import { setDefaultResultOrder } from 'node:dns';
+
+import { createClient } from 'webdav';
+
 import { logger } from '../../utils/logger.js';
+
+import type { StorageProvider } from '../../types/storage.js';
+import type { WebDAVClient, WebDAVClientOptions } from 'webdav';
 
 /**
  * WebDAV 서버 기반 첨부파일 스토리지 구현입니다.
@@ -92,7 +96,7 @@ export class WebDAVProvider implements StorageProvider {
         } catch (error) {
             const err = error as { response?: { status: number } };
             if (err.response?.status === 404) {
-                throw new Error(`File not found: ${fullPath}`);
+                throw new Error(`File not found: ${fullPath}`, { cause: error });
             }
             throw error;
         }

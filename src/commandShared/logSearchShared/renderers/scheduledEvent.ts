@@ -1,8 +1,10 @@
 import { ThumbnailBuilder } from 'discord.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
+import { getInteractionLocale, t } from '../deps.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
+
+import type { GroupRendererInput, GroupRendererResult } from '../deps.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,
@@ -38,7 +40,9 @@ const renderScheduledEventCreate = async (
     const eventDetails: string[] = [];
     const event = isJsonData(input.eventData.scheduledEvent)
         ? input.eventData.scheduledEvent
-        : input.eventData;
+        : isJsonData(input.eventData)
+          ? input.eventData
+          : undefined;
 
     if (event) {
         eventDetails.push(
@@ -93,9 +97,9 @@ const renderScheduledEventCreate = async (
     }
 
     let thumbnailComponent: ThumbnailBuilder | undefined;
-    const eventId = str(event.id);
-    const eventImage = str(event.image);
-    const creatorId = str(event.creatorId);
+    const eventId = str(event?.id);
+    const eventImage = str(event?.image);
+    const creatorId = str(event?.creatorId);
     if (eventId && eventImage) {
         thumbnailComponent = new ThumbnailBuilder({
             media: {
@@ -198,7 +202,9 @@ const renderScheduledEventDelete = async (
     const eventDetails: string[] = [];
     const event = isJsonData(input.eventData.scheduledEvent)
         ? input.eventData.scheduledEvent
-        : input.eventData;
+        : isJsonData(input.eventData)
+          ? input.eventData
+          : undefined;
 
     if (event) {
         eventDetails.push(

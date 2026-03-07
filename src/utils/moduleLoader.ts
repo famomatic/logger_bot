@@ -1,6 +1,7 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, URL } from 'url';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, URL } from 'node:url';
+
 import type {
     LoadModulesFromDirectoryOptions,
     ModuleLoadContext,

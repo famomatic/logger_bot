@@ -1,13 +1,9 @@
-import {
-    Events,
-    Message,
-    PartialMessage,
-    AuditLogEvent,
-    User,
-    GuildAuditLogsEntry,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Message, PartialMessage, User, GuildAuditLogsEntry } from 'discord.js';
 
 const deleteBuffer: (Message | PartialMessage)[] = [];
 let bufferTimer: NodeJS.Timeout | null = null;
@@ -55,7 +51,7 @@ async function handleDelete(
         return;
     }
 
-    let messageContent: string | null = null;
+    let messageContent: string | null;
     let author: User | null = null;
     let executorId: string | null = null;
     let authorId: string | null = null;
@@ -65,8 +61,8 @@ async function handleDelete(
     } else {
         messageContent = message.content;
         author = message.author;
-        authorId = author?.id ?? null;
-        if (fetchedEntries && author && message.guild) {
+        authorId = author.id;
+        if (fetchedEntries && message.guild) {
             const deleteLog = fetchedEntries.find(
                 (entry) =>
                     entry.extra &&
@@ -118,13 +114,15 @@ async function handleDelete(
 const event = {
     name: Events.MessageDelete,
     execute(message: Message | PartialMessage) {
-        if (!message.partial && message.author?.bot) {
+        if (!message.partial && message.author.bot) {
             return;
         }
         deleteBuffer.push(message);
         bufferTimer ??= setTimeout(() => {
             bufferTimer = null;
-            void processBuffer();
+            processBuffer().catch((error) => {
+                logger.error('Failed to process message delete buffer:', error);
+            });
         }, 1000);
     },
 } as const;
@@ -132,4 +130,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

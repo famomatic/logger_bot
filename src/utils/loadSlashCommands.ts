@@ -1,9 +1,12 @@
-import { Client, Collection, REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { Collection, REST, Routes } from 'discord.js';
+
 import { logger } from './logger.js';
-import { config } from '../config/config.js';
-import type { SlashCommand } from '../types/commands.js';
-import { setSlashPermissionCatalog } from '../commandShared/slashPermission.js';
 import { loadModulesFromDirectory, resolveRuntimeSubdirectory } from './moduleLoader.js';
+import { setSlashPermissionCatalog } from '../commandShared/slashPermission.js';
+import { config } from '../config/config.js';
+
+import type { SlashCommand } from '../types/commands.js';
+import type { Client, SlashCommandBuilder } from 'discord.js';
 
 function isSlashCommand(value: unknown): value is SlashCommand {
     if (!value || typeof value !== 'object') {
@@ -100,6 +103,6 @@ export async function loadSlashCommands(client: Client): Promise<void> {
  * 메모리에 적재된 슬래시 커맨드 캐시를 비웁니다.
  */
 export function unloadSlashCommands(client: Client): void {
-    client.commands?.clear?.();
+    client.commands?.clear();
     setSlashPermissionCatalog([]);
 }

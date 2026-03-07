@@ -1,5 +1,4 @@
 import {
-    ChatInputCommandInteraction,
     TextDisplayBuilder,
     ThumbnailBuilder,
     SectionBuilder,
@@ -10,34 +9,39 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
+} from 'discord.js';
+
+import { buildContainerMessage } from './componentsV2.js';
+import { getFriendlyEventName } from '../config/eventsConfig.js';
+import { searchLogs } from '../db/database.js';
+import { getInteractionLocale, t } from '../i18n/index.js';
+import { storageManager } from '../storage/StorageManager.js';
+import { logger } from '../utils/logger.js';
+import { MAX_TEXT_SIZE, PAGE_SIZE, getLogSearchMessages } from './logSearchShared/constants.js';
+import { str } from './logSearchShared/formatters.js';
+import { renderChannelEvent } from './logSearchShared/renderers/channel.js';
+import { renderEvent as renderEmojiEvent } from './logSearchShared/renderers/emoji.js';
+import { renderGuildEvent } from './logSearchShared/renderers/guild.js';
+import { renderInviteEvent } from './logSearchShared/renderers/invite.js';
+import { renderEvent as renderMemberEvent } from './logSearchShared/renderers/member.js';
+import { renderEvent as renderMessageEvent } from './logSearchShared/renderers/message.js';
+import { renderEvent as renderRoleEvent } from './logSearchShared/renderers/role.js';
+import { renderScheduledEvent } from './logSearchShared/renderers/scheduledEvent.js';
+import { renderEvent as renderStickerEvent } from './logSearchShared/renderers/sticker.js';
+import { renderThreadEvent } from './logSearchShared/renderers/thread.js';
+import { renderUserEvent } from './logSearchShared/renderers/user.js';
+import { renderEvent as renderVoiceStateUpdateEvent } from './logSearchShared/renderers/voice.js';
+
+import type { JsonData } from '../types/json.js';
+import type { AttachmentLogData } from '../types/logs.js';
+import type {
+    User,
+    ChatInputCommandInteraction,
     MessageComponentInteraction,
     InteractionEditReplyOptions,
     MessageActionRowComponentBuilder,
     InteractionReplyOptions,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { getFriendlyEventName } from '../config/eventsConfig.js';
-import { searchLogs } from '../db/database.js';
-import { storageManager } from '../storage/StorageManager.js';
-import { buildContainerMessage } from './componentsV2.js';
-import type { JsonData } from '../types/json.js';
-import type { AttachmentLogData } from '../types/logs.js';
-import { MAX_TEXT_SIZE, PAGE_SIZE, getLogSearchMessages } from './logSearchShared/constants.js';
-import { str } from './logSearchShared/formatters.js';
-import { renderEvent as renderMessageEvent } from './logSearchShared/renderers/message.js';
-import { renderEvent as renderMemberEvent } from './logSearchShared/renderers/member.js';
-import { renderEvent as renderRoleEvent } from './logSearchShared/renderers/role.js';
-import { renderEvent as renderStickerEvent } from './logSearchShared/renderers/sticker.js';
-import { renderEvent as renderEmojiEvent } from './logSearchShared/renderers/emoji.js';
-import { renderEvent as renderVoiceStateUpdateEvent } from './logSearchShared/renderers/voice.js';
-import { renderGuildEvent } from './logSearchShared/renderers/guild.js';
-import { renderScheduledEvent } from './logSearchShared/renderers/scheduledEvent.js';
-import { renderInviteEvent } from './logSearchShared/renderers/invite.js';
-import { renderChannelEvent } from './logSearchShared/renderers/channel.js';
-import { renderThreadEvent } from './logSearchShared/renderers/thread.js';
-import { renderUserEvent } from './logSearchShared/renderers/user.js';
-import { getInteractionLocale, t } from '../i18n/index.js';
-import type { User } from 'discord.js';
 
 /** 로그 검색 명령에서 날짜 파서를 재사용할 수 있도록 re-export 합니다. */
 export { parseDateString } from './logSearchShared/date.js';
@@ -163,7 +167,7 @@ export async function fetchAndDisplayLogs(
             const timestampText = new TextDisplayBuilder().setContent(timestampContent);
             let eventSpecificsText = t(locale, 'logSearchShared.emptyContent');
 
-            if (log.event_data && typeof log.event_data === 'object') {
+            if (Object.prototype.toString.call(log.event_data) === '[object Object]') {
                 const data = log.event_data as JsonData;
                 switch (log.event_type) {
                     case 'messageCreate':
@@ -402,7 +406,7 @@ export async function fetchAndDisplayLogs(
             logsDisplayed++;
 
             const eventData = log.event_data as JsonData & { attachments?: AttachmentLogData[] };
-            if (eventData && Array.isArray(eventData.attachments)) {
+            if (Array.isArray(eventData.attachments)) {
                 for (const item of eventData.attachments) {
                     const attachmentData = item;
                     const storagePath = str(attachmentData.storagePath);

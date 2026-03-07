@@ -1,18 +1,17 @@
 import {
     SlashCommandBuilder,
-    CommandInteraction,
     PermissionsBitField,
-    GuildTextBasedChannel,
     Collection,
-    Message,
-    Client,
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
-import type { SlashCommand } from '../types/commands.js';
+
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { SlashCommand } from '../types/commands.js';
+import type { CommandInteraction, GuildTextBasedChannel, Message, Client } from 'discord.js';
 
 // 슬래시 커맨드 정의 및 실행 로직
 /**
@@ -127,14 +126,14 @@ export const command: SlashCommand = {
         // 로그 접두사 변경
         const logPrefix = '[message-delete-user]';
         logger.info(
-            `${logPrefix} Initiating message deletion for user ${targetUserId} in guild ${targetGuildId} by ${interaction.user.tag} (${interaction.user.id})`,
+            `${logPrefix} Initiating message deletion for user ${targetUserId} in guild ${targetGuildId ?? 'unknown'} by ${interaction.user.tag} (${interaction.user.id})`,
         );
 
         // 응답 보낼 채널 타입 확인 및 저장
         const channelToSendResponse = interaction.channel;
         if (!channelToSendResponse || !('send' in channelToSendResponse)) {
             logger.error(
-                `${logPrefix} Cannot send response: Interaction channel is not text-based or lacks send permissions. Channel type: ${interaction.channel?.type}`,
+                `${logPrefix} Cannot send response: Interaction channel is not text-based or lacks send permissions. Channel type: ${String(interaction.channel?.type ?? 'unknown')}`,
             );
             try {
                 await interaction
@@ -159,7 +158,7 @@ export const command: SlashCommand = {
                 : await client.guilds.fetch(targetGuildId!).catch(() => null);
             if (!guild) {
                 logger.warn(
-                    `${logPrefix} Attempted deletion in non-existent or inaccessible guild ${targetGuildId}`,
+                    `${logPrefix} Attempted deletion in non-existent or inaccessible guild ${targetGuildId ?? 'unknown'}`,
                 );
                 await interaction.editReply(
                     t(locale, 'messageCmd.guildNotFound', { guildId: targetGuildId! }),
@@ -184,19 +183,17 @@ export const command: SlashCommand = {
                           ch.isTextBased() &&
                           !ch.isThread() &&
                           ch.viewable &&
-                          (ch
+                          ch
                               .permissionsFor(guild.members.me!)
-                              ?.has(PermissionsBitField.Flags.ReadMessageHistory) ??
-                              false) &&
-                          (ch
+                              .has(PermissionsBitField.Flags.ReadMessageHistory) &&
+                          ch
                               .permissionsFor(guild.members.me!)
-                              ?.has(PermissionsBitField.Flags.ManageMessages) ??
-                              false),
+                              .has(PermissionsBitField.Flags.ManageMessages),
                   );
 
             if (channels.size === 0) {
                 logger.warn(
-                    `${logPrefix} No accessible channels found for deletion in guild ${targetGuildId}`,
+                    `${logPrefix} No accessible channels found for deletion in guild ${targetGuildId ?? 'unknown'}`,
                 );
                 await interaction.editReply(t(locale, 'messageCmd.noAccessibleDeleteChannels'));
                 return;
@@ -204,7 +201,7 @@ export const command: SlashCommand = {
 
             if (specificChannel) {
                 logger.info(
-                    `${logPrefix} Deleting messages only in channel ${specificChannel.id} of guild ${targetGuildId}`,
+                    `${logPrefix} Deleting messages only in channel ${specificChannel.id} of guild ${targetGuildId ?? 'unknown'}`,
                 );
                 await interaction.editReply(
                     t(locale, 'messageCmd.startDeleteInChannel', {
@@ -215,7 +212,7 @@ export const command: SlashCommand = {
                 );
             } else {
                 logger.info(
-                    `${logPrefix} Found ${channels.size} accessible text channels in guild ${targetGuildId} to scan.`,
+                    `${logPrefix} Found ${channels.size} accessible text channels in guild ${targetGuildId ?? 'unknown'} to scan.`,
                 );
                 await interaction.editReply(
                     t(locale, 'messageCmd.startDeleteInGuild', {
@@ -302,7 +299,7 @@ export const command: SlashCommand = {
                                             );
                                         } else {
                                             logger.warn(
-                                                `${logPrefix} Failed to delete message ${message.id} in channel ${channel.id}: ${deleteError.message} (Code: ${deleteError.code})`,
+                                                `${logPrefix} Failed to delete message ${message.id} in channel ${channel.id}: ${deleteError.message} (Code: ${String(deleteError.code ?? 'unknown')})`,
                                             );
                                             if (
                                                 !errorMessages.some((e) => e.includes(channel.id))
@@ -394,28 +391,24 @@ export const command: SlashCommand = {
             }
             const channelInfo = specificChannel ? ` channel ${specificChannel.id}` : '';
             logger.info(
-                `${logPrefix} Finished message deletion for user ${targetUserId} in guild ${targetGuildId}${channelInfo}. Deleted ${deletedCount} messages with ${errorMessages.length} errors in ${duration}s.`,
+                `${logPrefix} Finished message deletion for user ${targetUserId} in guild ${targetGuildId ?? 'unknown'}${channelInfo}. Deleted ${deletedCount} messages with ${errorMessages.length} errors in ${duration}s.`,
             );
         } catch (error) {
             const err = error as Error;
             logger.error(
-                `${logPrefix} Critical error during message deletion process for guild ${targetGuildId}, user ${targetUserId}:`,
+                `${logPrefix} Critical error during message deletion process for guild ${targetGuildId ?? 'unknown'}, user ${targetUserId}:`,
                 err,
             );
             const criticalErrorMessage = t(locale, 'messageCmd.criticalDeleteError', {
                 userMention: interaction.user.toString(),
                 error: err.message,
             });
-            if (channelToSendResponse) {
-                await channelToSendResponse
-                    .send(criticalErrorMessage)
-                    .catch((sendError: unknown) => {
-                        logger.error(
-                            `${logPrefix} Failed to send critical error report for deletion:`,
-                            sendError,
-                        );
-                    });
-            }
+            await channelToSendResponse.send(criticalErrorMessage).catch((sendError: unknown) => {
+                logger.error(
+                    `${logPrefix} Failed to send critical error report for deletion:`,
+                    sendError,
+                );
+            });
             try {
                 await interaction
                     .editReply(t(locale, 'messageCmd.criticalDeleteErrorSent'))
