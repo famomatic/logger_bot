@@ -1,5 +1,6 @@
 import { Events, AuditLogEvent, PermissionsBitField } from 'discord.js';
 
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -73,14 +74,15 @@ const event = {
 
         // Audit Log 조회 시도
         try {
-            const fetchedLogs = await newRole.guild.fetchAuditLogs({
+            const fetchedLogs = await fetchAuditLogsCached(newRole.guild, {
                 limit: 5, // 여러 변경이 동시에 발생할 수 있으므로 조금 더 확인
                 type: AuditLogEvent.RoleUpdate, // 31
+                ttlMs: 2_000,
             });
             // 가장 최근 RoleUpdate 로그 중 대상이 일치하는 로그 찾기
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target.id === targetId &&
+                    entry.targetId === targetId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
 

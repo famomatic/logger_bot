@@ -1,3 +1,4 @@
+import { mapWithConcurrency, withTimeout } from './asyncControl.js';
 import { logger } from './logger.js';
 import { escapeCodeBlockContent } from './sanitize.js';
 import { eventConfigurations, getFriendlyEventName } from '../config/eventsConfig.js';
@@ -12,6 +13,8 @@ import type { AlertSubscription } from '../types/alerts.js';
 import type { Client } from 'discord.js';
 
 const subscriptions = new Map<string, AlertSubscription>();
+const ALERT_DISPATCH_CONCURRENCY = 4;
+const ALERT_DISPATCH_TIMEOUT_MS = 4_000;
 
 function subscriptionKey(guildId: string, category: string, channelId: string): string {
     return `${guildId}:${category}:${channelId}`;
@@ -96,41 +99,55 @@ export async function dispatchAlert(
     timestamp: Date,
     client: Client,
 ) {
-    for (const sub of subscriptions.values()) {
-        if (sub.guildId !== guildId) continue;
-        if (!sub.eventTypes.includes(eventType)) continue;
+    const targets = [...subscriptions.values()].filter(
+        (sub) => sub.guildId === guildId && sub.eventTypes.includes(eventType),
+    );
+    if (targets.length === 0) {
+        return;
+    }
+
+    const guild = await client.guilds.fetch(guildId).catch(() => null);
+    const locale = resolveLocale(guild?.preferredLocale);
+    const friendlyName = getFriendlyEventName(eventType, locale);
+    const json = escapeCodeBlockContent(JSON.stringify(data).slice(0, 1800));
+    const summaryLines = [
+        locale === 'ko'
+            ? `이벤트: ${friendlyName} (${eventType})`
+            : `Event: ${friendlyName} (${eventType})`,
+        locale === 'ko'
+            ? `타임스탬프: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`
+            : `Timestamp: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`,
+        locale === 'ko'
+            ? `채널: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`
+            : `Channel: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`,
+        locale === 'ko' ? `대상 ID: ${targetId ?? 'N/A'}` : `Target ID: ${targetId ?? 'N/A'}`,
+        locale === 'ko' ? `사용자 ID: ${userId ?? 'N/A'}` : `User ID: ${userId ?? 'N/A'}`,
+    ];
+    const content = `${summaryLines.join('\n')}\n\n${locale === 'ko' ? '데이터' : 'Data'}:\n\`\`\`json\n${json}\n\`\`\``;
+
+    await mapWithConcurrency(targets, ALERT_DISPATCH_CONCURRENCY, async (sub) => {
         try {
-            const fetched = await client.channels.fetch(sub.channelId).catch(() => null);
-            if (!fetched?.isTextBased()) continue;
-            const json = escapeCodeBlockContent(JSON.stringify(data).slice(0, 1800));
-            const guild = await client.guilds.fetch(guildId).catch(() => null);
-            const locale = resolveLocale(guild?.preferredLocale);
-            const friendlyName = getFriendlyEventName(eventType, locale);
-            const summaryLines = [
-                locale === 'ko'
-                    ? `이벤트: ${friendlyName} (${eventType})`
-                    : `Event: ${friendlyName} (${eventType})`,
-                locale === 'ko'
-                    ? `타임스탬프: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`
-                    : `Timestamp: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`,
-                locale === 'ko'
-                    ? `채널: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`
-                    : `Channel: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`,
-                locale === 'ko'
-                    ? `대상 ID: ${targetId ?? 'N/A'}`
-                    : `Target ID: ${targetId ?? 'N/A'}`,
-                locale === 'ko' ? `사용자 ID: ${userId ?? 'N/A'}` : `User ID: ${userId ?? 'N/A'}`,
-            ];
-            const content = `${summaryLines.join('\n')}\n\n${locale === 'ko' ? '데이터' : 'Data'}:\n\`\`\`json\n${json}\n\`\`\``;
+            const fetched = await withTimeout(
+                client.channels.fetch(sub.channelId),
+                ALERT_DISPATCH_TIMEOUT_MS,
+                `Alert channel fetch timeout: ${sub.channelId}`,
+            ).catch(() => null);
+            if (!fetched?.isTextBased()) return;
 
             if ('send' in fetched && typeof fetched.send === 'function') {
-                await fetched.send({
-                    content,
-                    allowedMentions: { parse: [] },
-                });
+                await withTimeout(
+                    Promise.resolve(
+                        fetched.send({
+                            content,
+                            allowedMentions: { parse: [] },
+                        }),
+                    ).then(() => undefined),
+                    ALERT_DISPATCH_TIMEOUT_MS,
+                    `Alert send timeout: ${sub.channelId}`,
+                );
             }
         } catch (err) {
             logger.error('Failed to dispatch log alert:', err);
         }
-    }
+    });
 }

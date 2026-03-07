@@ -4,43 +4,6 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 /**
- * `10s`, `500ms`, `2m` 같은 duration 문자열을 밀리초 값으로 변환합니다.
- */
-function parseDurationToMs(input?: string | null): number | undefined {
-    if (!input) {
-        return undefined;
-    }
-
-    const trimmed = input.trim();
-    if (!trimmed) {
-        return undefined;
-    }
-
-    const lowered = trimmed.toLowerCase();
-    let unit: 'ms' | 's' | 'm' | 'h' = 's';
-    let numericPart = lowered;
-    for (const candidate of ['ms', 's', 'm', 'h'] as const) {
-        if (lowered.endsWith(candidate)) {
-            unit = candidate;
-            numericPart = lowered.slice(0, -candidate.length);
-            break;
-        }
-    }
-    if (!numericPart || numericPart.includes(' ')) {
-        return undefined;
-    }
-
-    const value = Number(numericPart);
-    if (Number.isNaN(value)) {
-        return undefined;
-    }
-
-    const multiplier = unit === 'ms' ? 1 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 1_000;
-
-    return Math.round(value * multiplier);
-}
-
-/**
  * 정수 환경변수를 파싱하고 실패 시 기본값을 반환합니다.
  */
 function parseInteger(input: string | undefined, fallback: number): number {
@@ -123,9 +86,6 @@ interface RuntimeConfig {
             password: string;
         };
     };
-    sudoPassword: string | undefined;
-    sudoPasswordCommand: string | undefined;
-    execCommandTimeoutMs: number | undefined;
 }
 
 /**
@@ -230,11 +190,6 @@ const buildConfigTemplate = (): RuntimeConfig => {
                 password: process.env.SMB_PASSWORD ?? '',
             },
         },
-        sudoPassword: process.env.SUDO_PASSWORD,
-        sudoPasswordCommand: process.env.SUDO_PASSWORD_COMMAND,
-        execCommandTimeoutMs: parseDurationToMs(
-            process.env.EXEC_COMMAND_TIMEOUT ?? process.env.EXEC_COMMAND_TIMEOUT_MS,
-        ),
     };
 };
 const buildConfig = (): ReturnType<typeof buildConfigTemplate> => buildConfigTemplate();

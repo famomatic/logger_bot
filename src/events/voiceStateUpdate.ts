@@ -1,5 +1,6 @@
 import { Events, AuditLogEvent } from 'discord.js';
 
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -112,13 +113,14 @@ const event = {
 
                 let executorId: string | null = null;
                 try {
-                    const fetchedLogs = await guild.fetchAuditLogs({
+                    const fetchedLogs = await fetchAuditLogsCached(guild, {
                         limit: 5,
                         type: AuditLogEvent.MemberUpdate, // 24
+                        ttlMs: 2_000,
                     });
                     const stateLog = fetchedLogs.entries.find(
                         (entry) =>
-                            entry.target?.id === user.id &&
+                            entry.targetId === user.id &&
                             entry.changes.some((c: AuditLogChange) => c.key === changeKey) &&
                             Math.abs(Date.now() - entry.createdTimestamp) < 5000,
                     );

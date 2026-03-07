@@ -99,6 +99,12 @@ export const command: SlashCommand = {
         // 봇 권한 확인 (채널 객체 직접 사용)
         // GuildTextBasedChannel 타입으로 단언 (isTextBased, !isDMBased 통과했으므로)
         const textChannel = targetChannel as GuildTextBasedChannel;
+        if (textChannel.guildId !== interaction.guildId) {
+            await interaction.editReply({
+                content: t(locale, 'common.commandNotAllowed'),
+            });
+            return;
+        }
         let botPermissions;
         try {
             const botMember = await textChannel.guild.members.fetch(client.user!.id);

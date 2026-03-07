@@ -1,5 +1,6 @@
 import { Events, AuditLogEvent } from 'discord.js';
 
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -11,9 +12,10 @@ async function findGuildUpdateLog(
     changeKey: string,
 ): Promise<{ executorId: string | null; logTimestamp: Date | null }> {
     try {
-        const fetchedLogs = await guild.fetchAuditLogs({
+        const fetchedLogs = await fetchAuditLogsCached(guild, {
             limit: 5,
             type: AuditLogEvent.GuildUpdate, // 1
+            ttlMs: 2000,
         });
         const updateLog = fetchedLogs.entries.find(
             (entry) =>

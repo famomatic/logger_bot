@@ -5,7 +5,7 @@ import {
     logPermissionCheckFailure,
 } from './commandShared/slashPermission.js';
 import { config } from './config/config.js';
-import { destroyDatabase, loadAuthorizedGuildIds } from './db/database.js';
+import { destroyDatabase, loadAuthorizedGuildIds, testDatabaseConnection } from './db/database.js';
 import { getInteractionLocale, t } from './i18n/index.js';
 import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
 import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';
@@ -25,6 +25,9 @@ logger.info('Starting logger bot...');
 // --- 초기화 함수 ---
 async function initializeBot() {
     try {
+        // 0. DB 연결 상태 확인 (실패 시 즉시 중단)
+        await testDatabaseConnection();
+
         // 1. 레거시 명령어 로드 (discordClient.legacyCommands에 저장)
         await loadLegacyCommands(discordClient);
 

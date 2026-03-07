@@ -1,5 +1,6 @@
 import { Events, ChannelType, AuditLogEvent } from 'discord.js';
 
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -87,14 +88,15 @@ const event = {
 
         // Audit Log 조회 시도 (채널 업데이트 실행자 확인)
         try {
-            const fetchedLogs = await guild.fetchAuditLogs({
+            const fetchedLogs = await fetchAuditLogsCached(guild, {
                 limit: 5,
                 type: AuditLogEvent.ChannelUpdate, // 11
+                ttlMs: 2_000,
             });
             // 채널 ID가 일치하고 변경 사항 키가 일치하는 로그 찾기
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target.id === channelId &&
+                    entry.targetId === channelId &&
                     entry.changes.some((c) => c.key in changes) && // 실제 변경된 내용과 관련된 로그인지 확인
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );

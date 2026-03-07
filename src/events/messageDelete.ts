@@ -1,5 +1,6 @@
 import { Events, AuditLogEvent } from 'discord.js';
 
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -22,11 +23,12 @@ async function processBuffer() {
         const guild = msgs[0].guild!;
         let fetchedEntries: GuildAuditLogsEntry[] | null = null;
         try {
-            const fetchedLogs = await guild.fetchAuditLogs({
+            const fetchedLogs = await fetchAuditLogsCached(guild, {
                 limit: 5,
                 type: AuditLogEvent.MessageDelete,
+                ttlMs: 1_500,
             });
-            fetchedEntries = [...fetchedLogs.entries.values()];
+            fetchedEntries = [...fetchedLogs.entries.values()] as GuildAuditLogsEntry[];
         } catch (err) {
             logger.error(`Failed to fetch audit logs for guild ${gid}:`, err);
         }

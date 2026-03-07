@@ -85,6 +85,10 @@ export const command: SlashCommand = {
                 return;
             }
             channel = fetched as GuildTextBasedChannel;
+            if (channel.guildId !== interaction.guildId) {
+                await interaction.editReply(t(locale, 'common.commandNotAllowed'));
+                return;
+            }
         } catch (err) {
             logger.error(`${logPrefix} Failed to fetch channel`, err);
             await interaction.editReply(t(locale, 'messageCmd.fetchChannelFailed'));

@@ -10,12 +10,19 @@ CREATE TABLE IF NOT EXISTS event_logs (
   user_id VARCHAR(30),              -- 사용자 ID (Nullable)
   target_id VARCHAR(30),            -- 대상 ID (Nullable, e.g., banned user, deleted message)
   timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL, -- 이벤트 발생 시간
-  data JSONB,
-  -- UNIQUE 제약 조건 추가: guild_id, event_type, target_id 조합은 고유해야 함
-  CONSTRAINT event_logs_unique_guild_event_target UNIQUE (guild_id, event_type, target_id)
+  data JSONB
 ) PARTITION BY LIST (guild_id); -- guild_id를 기준으로 리스트 파티셔닝 적용
 `;
 // PRIMARY KEY (id, guild_id) -- 파티션 키를 포함한 복합키 또는 파티션별 로컬 PK 고려
+
+const alignEventLogsDedupQuery = `
+ALTER TABLE event_logs
+DROP CONSTRAINT IF EXISTS event_logs_unique_guild_event_target;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_event_logs_message_create_unique_target
+ON event_logs (guild_id, event_type, target_id)
+WHERE event_type = 'messageCreate';
+`;
 
 const createIndexesQuery = `
 -- CREATE INDEX IF NOT EXISTS idx_event_logs_guild_id ON event_logs (guild_id); -- 파티션 키 인덱스는 보통 불필요하거나 다르게 관리
@@ -104,6 +111,10 @@ ON command_permissions (guild_id, command_name);
         logger.info('Creating event_logs table if it does not exist...');
         await client.query(createEventLogsTableQuery);
         logger.success('Table event_logs checked/created.');
+
+        logger.info('Aligning event_logs dedup constraints/indexes...');
+        await client.query(alignEventLogsDedupQuery);
+        logger.success('event_logs dedup constraints/indexes aligned.');
 
         logger.info('Creating event_logs indexes if they do not exist...');
         await client.query(createIndexesQuery);

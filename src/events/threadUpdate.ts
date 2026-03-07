@@ -1,5 +1,6 @@
 import { Events, AuditLogEvent } from 'discord.js';
 
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -56,13 +57,14 @@ const event = {
 
         // Audit Log 조회 시도
         try {
-            const fetchedLogs = await guild.fetchAuditLogs({
+            const fetchedLogs = await fetchAuditLogsCached(guild, {
                 limit: 10,
                 type: AuditLogEvent.ThreadUpdate, // 111
+                ttlMs: 2_000,
             });
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target.id === targetId &&
+                    entry.targetId === targetId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 15000,
             );
 

@@ -16,6 +16,7 @@ import { getFriendlyEventName } from '../config/eventsConfig.js';
 import { searchLogs } from '../db/database.js';
 import { getInteractionLocale, t } from '../i18n/index.js';
 import { storageManager } from '../storage/StorageManager.js';
+import { mapWithConcurrency, withTimeout } from '../utils/asyncControl.js';
 import { logger } from '../utils/logger.js';
 import { MAX_TEXT_SIZE, PAGE_SIZE, getLogSearchMessages } from './logSearchShared/constants.js';
 import { str } from './logSearchShared/formatters.js';
@@ -45,6 +46,17 @@ import type {
 
 /** 로그 검색 명령에서 날짜 파서를 재사용할 수 있도록 re-export 합니다. */
 export { parseDateString } from './logSearchShared/date.js';
+
+const MAX_ATTACHMENT_DOWNLOADS_PER_PAGE = 4;
+const ATTACHMENT_DOWNLOAD_CONCURRENCY = 2;
+const ATTACHMENT_DOWNLOAD_TIMEOUT_MS = 1_500;
+
+interface PendingAttachmentDownload {
+    logId: string;
+    attachmentId: string;
+    filename: string;
+    storagePath: string;
+}
 
 /**
  * 로그 검색 결과를 페이지 단위로 조회해 Components V2 UI(본문/첨부/페이지 버튼)로 렌더링합니다.
@@ -137,6 +149,7 @@ export async function fetchAndDisplayLogs(
         let currentTextSize = summaryMessage.length;
         let logsDisplayed = 0;
         const userCache = new Map<string, User | null>();
+        const pendingDownloads: PendingAttachmentDownload[] = [];
 
         for (let logIndex = 0; logIndex < logs.length; logIndex++) {
             const log = logs[logIndex];
@@ -411,29 +424,16 @@ export async function fetchAndDisplayLogs(
                     const attachmentData = item;
                     const storagePath = str(attachmentData.storagePath);
                     if (storagePath && attachmentData.filename) {
-                        let nasFileBuffer: Buffer | null = null;
-                        try {
-                            nasFileBuffer = await storageManager.download(storagePath);
-                        } catch {
-                            // Suppress error if file not found or download failed, similar to previous behavior
-                            // logger.warn(`Failed to download attachment: ${attachmentData.storagePath}`, error);
-                        }
-                        if (nasFileBuffer) {
-                            const uniqueAttachmentFilename =
-                                `${log.id}_${str(attachmentData.id)}_${str(attachmentData.filename)}`.replace(
-                                    /[^a-zA-Z0-9_.-]/g,
-                                    '_',
-                                );
-                            const discordAttachment = new AttachmentBuilder(nasFileBuffer, {
-                                name: uniqueAttachmentFilename,
+                        if (pendingDownloads.length < MAX_ATTACHMENT_DOWNLOADS_PER_PAGE) {
+                            pendingDownloads.push({
+                                logId: str(log.id),
+                                attachmentId: str(attachmentData.id),
+                                filename: str(attachmentData.filename),
+                                storagePath,
                             });
-                            attachmentsToSend.push(discordAttachment);
-                            const fileComponent = new FileBuilder().setURL(
-                                `attachment://${uniqueAttachmentFilename}`,
-                            );
-                            displayableComponents.push(fileComponent);
-                        } else if (attachmentData.discordUrl) {
-                            const attText = `📎 [${str(attachmentData.filename) || t(locale, 'logSearchShared.attachmentDownloadFail')}](${str(attachmentData.discordUrl)})`;
+                        }
+                        if (attachmentData.discordUrl) {
+                            const attText = `📎 [${str(attachmentData.filename) || t(locale, 'logSearchShared.attachment')}](${str(attachmentData.discordUrl)})`;
                             if (currentTextSize + attText.length > MAX_TEXT_SIZE) break;
                             currentTextSize += attText.length;
                             displayableComponents.push(
@@ -450,6 +450,44 @@ export async function fetchAndDisplayLogs(
             }
             if (logIndex < logs.length - 1) {
                 displayableComponents.push(new SeparatorBuilder());
+            }
+        }
+
+        if (pendingDownloads.length > 0) {
+            const downloadedAttachments = await mapWithConcurrency(
+                pendingDownloads,
+                ATTACHMENT_DOWNLOAD_CONCURRENCY,
+                async (pending) => {
+                    try {
+                        const buffer = await withTimeout(
+                            storageManager.download(pending.storagePath),
+                            ATTACHMENT_DOWNLOAD_TIMEOUT_MS,
+                            `Attachment download timeout: ${pending.storagePath}`,
+                        );
+                        return {
+                            ...pending,
+                            buffer,
+                        };
+                    } catch {
+                        return null;
+                    }
+                },
+            );
+
+            for (const downloaded of downloadedAttachments) {
+                if (!downloaded) continue;
+                const uniqueAttachmentFilename =
+                    `${downloaded.logId}_${downloaded.attachmentId}_${downloaded.filename}`.replace(
+                        /[^a-zA-Z0-9_.-]/g,
+                        '_',
+                    );
+                const discordAttachment = new AttachmentBuilder(downloaded.buffer, {
+                    name: uniqueAttachmentFilename,
+                });
+                attachmentsToSend.push(discordAttachment);
+                displayableComponents.push(
+                    new FileBuilder().setURL(`attachment://${uniqueAttachmentFilename}`),
+                );
             }
         }
 

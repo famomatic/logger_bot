@@ -99,6 +99,13 @@ export const command: SlashCommand = {
                     return;
                 }
                 specificChannel = fetched as GuildTextBasedChannel;
+                if (specificChannel.guildId !== interaction.guildId) {
+                    await interaction.reply({
+                        content: t(locale, 'common.commandNotAllowed'),
+                        flags: [MessageFlags.Ephemeral],
+                    });
+                    return;
+                }
             } catch (err) {
                 logger.error(
                     `[message-delete-user] Failed to fetch channel ${targetChannelIdOption}:`,

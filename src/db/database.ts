@@ -47,6 +47,7 @@ pool.on('error', (err, client) => {
 
 // --- Authorized Guild Cache ---
 let authorizedGuildIds = new Set<string>();
+let authorizedGuildIdsLoaded = false;
 
 /**
  * `authorized_guilds` 테이블을 읽어 메모리 캐시를 초기화합니다.
@@ -55,10 +56,20 @@ export async function loadAuthorizedGuildIds(): Promise<void> {
     try {
         const res = await pool.query('SELECT guild_id FROM authorized_guilds');
         authorizedGuildIds = new Set(res.rows.map((r: { guild_id: string }) => r.guild_id));
+        authorizedGuildIdsLoaded = true;
         logger.info(`Loaded ${authorizedGuildIds.size} authorized guild IDs.`);
     } catch (error) {
+        authorizedGuildIdsLoaded = false;
         logger.error('Failed to load authorized guild IDs:', error);
+        throw error;
     }
+}
+
+/**
+ * authorized_guilds 캐시가 정상 로드되었는지 반환합니다.
+ */
+export function isAuthorizedGuildCacheLoaded(): boolean {
+    return authorizedGuildIdsLoaded;
 }
 
 /**
@@ -431,10 +442,19 @@ async function ensureGuildPartition(guildId: string): Promise<void> {
  * 이벤트 1건을 즉시 DB에 삽입합니다. 파티션 누락 시 1회 복구 재시도합니다.
  */
 async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Promise<boolean> {
-    const insertQuery = `
+    const messageCreateConflictClause =
+        "ON CONFLICT (guild_id, event_type, target_id) WHERE (event_type = 'messageCreate') DO NOTHING";
+    const insertQuery =
+        event.eventType === 'messageCreate'
+            ? `
     INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
     VALUES ($1, $2, $3, $4, $5, $6, $7)
-    ON CONFLICT (guild_id, event_type, target_id) DO NOTHING
+    ${messageCreateConflictClause}
+    RETURNING id;
+  `
+            : `
+    INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING id;
   `;
     const normalizedTargetId = normalizeTargetId(event.targetId);
@@ -507,33 +527,53 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
     const uniqueGuildIds = [...new Set(events.map((event) => event.guildId))];
     await Promise.all(uniqueGuildIds.map((guildId) => ensureGuildPartition(guildId)));
 
-    const values: unknown[] = [];
-    const rows = events.map((event, index) => {
-        const base = index * 7;
-        const normalizedTargetId = normalizeTargetId(event.targetId);
-        values.push(
-            event.eventType,
-            event.guildId,
-            event.userId,
-            event.channelId,
-            normalizedTargetId,
-            event.data,
-            event.timestamp,
-        );
-        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
-    });
+    const messageCreateEvents = events.filter((event) => event.eventType === 'messageCreate');
+    const otherEvents = events.filter((event) => event.eventType !== 'messageCreate');
+    const insertedRows: BatchInsertedLogRow[] = [];
 
-    const insertQuery = `
+    const runBatchInsert = async (
+        batchEvents: LogEventRecord[],
+        options: { messageCreateOnly: boolean },
+    ): Promise<void> => {
+        if (batchEvents.length === 0) {
+            return;
+        }
+
+        const values: unknown[] = [];
+        const rows = batchEvents.map((event, index) => {
+            const base = index * 7;
+            const normalizedTargetId = normalizeTargetId(event.targetId);
+            values.push(
+                event.eventType,
+                event.guildId,
+                event.userId,
+                event.channelId,
+                normalizedTargetId,
+                event.data,
+                event.timestamp,
+            );
+            return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
+        });
+
+        const conflictClause = options.messageCreateOnly
+            ? "ON CONFLICT (guild_id, event_type, target_id) WHERE (event_type = 'messageCreate') DO NOTHING"
+            : '';
+        const insertQuery = `
       INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
       VALUES ${rows.join(', ')}
-      ON CONFLICT (guild_id, event_type, target_id) DO NOTHING
+      ${conflictClause}
       RETURNING event_type, guild_id, user_id, channel_id, target_id, data, "timestamp"
     `;
 
-    try {
         const result = await pool.query<BatchInsertedLogRow>(insertQuery, values);
+        insertedRows.push(...result.rows);
+    };
 
-        for (const row of result.rows) {
+    try {
+        await runBatchInsert(messageCreateEvents, { messageCreateOnly: true });
+        await runBatchInsert(otherEvents, { messageCreateOnly: false });
+
+        for (const row of insertedRows) {
             dispatchAlert(
                 row.event_type,
                 row.guild_id,
@@ -548,7 +588,7 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
             });
         }
 
-        return result.rowCount ?? 0;
+        return insertedRows.length;
     } catch (error) {
         logger.error('Bulk log insert failed:', error);
         throw error;
@@ -712,11 +752,17 @@ export async function migrate() {
         user_id VARCHAR(30),              -- 사용자 ID (Nullable)
         target_id VARCHAR(30),            -- 대상 ID (Nullable, e.g., banned user, deleted message)
         timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL, -- 이벤트 발생 시간
-        data JSONB,
-        -- UNIQUE 제약 조건 추가: guild_id, event_type, target_id 조합은 고유해야 함
-        CONSTRAINT event_logs_unique_guild_event_target UNIQUE (guild_id, event_type, target_id)
+        data JSONB
       ) PARTITION BY LIST (guild_id); -- guild_id를 기준으로 리스트 파티셔닝 적용
     `);
+        await client.query(
+            `ALTER TABLE event_logs DROP CONSTRAINT IF EXISTS event_logs_unique_guild_event_target;`,
+        );
+        await client.query(
+            `CREATE UNIQUE INDEX IF NOT EXISTS idx_event_logs_message_create_unique_target
+             ON event_logs (guild_id, event_type, target_id)
+             WHERE event_type = 'messageCreate';`,
+        );
         // 인덱스 추가 (선택적이지만 조회 성능 향상에 도움)
         await client.query(
             `CREATE INDEX IF NOT EXISTS idx_event_logs_guild_timestamp ON event_logs (guild_id, "timestamp" DESC);`,

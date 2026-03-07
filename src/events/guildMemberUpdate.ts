@@ -1,5 +1,6 @@
 import { Events, GuildMember, AuditLogEvent, User, Collection } from 'discord.js';
 
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -193,22 +194,24 @@ const event = {
         let memberRoleUpdateLogs = new Collection<string, GuildAuditLogsEntry>();
 
         try {
-            const fetchedMemberUpdates = await guild.fetchAuditLogs({
+            const fetchedMemberUpdates = await fetchAuditLogsCached(guild, {
                 limit: 10,
                 type: AuditLogEvent.MemberUpdate,
+                ttlMs: 2_000,
             });
             memberUpdateLogs = fetchedMemberUpdates.entries.filter(
-                (entry: GuildAuditLogsEntry) =>
+                (entry) =>
                     entry.target instanceof User &&
                     entry.target.id === targetId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
-            const fetchedRoleUpdates = await guild.fetchAuditLogs({
+            const fetchedRoleUpdates = await fetchAuditLogsCached(guild, {
                 limit: 5,
                 type: AuditLogEvent.MemberRoleUpdate,
+                ttlMs: 2_000,
             });
             memberRoleUpdateLogs = fetchedRoleUpdates.entries.filter(
-                (entry: GuildAuditLogsEntry) =>
+                (entry) =>
                     entry.target instanceof User &&
                     entry.target.id === targetId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,

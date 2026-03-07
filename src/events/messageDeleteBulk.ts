@@ -1,5 +1,6 @@
 import { Events, AuditLogEvent } from 'discord.js';
 
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -27,15 +28,22 @@ const event = {
 
         // Audit Log 조회 시도 (대량 삭제 실행자 확인)
         try {
-            const fetchedLogs = await channel.guild.fetchAuditLogs({
+            const fetchedLogs = await fetchAuditLogsCached(channel.guild, {
                 limit: 5,
                 type: AuditLogEvent.MessageBulkDelete,
+                ttlMs: 1_500,
             });
 
             // 채널 ID가 같고, 삭제된 메시지 수가 일치하는 가장 최근 로그를 찾음
             // AuditLog는 약간의 지연이 있을 수 있음
             const deleteLog = fetchedLogs.entries.find(
-                (entry) => entry.targetId === channelId && entry.extra.count === deletedCount,
+                (entry) =>
+                    entry.targetId === channelId &&
+                    entry.extra &&
+                    typeof entry.extra === 'object' &&
+                    'count' in entry.extra &&
+                    typeof entry.extra.count === 'number' &&
+                    entry.extra.count === deletedCount,
             );
 
             if (deleteLog) {
