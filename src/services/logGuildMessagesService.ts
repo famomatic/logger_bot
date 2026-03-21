@@ -32,10 +32,6 @@ interface MessageBackfillOutcome {
     failed: boolean;
 }
 
-const BACKFILL_CONCURRENCY = 8;
-const ATTACHMENT_DOWNLOAD_TIMEOUT_MS = 15_000;
-const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
-
 /**
  * 첨부파일 다운로드를 지수형 대기(1s, 2s, 3s...)로 재시도합니다.
  */
@@ -46,9 +42,9 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
             logger.debug(`Downloading attachment: ${url} (try ${attempt}/${maxRetries})`);
             const res = await axios.get(url, {
                 responseType: 'arraybuffer',
-                timeout: ATTACHMENT_DOWNLOAD_TIMEOUT_MS,
-                maxContentLength: ATTACHMENT_MAX_BYTES,
-                maxBodyLength: ATTACHMENT_MAX_BYTES,
+                timeout: config.messageRecovery.attachmentDownloadTimeoutMs,
+                maxContentLength: config.messageRecovery.attachmentMaxBytes,
+                maxBodyLength: config.messageRecovery.attachmentMaxBytes,
             });
             return Buffer.from(res.data);
         } catch (err) {
@@ -107,8 +103,8 @@ export async function buildAttachmentData(
         let downloadError: string | null = null;
         {
             try {
-                if (attachment.size > ATTACHMENT_MAX_BYTES) {
-                    downloadError = `Attachment too large (${attachment.size} bytes > ${ATTACHMENT_MAX_BYTES} bytes)`;
+                if (attachment.size > config.messageRecovery.attachmentMaxBytes) {
+                    downloadError = `Attachment too large (${attachment.size} bytes > ${config.messageRecovery.attachmentMaxBytes} bytes)`;
                     logger.warn(
                         `Skipping oversized attachment ${attachment.id} (${attachment.name}) size=${attachment.size}`,
                     );
@@ -271,8 +267,15 @@ export async function runGuildMessageBackfill({
                     candidates.push(message);
                 }
 
-                for (let start = 0; start < candidates.length; start += BACKFILL_CONCURRENCY) {
-                    const chunk = candidates.slice(start, start + BACKFILL_CONCURRENCY);
+                for (
+                    let start = 0;
+                    start < candidates.length;
+                    start += config.messageRecovery.backfillConcurrency
+                ) {
+                    const chunk = candidates.slice(
+                        start,
+                        start + config.messageRecovery.backfillConcurrency,
+                    );
                     const outcomes = await Promise.all(
                         chunk.map(async (message): Promise<MessageBackfillOutcome> => {
                             try {

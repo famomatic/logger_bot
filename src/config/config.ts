@@ -56,6 +56,9 @@ interface RuntimeConfig {
     messageRecovery: {
         enabled: boolean;
         maxPagesPerChannel: number;
+        backfillConcurrency: number;
+        attachmentDownloadTimeoutMs: number;
+        attachmentMaxBytes: number;
     };
     sentryDsn: string | undefined;
     nodeEnv: string;
@@ -159,6 +162,18 @@ const buildConfigTemplate = (): RuntimeConfig => {
             maxPagesPerChannel: Math.max(
                 1,
                 parseInteger(process.env.MESSAGE_RECOVERY_MAX_PAGES_PER_CHANNEL, 20),
+            ),
+            backfillConcurrency: Math.max(
+                1,
+                parseInteger(process.env.MESSAGE_RECOVERY_BACKFILL_CONCURRENCY, 8),
+            ),
+            attachmentDownloadTimeoutMs: Math.max(
+                1000,
+                parseInteger(process.env.MESSAGE_RECOVERY_ATTACHMENT_DOWNLOAD_TIMEOUT_MS, 15000),
+            ),
+            attachmentMaxBytes: Math.max(
+                1,
+                parseInteger(process.env.MESSAGE_RECOVERY_ATTACHMENT_MAX_BYTES, 25 * 1024 * 1024),
             ),
         },
         sentryDsn: process.env.SENTRY_DSN,
