@@ -1,5 +1,5 @@
 import { Redis as RedisClient } from 'ioredis';
-
+import { randomUUID } from 'crypto';
 import { config } from '../config/config.js';
 import {
     insertLogEventDirectNow,
@@ -227,9 +227,13 @@ class RedisLogQueue {
     private parsePayload(raw: string): QueuedLogEvent | null {
         try {
             const parsed = JSON.parse(raw) as QueuedLogEvent;
-            if (!parsed.event.guildId || !parsed.event.eventType || !parsed.event.targetId) {
+            if (!parsed?.event?.guildId || !parsed.event.eventType) {
                 logger.warn('Discarding malformed queued log event payload.');
                 return null;
+            }
+            if (!parsed.event.eventId) {
+                // Backward compatibility for pre-cutover queued payloads.
+                parsed.event.eventId = randomUUID();
             }
             return parsed;
         } catch (error) {
@@ -343,7 +347,16 @@ export async function initializeLogQueue(): Promise<void> {
     }
 
     const queue = new RedisLogQueue();
-    await queue.start();
+    try {
+        await queue.start();
+    } catch (error) {
+        logger.error(
+            'Failed to start Redis log queue. Falling back to direct DB writes for this process.',
+            error,
+        );
+        setLogEventDispatcher(null);
+        return;
+    }
 
     setLogEventDispatcher(async (event) => {
         const queued = await queue.enqueue(event);

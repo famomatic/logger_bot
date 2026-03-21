@@ -28,8 +28,10 @@ export const command: SlashCommand = {
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         try {
-            await executeReload(client);
-            await interaction.editReply(t(locale, 'reload.success'));
+            const result = await executeReload(client);
+            const suffix =
+                result.warnings.length > 0 ? `\n\nWarning: ${result.warnings.join('\n')}` : '';
+            await interaction.editReply(`${t(locale, 'reload.success')}${suffix}`);
         } catch (error) {
             logger.error('Reload failed:', error);
             await interaction.editReply(t(locale, 'reload.failed'));

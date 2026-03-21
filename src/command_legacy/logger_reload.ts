@@ -17,8 +17,10 @@ const command: LegacyCommand = {
 
         const reply = await message.reply(t(locale, 'reload.inProgress'));
         try {
-            await executeReload(message.client);
-            await reply.edit(t(locale, 'reload.success'));
+            const result = await executeReload(message.client);
+            const suffix =
+                result.warnings.length > 0 ? `\n\nWarning: ${result.warnings.join('\n')}` : '';
+            await reply.edit(`${t(locale, 'reload.success')}${suffix}`);
         } catch (error) {
             logger.error('Reload failed:', error);
             await reply.edit(t(locale, 'reload.failed'));

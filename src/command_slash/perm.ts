@@ -1,12 +1,17 @@
 import { InteractionContextType, MessageFlags, SlashCommandBuilder } from 'discord.js';
 
 import {
-    canManagePermissions,
-    isManagedSlashCommand,
-    managedCommandChoices,
-} from '../commandShared/slashPermission.js';
+    ChatInputCommandInteraction,
+    InteractionContextType,
+    MessageFlags,
+    SlashCommandBuilder,
+} from 'discord.js';
+import { logger } from '../utils/logger.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { buildContainerMessage } from '../commandShared/componentsV2.js';
 import {
     authorizeGuildId,
+    fetchAlertSubscriptions,
     grantCommandPermission,
     listCommandPermissionsByCommand,
     listCommandPermissionsByUser,
@@ -25,6 +30,11 @@ export const command = {
     data: new SlashCommandBuilder()
         .setName('perm')
         .setDescription(defaultText('command.permDescription'))
+        .addSubcommand((subcommand) =>
+            subcommand
+                .setName('panel')
+                .setDescription(defaultText('command.permDescription')),
+        )
         .addSubcommand((subcommand) =>
             subcommand
                 .setName('guild-authorize')
@@ -129,6 +139,48 @@ export const command = {
         const subcommand = interaction.options.getSubcommand(true);
         try {
             switch (subcommand) {
+                case 'panel': {
+                    const managedCommands = managedCommandChoices().map((item) => item.value);
+                    const alertRows = await fetchAlertSubscriptions();
+                    const guildAlertCount = alertRows.filter(
+                        (row) => row.guild_id === interaction.guildId,
+                    ).length;
+
+                    const sections = [
+                        {
+                            title: 'Permission Console',
+                            body: [
+                                `Guild: ${interaction.guild?.name ?? interaction.guildId} (${interaction.guildId})`,
+                                `Managed commands: ${managedCommands.length > 0 ? managedCommands.join(', ') : t(locale, 'report.none')}`,
+                                `Alert subscriptions: ${guildAlertCount}`,
+                            ].join('\n'),
+                        },
+                        {
+                            title: 'Quick Actions',
+                            body: [
+                                '`/perm guild-authorize guild_id:<id>`',
+                                '`/perm guild-unauthorize guild_id:<id>`',
+                                '`/perm grant user:<user> command:<name>`',
+                                '`/perm revoke user:<user> command:<name>`',
+                                '`/perm list-user user:<user>`',
+                                '`/perm list-command command:<name>`',
+                            ].join('\n'),
+                        },
+                    ];
+
+                    await interaction.reply({
+                        ...buildContainerMessage({
+                            title: 'Permission Panel',
+                            description:
+                                'Use this ephemeral panel as the control surface for permission operations.',
+                            sections,
+                            accentColor: 0x5865f2,
+                            footer: `Requester: ${interaction.user.tag}`,
+                        }),
+                        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+                    });
+                    return;
+                }
                 case 'guild-authorize': {
                     const guildId = interaction.options.getString('guild_id', true).trim();
                     await authorizeGuildId(guildId);

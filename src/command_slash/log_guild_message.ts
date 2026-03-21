@@ -83,7 +83,7 @@ export const command: SlashCommand = {
                 return;
             }
 
-            await interaction.followUp(finalReply);
+            await interaction.editReply(finalReply);
             logger.info(
                 `Finished bulk message logging check for guild ${targetGuildId}. Processed ${result.totalChannels} channels, checked ${result.processedCount} messages, newly logged ${result.newlyLoggedCount} from approx ${result.uniqueUserCount} users with ${result.errorCount} errors in ${result.durationSeconds}s.`,
             );
@@ -103,10 +103,7 @@ export const command: SlashCommand = {
             });
 
             if (interaction.deferred || interaction.replied) {
-                await interaction.followUp({
-                    content: errorMessage,
-                    flags: MessageFlags.Ephemeral,
-                });
+                await interaction.editReply(errorMessage);
             } else {
                 await interaction.reply({
                     content: errorMessage,

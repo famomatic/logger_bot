@@ -8,8 +8,8 @@ import {
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
 import { config } from '../config/config.js';
 import { getGuildReport, isGuildAuthorized } from '../db/database.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
-import { logger } from '../utils/logger.js';
+import { buildContainerMessage } from '../commandShared/componentsV2.js';
+import { isSuperAdmin } from '../commandShared/slashPermission.js';
 import {
     formatEntityCountList,
     formatEventTypeCountList,
@@ -67,6 +67,7 @@ export const command = {
                 config.superAdminIds,
                 { emptyText: t(locale, 'report.none') },
             );
+            const requesterIsSuperAdmin = isSuperAdmin(interaction.user.id);
 
             const premiumTierName = GuildPremiumTier[guild.premiumTier];
 
@@ -148,7 +149,13 @@ export const command = {
                 }),
             ];
 
-            const accessLines = [t(locale, 'reportCommand.superAdmins', { value: superAdminList })];
+            const accessLines = [
+                requesterIsSuperAdmin
+                    ? t(locale, 'reportCommand.superAdmins', { value: superAdminList })
+                    : t(locale, 'reportCommand.superAdmins', {
+                          value: t(locale, 'common.commandNotAllowed'),
+                      }),
+            ];
 
             await interaction.editReply(
                 buildContainerMessage({

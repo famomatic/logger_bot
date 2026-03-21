@@ -1,5 +1,5 @@
-import { AuditLogEvent, DiscordAPIError } from 'discord.js';
-
+import { Client, Guild, AuditLogEvent, DiscordAPIError } from 'discord.js';
+import { isAuthorizedGuildCacheReady, isGuildAuthorized } from '../db/database.js';
 import { logger } from './logger.js';
 import { isGuildAuthorized } from '../db/database.js';
 
@@ -43,6 +43,13 @@ export async function leaveUnauthorizedGuild(guild: Guild): Promise<void> {
  * 현재 접속한 길드 중 미인증 길드를 순회하며 자동 탈퇴 처리합니다.
  */
 export async function checkAndLeaveUnauthorizedGuilds(client: Client): Promise<void> {
+    if (!isAuthorizedGuildCacheReady()) {
+        logger.error(
+            'Authorized guild cache is not ready. Skipping unauthorized guild enforcement.',
+        );
+        return;
+    }
+
     for (const guild of client.guilds.cache.values()) {
         if (!isGuildAuthorized(guild.id)) {
             await leaveUnauthorizedGuild(guild);

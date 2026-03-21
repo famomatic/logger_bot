@@ -8,30 +8,20 @@ import {
     fetchAlertSubscriptions,
 } from '../db/database.js';
 import { resolveLocale } from '../i18n/index.js';
+import type { GuildTextBasedChannel } from 'discord.js';
 
 import type { AlertSubscription } from '../types/alerts.js';
 import type { Client } from 'discord.js';
 
 const subscriptions = new Map<string, AlertSubscription>();
-const ALERT_DISPATCH_CONCURRENCY = 4;
-const ALERT_DISPATCH_TIMEOUT_MS = 4_000;
-const ALERT_QUEUE_MAX_SIZE = 5_000;
-const ALERT_QUEUE_BATCH_SIZE = 100;
-const ALERT_FLUSH_POLL_MS = 50;
-
-interface AlertDispatchJob {
-    eventType: string;
-    guildId: string;
-    userId: string | null;
-    channelId: string | null;
-    targetId: string | null;
-    data: Record<string, unknown>;
-    timestamp: Date;
-    client: Client;
-}
-
-const dispatchQueue: AlertDispatchJob[] = [];
-let dispatchLoopRunning = false;
+const alertChannelCache = new Map<
+    string,
+    {
+        fetchedAt: number;
+        channel: GuildTextBasedChannel | null;
+    }
+>();
+const ALERT_CHANNEL_CACHE_TTL_MS = 60_000;
 
 function subscriptionKey(guildId: string, category: string, channelId: string): string {
     return `${guildId}:${category}:${channelId}`;
@@ -209,18 +199,60 @@ export function queueAlertDispatch(
     data: Record<string, unknown>,
     timestamp: Date,
     client: Client,
-): boolean {
-    return enqueueDispatchJob({
-        eventType,
-        guildId,
-        userId,
-        channelId,
-        targetId,
-        data,
-        timestamp,
-        client,
-    });
-}
+) {
+    const matchingSubscriptions = Array.from(subscriptions.values()).filter(
+        (sub) => sub.guildId === guildId && sub.eventTypes.includes(eventType),
+    );
+    if (matchingSubscriptions.length === 0) {
+        return;
+    }
+
+    const guild = client.guilds.cache.get(guildId);
+    const locale = resolveLocale(guild?.preferredLocale);
+
+    for (const sub of matchingSubscriptions) {
+        try {
+            const now = Date.now();
+            const cached = alertChannelCache.get(sub.channelId);
+            const cacheFresh = cached && now - cached.fetchedAt < ALERT_CHANNEL_CACHE_TTL_MS;
+            let fetched = cacheFresh ? cached.channel : null;
+
+            if (!fetched) {
+                const fromCache = client.channels.cache.get(sub.channelId);
+                if (fromCache?.isTextBased()) {
+                    fetched = fromCache as GuildTextBasedChannel;
+                } else {
+                    const lookedUp = await client.channels.fetch(sub.channelId).catch(() => null);
+                    fetched = lookedUp?.isTextBased()
+                        ? (lookedUp as GuildTextBasedChannel)
+                        : null;
+                }
+
+                alertChannelCache.set(sub.channelId, {
+                    fetchedAt: now,
+                    channel: fetched,
+                });
+            }
+
+            if (!fetched?.isTextBased()) continue;
+            const json = escapeCodeBlockContent(JSON.stringify(data).slice(0, 1800));
+            const friendlyName = getFriendlyEventName(eventType, locale);
+            const summaryLines = [
+                locale === 'ko'
+                    ? `이벤트: ${friendlyName} (${eventType})`
+                    : `Event: ${friendlyName} (${eventType})`,
+                locale === 'ko'
+                    ? `타임스탬프: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`
+                    : `Timestamp: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`,
+                locale === 'ko'
+                    ? `채널: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`
+                    : `Channel: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`,
+                locale === 'ko'
+                    ? `대상 ID: ${targetId ?? 'N/A'}`
+                    : `Target ID: ${targetId ?? 'N/A'}`,
+                locale === 'ko' ? `사용자 ID: ${userId ?? 'N/A'}` : `User ID: ${userId ?? 'N/A'}`,
+            ];
+            const content = `${summaryLines.join('\n')}\n\n${locale === 'ko' ? '데이터' : 'Data'}:\n\`\`\`json\n${json}\n\`\`\``;
 
 /**
  * 종료 시 큐에 남은 알림 전송 작업의 drain 완료를 대기합니다.

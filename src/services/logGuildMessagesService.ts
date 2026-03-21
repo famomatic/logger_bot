@@ -33,7 +33,8 @@ interface MessageBackfillOutcome {
 }
 
 const BACKFILL_CONCURRENCY = 8;
-const ATTACHMENT_DOWNLOAD_TIMEOUT_MS = 10_000;
+const ATTACHMENT_DOWNLOAD_TIMEOUT_MS = 15_000;
+const ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 
 /**
  * 첨부파일 다운로드를 지수형 대기(1s, 2s, 3s...)로 재시도합니다.
@@ -46,6 +47,8 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
             const res = await axios.get(url, {
                 responseType: 'arraybuffer',
                 timeout: ATTACHMENT_DOWNLOAD_TIMEOUT_MS,
+                maxContentLength: ATTACHMENT_MAX_BYTES,
+                maxBodyLength: ATTACHMENT_MAX_BYTES,
             });
             return Buffer.from(res.data);
         } catch (err) {

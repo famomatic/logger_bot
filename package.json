@@ -7,7 +7,7 @@
     "scripts": {
         "start": "node dist/index.js",
         "clean": "node -e \"['dist', 'node_modules', 'package-lock.json'].forEach((p) => require('fs').rmSync(p, { recursive: true, force: true }))\" && npm install",
-        "dev": "npm run build && NODE_ENV=dev node dist/index.js",
+        "dev": "npm run build && NODE_ENV=development node dist/index.js",
         "dev:build:watch": "tsc -w",
         "dev:run:watch": "NODE_ENV=dev node --watch dist/index.js",
         "build": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\" && tsc",
@@ -22,7 +22,9 @@
         "verify:release": "npm run lint:strict && npm run lint:scripts && npm run type && npm run build && npm run verify:renderers && npm audit --omit=dev",
         "db:setup": "node scripts/generate_db.cjs",
         "db:migrate": "node scripts/migrate.cjs",
-        "db:migrate:storage-path": "node scripts/migrate_attachment_storage_path.cjs"
+        "db:migrate:storage-path": "node scripts/migrate_attachment_storage_path.cjs",
+        "db:prepare:event-id-cutover": "node scripts/prepare_event_id_cutover.cjs",
+        "db:cutover:event-logs-swap": "node scripts/cutover_event_logs_swap.cjs"
     },
     "keywords": [
         "discord",
@@ -72,8 +74,8 @@
         "typescript-eslint": "^8.56.1"
     },
     "overrides": {
-        "undici": "^6.23.0",
-        "fast-xml-parser": "^5.3.8",
+        "undici": "^6.24.0",
+        "fast-xml-parser": "^5.5.7",
         "minimatch": "^10.2.3"
     }
 }

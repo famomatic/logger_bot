@@ -47,7 +47,7 @@ pool.on('error', (err, client) => {
 
 // --- Authorized Guild Cache ---
 let authorizedGuildIds = new Set<string>();
-let authorizedGuildIdsLoaded = false;
+let authorizedGuildCacheReady = false;
 
 /**
  * `authorized_guilds` 테이블을 읽어 메모리 캐시를 초기화합니다.
@@ -56,20 +56,20 @@ export async function loadAuthorizedGuildIds(): Promise<void> {
     try {
         const res = await pool.query('SELECT guild_id FROM authorized_guilds');
         authorizedGuildIds = new Set(res.rows.map((r: { guild_id: string }) => r.guild_id));
-        authorizedGuildIdsLoaded = true;
+        authorizedGuildCacheReady = true;
         logger.info(`Loaded ${authorizedGuildIds.size} authorized guild IDs.`);
     } catch (error) {
-        authorizedGuildIdsLoaded = false;
+        authorizedGuildCacheReady = false;
         logger.error('Failed to load authorized guild IDs:', error);
         throw error;
     }
 }
 
 /**
- * authorized_guilds 캐시가 정상 로드되었는지 반환합니다.
+ * 메모리 기반 authorized guild 캐시가 성공적으로 적재되었는지 반환합니다.
  */
-export function isAuthorizedGuildCacheLoaded(): boolean {
-    return authorizedGuildIdsLoaded;
+export function isAuthorizedGuildCacheReady(): boolean {
+    return authorizedGuildCacheReady;
 }
 
 /**
@@ -339,26 +339,13 @@ export function setLogEventDispatcher(dispatcher: LogEventDispatcher | null): vo
 }
 
 /**
- * target_id가 없을 때 중복 가능성을 낮춘 합성 ID를 생성합니다.
- */
-function createSyntheticTargetId(
-    eventType: string,
-    guildId: string,
-    userId: string | null,
-    channelId: string | null,
-    timestamp: Date,
-): string {
-    const stamp = timestamp.getTime().toString(36);
-    const entropy = randomUUID().replace(/-/g, '').slice(0, 12);
-    const source = `${eventType}|${guildId}|${userId ?? 'system'}|${channelId ?? 'none'}|${stamp}|${entropy}`;
-    const hash = createHash('sha1').update(source).digest('hex').slice(0, 24);
-    return `auto_${hash}`;
-}
-
-/**
  * DB 컬럼 길이 제한(30자)을 넘는 target_id를 해시 접미사로 축약합니다.
  */
-function normalizeTargetId(targetId: string): string {
+function normalizeTargetId(targetId: string | null): string | null {
+    if (targetId === null) {
+        return null;
+    }
+
     if (targetId.length <= TARGET_ID_MAX_LENGTH) {
         return targetId;
     }
@@ -366,6 +353,28 @@ function normalizeTargetId(targetId: string): string {
     const hash = createHash('sha1').update(targetId).digest('hex').slice(0, 8);
     const prefixLength = TARGET_ID_MAX_LENGTH - (hash.length + 1);
     return `${targetId.slice(0, prefixLength)}_${hash}`;
+}
+
+function toDeterministicUuid(source: string): string {
+    const digest = createHash('sha256').update(source).digest('hex').slice(0, 32).split('');
+    digest[12] = '4'; // UUID version 4
+    const variant = parseInt(digest[16], 16);
+    digest[16] = ((variant & 0x3) | 0x8).toString(16); // RFC 4122 variant
+    const hex = digest.join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function resolveEventId(
+    eventType: string,
+    guildId: string,
+    targetId: string | null,
+    channelId: string | null,
+): string {
+    // messageCreate는 재복구/재백필 시 동일 이벤트를 중복 적재하지 않도록 결정적 ID를 사용한다.
+    if (eventType === 'messageCreate' && targetId) {
+        return toDeterministicUuid(`messageCreate|${guildId}|${channelId ?? 'none'}|${targetId}`);
+    }
+    return randomUUID();
 }
 
 /**
@@ -380,85 +389,32 @@ function normalizeLogEvent(
     data: Record<string, unknown>,
     timestamp: Date,
 ): LogEventRecord {
+    const normalizedTargetId = normalizeTargetId(targetId);
     return {
+        eventId: resolveEventId(eventType, guildId, normalizedTargetId, channelId),
         eventType,
         guildId,
         userId,
         channelId,
-        targetId: normalizeTargetId(
-            targetId ?? createSyntheticTargetId(eventType, guildId, userId, channelId, timestamp),
-        ),
+        targetId: normalizedTargetId,
         data,
         timestamp,
     };
 }
 
 /**
- * 파티션 테이블 이름 생성 전 guildId 형식을 검증합니다.
+ * 이벤트 1건을 즉시 DB에 삽입합니다.
  */
-function assertValidGuildId(guildId: string): void {
-    if (!/^\d+$/.test(guildId)) {
-        throw new Error(`Invalid guild ID format: ${guildId}`);
-    }
-}
-
-/**
- * SQL 식별자(테이블명 등) 안전 이스케이프를 수행합니다.
- */
-function quoteIdentifier(input: string): string {
-    return `"${input.replace(/"/g, '""')}"`;
-}
-
-/**
- * SQL 리터럴 문자열을 안전하게 이스케이프합니다.
- */
-function quoteLiteral(input: string): string {
-    return `'${input.replace(/'/g, "''")}'`;
-}
-
-/**
- * 길드별 리스트 파티션 테이블이 없으면 생성/attach합니다.
- */
-async function ensureGuildPartition(guildId: string): Promise<void> {
-    assertValidGuildId(guildId);
-    const partitionTableName = `event_logs_guild_${guildId}`;
-    const quotedPartitionTableName = quoteIdentifier(partitionTableName);
-    const quotedGuildId = quoteLiteral(guildId);
-    try {
-        const createPartitionQuery = `CREATE TABLE IF NOT EXISTS ${quotedPartitionTableName} PARTITION OF event_logs FOR VALUES IN (${quotedGuildId});`;
-        await pool.query(createPartitionQuery);
-    } catch (error: unknown) {
-        const pgErr = error as PgError;
-        if (pgErr.code === '42P07') {
-            const attachQuery = `ALTER TABLE event_logs ATTACH PARTITION ${quotedPartitionTableName} FOR VALUES IN (${quotedGuildId});`;
-            await pool.query(attachQuery);
-        } else if (pgErr.code !== '42710' && pgErr.code !== '42809') {
-            throw error;
-        }
-    }
-}
-
-/**
- * 이벤트 1건을 즉시 DB에 삽입합니다. 파티션 누락 시 1회 복구 재시도합니다.
- */
-async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Promise<boolean> {
-    const messageCreateConflictClause =
-        "ON CONFLICT (guild_id, event_type, target_id) WHERE (event_type = 'messageCreate') DO NOTHING";
-    const insertQuery =
-        event.eventType === 'messageCreate'
-            ? `
-    INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-    ${messageCreateConflictClause}
-    RETURNING id;
-  `
-            : `
-    INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+async function insertLogEventDirect(event: LogEventRecord): Promise<boolean> {
+    const insertQuery = `
+    INSERT INTO event_logs (event_id, event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    ON CONFLICT (event_id) DO NOTHING
     RETURNING id;
   `;
     const normalizedTargetId = normalizeTargetId(event.targetId);
     const values = [
+        event.eventId,
         event.eventType,
         event.guildId,
         event.userId,
@@ -485,23 +441,6 @@ async function insertLogEventDirect(event: LogEventRecord, isRetry = false): Pro
         }
         return inserted;
     } catch (error: unknown) {
-        const pgErr = error as PgError;
-        if (pgErr.code === '23514' && !isRetry) {
-            logger.warn(
-                `Partition not found for guild ${event.guildId} while logging ${event.eventType}. Creating partition and retrying.`,
-            );
-            try {
-                await ensureGuildPartition(event.guildId);
-                return await insertLogEventDirect(event, true);
-            } catch (partitionError) {
-                logger.error(
-                    `Failed to create partition for guild ${event.guildId}:`,
-                    partitionError,
-                );
-                logOriginalError(error, event.eventType, event.targetId, event.guildId);
-                return false;
-            }
-        }
         logOriginalError(error, event.eventType, event.targetId, event.guildId);
         return false;
     }
@@ -522,45 +461,28 @@ export async function insertLogEventsBatch(events: LogEventRecord[]): Promise<nu
         return 0;
     }
 
-    const uniqueGuildIds = [...new Set(events.map((event) => event.guildId))];
-    await Promise.all(uniqueGuildIds.map((guildId) => ensureGuildPartition(guildId)));
+    const values: unknown[] = [];
+    const rows = events.map((event, index) => {
+        const base = index * 8;
+        const normalizedTargetId = normalizeTargetId(event.targetId);
+        values.push(
+            event.eventId,
+            event.eventType,
+            event.guildId,
+            event.userId,
+            event.channelId,
+            normalizedTargetId,
+            event.data,
+            event.timestamp,
+        );
+        return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8})`;
+    });
 
-    const messageCreateEvents = events.filter((event) => event.eventType === 'messageCreate');
-    const otherEvents = events.filter((event) => event.eventType !== 'messageCreate');
-    const insertedRows: BatchInsertedLogRow[] = [];
-
-    const runBatchInsert = async (
-        batchEvents: LogEventRecord[],
-        options: { messageCreateOnly: boolean },
-    ): Promise<void> => {
-        if (batchEvents.length === 0) {
-            return;
-        }
-
-        const values: unknown[] = [];
-        const rows = batchEvents.map((event, index) => {
-            const base = index * 7;
-            const normalizedTargetId = normalizeTargetId(event.targetId);
-            values.push(
-                event.eventType,
-                event.guildId,
-                event.userId,
-                event.channelId,
-                normalizedTargetId,
-                event.data,
-                event.timestamp,
-            );
-            return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`;
-        });
-
-        const conflictClause = options.messageCreateOnly
-            ? "ON CONFLICT (guild_id, event_type, target_id) WHERE (event_type = 'messageCreate') DO NOTHING"
-            : '';
-        const insertQuery = `
-      INSERT INTO event_logs (event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
+    const insertQuery = `
+      INSERT INTO event_logs (event_id, event_type, guild_id, user_id, channel_id, target_id, data, "timestamp")
       VALUES ${rows.join(', ')}
-      ${conflictClause}
-      RETURNING event_type, guild_id, user_id, channel_id, target_id, data, "timestamp"
+      ON CONFLICT (event_id) DO NOTHING
+      RETURNING event_id, event_type, guild_id, user_id, channel_id, target_id, data, "timestamp"
     `;
 
         const result = await pool.query<BatchInsertedLogRow>(insertQuery, values);
@@ -738,18 +660,22 @@ export async function migrate() {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        await client.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
         // Event Logs Table
         await client.query(`
       CREATE TABLE IF NOT EXISTS event_logs (
-        id SERIAL, -- 파티셔닝 사용 시 PRIMARY KEY는 파티션 키를 포함해야 함. 또는 각 파티션에서 로컬 PK를 갖도록 수정 필요. 여기서는 일단 SERIAL로 유지하고 PK 제약조건 제거. 필요 시 추후 조정.
+        id BIGSERIAL PRIMARY KEY,
+        event_id UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
         event_type VARCHAR(50) NOT NULL, -- 이벤트 종류 (e.g., 'messageCreate', 'guildMemberAdd')
-        guild_id VARCHAR(30) NOT NULL,    -- 서버 ID (Partition Key)
+        guild_id VARCHAR(30) NOT NULL,    -- 서버 ID
         channel_id VARCHAR(30),           -- 채널 ID (Nullable)
         user_id VARCHAR(30),              -- 사용자 ID (Nullable)
         target_id VARCHAR(30),            -- 대상 ID (Nullable, e.g., banned user, deleted message)
         timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP NOT NULL, -- 이벤트 발생 시간
-        data JSONB
-      ) PARTITION BY LIST (guild_id); -- guild_id를 기준으로 리스트 파티셔닝 적용
+        data JSONB NOT NULL DEFAULT '{}'::jsonb,
+        CONSTRAINT event_logs_event_type_nonempty CHECK (length(trim(event_type)) > 0),
+        CONSTRAINT event_logs_guild_id_nonempty CHECK (length(trim(guild_id)) > 0)
+      );
     `);
         await client.query(
             `ALTER TABLE event_logs DROP CONSTRAINT IF EXISTS event_logs_unique_guild_event_target;`,
@@ -881,6 +807,19 @@ export async function migrate() {
         await client.query(
             `CREATE INDEX IF NOT EXISTS idx_command_permissions_guild_command ON command_permissions (guild_id, command_name);`,
         );
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS authorized_guilds (
+                guild_id VARCHAR(30) PRIMARY KEY
+            );
+        `);
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS alert_subscriptions (
+                guild_id VARCHAR(30) NOT NULL,
+                channel_id VARCHAR(30) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                PRIMARY KEY (guild_id, channel_id, category)
+            );
+        `);
 
         await client.query('COMMIT');
         logger.info('Database migration check completed successfully.');
@@ -1154,6 +1093,118 @@ export async function testDatabaseConnection() {
     } catch (error) {
         logger.error('Database connection test failed:', error);
         throw error; // Rethrow to potentially halt startup
+    }
+}
+
+/**
+ * event_logs 스키마 핵심 제약/인덱스/확장을 점검합니다.
+ * 실패 시 예외를 던져 부팅을 중단합니다.
+ */
+export async function verifyEventLogsSchemaStrict(): Promise<void> {
+    const client = await pool.connect();
+    try {
+        const tableExists = await client.query<{ exists: boolean }>(
+            `
+            SELECT EXISTS (
+              SELECT 1
+              FROM information_schema.tables
+              WHERE table_schema = 'public'
+                AND table_name = 'event_logs'
+            ) AS exists
+            `,
+        );
+        if (!tableExists.rows[0]?.exists) {
+            throw new Error('event_logs table is missing');
+        }
+
+        const columnRows = await client.query<{
+            column_name: string;
+            data_type: string;
+            is_nullable: 'YES' | 'NO';
+            column_default: string | null;
+        }>(
+            `
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = 'event_logs'
+            `,
+        );
+        const columns = new Map(columnRows.rows.map((r) => [r.column_name, r]));
+        const requiredColumns = ['id', 'event_id', 'event_type', 'guild_id', 'data', 'timestamp'];
+        for (const name of requiredColumns) {
+            if (!columns.has(name)) {
+                throw new Error(`event_logs.${name} column is missing`);
+            }
+        }
+
+        const eventIdColumn = columns.get('event_id');
+        if (eventIdColumn?.data_type !== 'uuid' || eventIdColumn.is_nullable !== 'NO') {
+            throw new Error('event_logs.event_id must be UUID NOT NULL');
+        }
+
+        const dataColumn = columns.get('data');
+        if (dataColumn?.data_type !== 'jsonb' || dataColumn.is_nullable !== 'NO') {
+            throw new Error('event_logs.data must be JSONB NOT NULL');
+        }
+
+        const uniqueEventId = await client.query<{ ok: boolean }>(
+            `
+            SELECT EXISTS (
+              SELECT 1
+              FROM pg_constraint c
+              JOIN pg_class t ON t.oid = c.conrelid
+              JOIN pg_namespace n ON n.oid = t.relnamespace
+              WHERE n.nspname = 'public'
+                AND t.relname = 'event_logs'
+                AND c.contype = 'u'
+                AND c.conname = 'event_logs_event_id_key'
+            ) AS ok
+            `,
+        );
+        if (!uniqueEventId.rows[0]?.ok) {
+            throw new Error('UNIQUE constraint on event_logs.event_id is missing');
+        }
+
+        const extensionRows = await client.query<{ extname: string }>(
+            `
+            SELECT extname
+            FROM pg_extension
+            WHERE extname IN ('pgcrypto', 'pg_trgm')
+            `,
+        );
+        const extensions = new Set(extensionRows.rows.map((r) => r.extname));
+        if (!extensions.has('pgcrypto')) {
+            throw new Error('pgcrypto extension is missing');
+        }
+        if (!extensions.has('pg_trgm')) {
+            throw new Error('pg_trgm extension is missing');
+        }
+
+        const indexRows = await client.query<{ indexname: string }>(
+            `
+            SELECT indexname
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+              AND tablename = 'event_logs'
+            `,
+        );
+        const indexes = new Set(indexRows.rows.map((r) => r.indexname));
+        const requiredIndexes = [
+            'idx_event_logs_guild_timestamp',
+            'idx_event_logs_guild_event_type',
+            'idx_event_logs_guild_user_id',
+            'idx_event_logs_guild_target_id',
+            'idx_event_logs_content_gin',
+            'idx_event_logs_newcontent_gin',
+            'idx_event_logs_oldcontent_gin',
+        ];
+        for (const name of requiredIndexes) {
+            if (!indexes.has(name)) {
+                throw new Error(`Required index is missing: ${name}`);
+            }
+        }
+    } finally {
+        client.release();
     }
 }
 

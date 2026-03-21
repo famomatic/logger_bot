@@ -1,4 +1,16 @@
-import { Events } from 'discord.js';
+import { Events, Interaction } from 'discord.js';
+import { config } from './config/config.js';
+import { logger } from './utils/logger.js';
+import discordClient, { destroyDiscordClient } from './utils/discordClient.js';
+import {
+    destroyDatabase,
+    loadAuthorizedGuildIds,
+    migrate,
+    testDatabaseConnection,
+    verifyEventLogsSchemaStrict,
+} from './db/database.js';
+import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
+import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';
 
 import {
     ensureSlashCommandPermission,
@@ -38,6 +50,9 @@ async function initializeBot() {
         await loadEvents(discordClient);
 
         // 4. 허가된 길드 목록 로드
+        await testDatabaseConnection();
+        await migrate();
+        await verifyEventLogsSchemaStrict();
         await loadAuthorizedGuildIds();
 
         // 5. 알림 구독 정보 로드
