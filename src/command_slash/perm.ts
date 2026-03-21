@@ -1,14 +1,11 @@
 import { InteractionContextType, MessageFlags, SlashCommandBuilder } from 'discord.js';
 
-import {
-    ChatInputCommandInteraction,
-    InteractionContextType,
-    MessageFlags,
-    SlashCommandBuilder,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
+import {
+    canManagePermissions,
+    isManagedSlashCommand,
+    managedCommandChoices,
+} from '../commandShared/slashPermission.js';
 import {
     authorizeGuildId,
     fetchAlertSubscriptions,
@@ -31,9 +28,7 @@ export const command = {
         .setName('perm')
         .setDescription(defaultText('command.permDescription'))
         .addSubcommand((subcommand) =>
-            subcommand
-                .setName('panel')
-                .setDescription(defaultText('command.permDescription')),
+            subcommand.setName('panel').setDescription(defaultText('command.permDescription')),
         )
         .addSubcommand((subcommand) =>
             subcommand

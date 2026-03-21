@@ -1,7 +1,10 @@
-import { Events, Interaction } from 'discord.js';
+import { Events } from 'discord.js';
+
+import {
+    ensureSlashCommandPermission,
+    logPermissionCheckFailure,
+} from './commandShared/slashPermission.js';
 import { config } from './config/config.js';
-import { logger } from './utils/logger.js';
-import discordClient, { destroyDiscordClient } from './utils/discordClient.js';
 import {
     destroyDatabase,
     loadAuthorizedGuildIds,
@@ -9,15 +12,6 @@ import {
     testDatabaseConnection,
     verifyEventLogsSchemaStrict,
 } from './db/database.js';
-import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
-import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';
-
-import {
-    ensureSlashCommandPermission,
-    logPermissionCheckFailure,
-} from './commandShared/slashPermission.js';
-import { config } from './config/config.js';
-import { destroyDatabase, loadAuthorizedGuildIds, testDatabaseConnection } from './db/database.js';
 import { getInteractionLocale, t } from './i18n/index.js';
 import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
 import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';

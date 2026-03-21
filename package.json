@@ -76,6 +76,7 @@
     "overrides": {
         "undici": "^6.24.0",
         "fast-xml-parser": "^5.5.7",
-        "minimatch": "^10.2.3"
+        "minimatch": "^10.2.3",
+        "flatted": "^3.4.2"
     }
 }

@@ -6,10 +6,12 @@ import {
 } from 'discord.js';
 
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
-import { config } from '../config/config.js';
-import { getGuildReport, isGuildAuthorized } from '../db/database.js';
-import { buildContainerMessage } from '../commandShared/componentsV2.js';
 import { isSuperAdmin } from '../commandShared/slashPermission.js';
+import { config } from '../config/config.js';
+import { isGuildAuthorized } from '../db/database.js';
+import { getGuildReport } from '../db/logQueries.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
 import {
     formatEntityCountList,
     formatEventTypeCountList,

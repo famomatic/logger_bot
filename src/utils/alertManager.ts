@@ -4,14 +4,24 @@ import { escapeCodeBlockContent } from './sanitize.js';
 import { eventConfigurations, getFriendlyEventName } from '../config/eventsConfig.js';
 import {
     addAlertSubscription,
-    removeAlertSubscription,
     fetchAlertSubscriptions,
+    removeAlertSubscription,
 } from '../db/database.js';
 import { resolveLocale } from '../i18n/index.js';
-import type { GuildTextBasedChannel } from 'discord.js';
 
 import type { AlertSubscription } from '../types/alerts.js';
-import type { Client } from 'discord.js';
+import type { Client, GuildTextBasedChannel } from 'discord.js';
+
+interface AlertDispatchJob {
+    eventType: string;
+    guildId: string;
+    userId: string | null;
+    channelId: string | null;
+    targetId: string | null;
+    data: Record<string, unknown>;
+    timestamp: Date;
+    client: Client;
+}
 
 const subscriptions = new Map<string, AlertSubscription>();
 const alertChannelCache = new Map<
@@ -21,15 +31,21 @@ const alertChannelCache = new Map<
         channel: GuildTextBasedChannel | null;
     }
 >();
+
 const ALERT_CHANNEL_CACHE_TTL_MS = 60_000;
+const ALERT_QUEUE_MAX_SIZE = 2_000;
+const ALERT_QUEUE_BATCH_SIZE = 50;
+const ALERT_DISPATCH_CONCURRENCY = 4;
+const ALERT_DISPATCH_TIMEOUT_MS = 3_000;
+const ALERT_FLUSH_POLL_MS = 50;
+
+const dispatchQueue: AlertDispatchJob[] = [];
+let dispatchLoopRunning = false;
 
 function subscriptionKey(guildId: string, category: string, channelId: string): string {
     return `${guildId}:${category}:${channelId}`;
 }
 
-/**
- * 이벤트 카테고리별 DB 이벤트 타입 목록 매핑입니다.
- */
 export const categoryEventMap: Partial<Record<string, string[]>> = (() => {
     const map: Partial<Record<string, string[]>> = {};
     for (const cfg of Object.values(eventConfigurations)) {
@@ -39,9 +55,6 @@ export const categoryEventMap: Partial<Record<string, string[]>> = (() => {
     return map;
 })();
 
-/**
- * DB에 저장된 알림 구독 설정을 메모리 구독 목록으로 로드합니다.
- */
 export async function loadAlertSubscriptions(): Promise<void> {
     try {
         subscriptions.clear();
@@ -49,8 +62,7 @@ export async function loadAlertSubscriptions(): Promise<void> {
         for (const row of rows) {
             const types = categoryEventMap[row.category];
             if (!types) continue;
-            const key = subscriptionKey(row.guild_id, row.category, row.channel_id);
-            subscriptions.set(key, {
+            subscriptions.set(subscriptionKey(row.guild_id, row.category, row.channel_id), {
                 guildId: row.guild_id,
                 channelId: row.channel_id,
                 category: row.category,
@@ -58,37 +70,36 @@ export async function loadAlertSubscriptions(): Promise<void> {
             });
         }
         logger.info(`Loaded ${subscriptions.size} alert subscriptions.`);
-    } catch (err) {
-        logger.error('Failed to load alert subscriptions:', err);
+    } catch (error) {
+        logger.error('Failed to load alert subscriptions:', error);
     }
 }
 
-/**
- * 길드/카테고리/채널 기준 알림 구독을 추가하고 DB에 반영합니다.
- */
 export function addSubscription(guildId: string, category: string, channelId: string): boolean {
     const types = categoryEventMap[category];
     if (!types) return false;
+
     const key = subscriptionKey(guildId, category, channelId);
     if (subscriptions.has(key)) {
         return true;
     }
+
     subscriptions.set(key, { guildId, channelId, category, eventTypes: types });
-    addAlertSubscription(guildId, category, channelId).catch((err) => {
-        logger.error('Failed to persist alert subscription:', err);
+    addAlertSubscription(guildId, category, channelId).catch((error) => {
+        logger.error('Failed to persist alert subscription:', error);
     });
     return true;
 }
 
-/**
- * 길드/카테고리/채널 기준 알림 구독을 제거하고 DB에 반영합니다.
- */
 export function removeSubscription(guildId: string, category: string, channelId: string): boolean {
     const key = subscriptionKey(guildId, category, channelId);
-    if (!subscriptions.has(key)) return false;
+    if (!subscriptions.has(key)) {
+        return false;
+    }
+
     subscriptions.delete(key);
-    removeAlertSubscription(guildId, category, channelId).catch((err) => {
-        logger.error('Failed to remove alert subscription:', err);
+    removeAlertSubscription(guildId, category, channelId).catch((error) => {
+        logger.error('Failed to remove alert subscription:', error);
     });
     return true;
 }
@@ -131,10 +142,36 @@ async function runDispatchLoop(): Promise<void> {
     }
 }
 
+async function resolveTextChannel(
+    client: Client,
+    channelId: string,
+): Promise<GuildTextBasedChannel | null> {
+    const now = Date.now();
+    const cached = alertChannelCache.get(channelId);
+    if (cached && now - cached.fetchedAt < ALERT_CHANNEL_CACHE_TTL_MS) {
+        return cached.channel;
+    }
+
+    const fromCache = client.channels.cache.get(channelId);
+    let channel: GuildTextBasedChannel | null = null;
+    if (fromCache?.isTextBased()) {
+        channel = fromCache as GuildTextBasedChannel;
+    } else {
+        const fetched = await client.channels.fetch(channelId).catch(() => null);
+        channel = fetched?.isTextBased() ? (fetched as GuildTextBasedChannel) : null;
+    }
+
+    alertChannelCache.set(channelId, {
+        fetchedAt: now,
+        channel,
+    });
+    return channel;
+}
+
 async function dispatchAlertNow(job: AlertDispatchJob): Promise<void> {
     const { eventType, guildId, userId, channelId, targetId, data, timestamp, client } = job;
 
-    const targets = [...subscriptions.values()].filter(
+    const targets = Array.from(subscriptions.values()).filter(
         (sub) => sub.guildId === guildId && sub.eventTypes.includes(eventType),
     );
     if (targets.length === 0) {
@@ -162,34 +199,31 @@ async function dispatchAlertNow(job: AlertDispatchJob): Promise<void> {
 
     await mapWithConcurrency(targets, ALERT_DISPATCH_CONCURRENCY, async (sub) => {
         try {
-            const fetched = await withTimeout(
-                client.channels.fetch(sub.channelId),
+            const textChannel = await withTimeout(
+                resolveTextChannel(client, sub.channelId),
                 ALERT_DISPATCH_TIMEOUT_MS,
                 `Alert channel fetch timeout: ${sub.channelId}`,
-            ).catch(() => null);
-            if (!fetched?.isTextBased()) return;
-
-            if ('send' in fetched && typeof fetched.send === 'function') {
-                await withTimeout(
-                    Promise.resolve(
-                        fetched.send({
-                            content,
-                            allowedMentions: { parse: [] },
-                        }),
-                    ).then(() => undefined),
-                    ALERT_DISPATCH_TIMEOUT_MS,
-                    `Alert send timeout: ${sub.channelId}`,
-                );
+            );
+            if (!textChannel || typeof textChannel.send !== 'function') {
+                return;
             }
-        } catch (err) {
-            logger.error('Failed to dispatch log alert:', err);
+
+            await withTimeout(
+                Promise.resolve(
+                    textChannel.send({
+                        content,
+                        allowedMentions: { parse: [] },
+                    }),
+                ).then(() => undefined),
+                ALERT_DISPATCH_TIMEOUT_MS,
+                `Alert send timeout: ${sub.channelId}`,
+            );
+        } catch (error) {
+            logger.error('Failed to dispatch log alert:', error);
         }
     });
 }
 
-/**
- * 이벤트 타입에 맞는 구독 채널로 로그 알림 전송 작업을 큐에 적재합니다.
- */
 export function queueAlertDispatch(
     eventType: string,
     guildId: string,
@@ -199,64 +233,26 @@ export function queueAlertDispatch(
     data: Record<string, unknown>,
     timestamp: Date,
     client: Client,
-) {
-    const matchingSubscriptions = Array.from(subscriptions.values()).filter(
+): void {
+    const hasMatching = Array.from(subscriptions.values()).some(
         (sub) => sub.guildId === guildId && sub.eventTypes.includes(eventType),
     );
-    if (matchingSubscriptions.length === 0) {
+    if (!hasMatching) {
         return;
     }
 
-    const guild = client.guilds.cache.get(guildId);
-    const locale = resolveLocale(guild?.preferredLocale);
+    enqueueDispatchJob({
+        eventType,
+        guildId,
+        userId,
+        channelId,
+        targetId,
+        data,
+        timestamp,
+        client,
+    });
+}
 
-    for (const sub of matchingSubscriptions) {
-        try {
-            const now = Date.now();
-            const cached = alertChannelCache.get(sub.channelId);
-            const cacheFresh = cached && now - cached.fetchedAt < ALERT_CHANNEL_CACHE_TTL_MS;
-            let fetched = cacheFresh ? cached.channel : null;
-
-            if (!fetched) {
-                const fromCache = client.channels.cache.get(sub.channelId);
-                if (fromCache?.isTextBased()) {
-                    fetched = fromCache as GuildTextBasedChannel;
-                } else {
-                    const lookedUp = await client.channels.fetch(sub.channelId).catch(() => null);
-                    fetched = lookedUp?.isTextBased()
-                        ? (lookedUp as GuildTextBasedChannel)
-                        : null;
-                }
-
-                alertChannelCache.set(sub.channelId, {
-                    fetchedAt: now,
-                    channel: fetched,
-                });
-            }
-
-            if (!fetched?.isTextBased()) continue;
-            const json = escapeCodeBlockContent(JSON.stringify(data).slice(0, 1800));
-            const friendlyName = getFriendlyEventName(eventType, locale);
-            const summaryLines = [
-                locale === 'ko'
-                    ? `이벤트: ${friendlyName} (${eventType})`
-                    : `Event: ${friendlyName} (${eventType})`,
-                locale === 'ko'
-                    ? `타임스탬프: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`
-                    : `Timestamp: <t:${Math.floor(timestamp.getTime() / 1000)}:F>`,
-                locale === 'ko'
-                    ? `채널: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`
-                    : `Channel: ${channelId ? `<#${channelId}> (${channelId})` : 'N/A'}`,
-                locale === 'ko'
-                    ? `대상 ID: ${targetId ?? 'N/A'}`
-                    : `Target ID: ${targetId ?? 'N/A'}`,
-                locale === 'ko' ? `사용자 ID: ${userId ?? 'N/A'}` : `User ID: ${userId ?? 'N/A'}`,
-            ];
-            const content = `${summaryLines.join('\n')}\n\n${locale === 'ko' ? '데이터' : 'Data'}:\n\`\`\`json\n${json}\n\`\`\``;
-
-/**
- * 종료 시 큐에 남은 알림 전송 작업의 drain 완료를 대기합니다.
- */
 export async function flushAlertDispatchQueue(timeoutMs = 5_000): Promise<void> {
     const startedAt = Date.now();
     while (dispatchLoopRunning || dispatchQueue.length > 0) {

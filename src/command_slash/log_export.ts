@@ -8,7 +8,7 @@ import {
 import { parseDateString } from '../commandShared/logSearchShared.js';
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { getEventTypeChoices, isValidEventType } from '../config/eventsConfig.js';
-import { searchLogs } from '../db/database.js';
+import { searchLogs } from '../db/logQueries.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 import { logger } from '../utils/logger.js';
 

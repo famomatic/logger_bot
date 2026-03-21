@@ -13,13 +13,14 @@ const dbSslRejectUnauthorized = (process.env.PG_SSL_REJECT_UNAUTHORIZED || 'true
 
 if (!dbName || !dbUser || !dbPassword) {
     console.error('Missing required env vars: BOT_DB_NAME, BOT_DB_USER, BOT_DB_PASSWORD');
-    process.exit(1);
+    throw new Error('Missing required env vars: BOT_DB_NAME, BOT_DB_USER, BOT_DB_PASSWORD');
 }
 
 const EVENT_ID_NAMESPACE =
     process.env.EVENT_ID_NAMESPACE_UUID || '4f58b70a-9f7f-4c5d-8a6f-7c2d5fef38c1';
 
-const sslEnabled = dbSsl === 'true' || dbSsl === '1' || (dbSsl !== 'false' && nodeEnv === 'production');
+const sslEnabled =
+    dbSsl === 'true' || dbSsl === '1' || (dbSsl !== 'false' && nodeEnv === 'production');
 
 const client = new Client({
     host: dbHost,

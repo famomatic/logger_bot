@@ -13,7 +13,7 @@ import {
 
 import { buildContainerMessage } from './componentsV2.js';
 import { getFriendlyEventName } from '../config/eventsConfig.js';
-import { searchLogs } from '../db/database.js';
+import { searchLogs } from '../db/logQueries.js';
 import { getInteractionLocale, t } from '../i18n/index.js';
 import { storageManager } from '../storage/StorageManager.js';
 import { mapWithConcurrency, withTimeout } from '../utils/asyncControl.js';

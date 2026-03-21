@@ -13,10 +13,11 @@ const dbSslRejectUnauthorized = (process.env.PG_SSL_REJECT_UNAUTHORIZED || 'true
 
 if (!dbName || !dbUser || !dbPassword) {
     console.error('Missing required env vars: BOT_DB_NAME, BOT_DB_USER, BOT_DB_PASSWORD');
-    process.exit(1);
+    throw new Error('Missing required env vars: BOT_DB_NAME, BOT_DB_USER, BOT_DB_PASSWORD');
 }
 
-const sslEnabled = dbSsl === 'true' || dbSsl === '1' || (dbSsl !== 'false' && nodeEnv === 'production');
+const sslEnabled =
+    dbSsl === 'true' || dbSsl === '1' || (dbSsl !== 'false' && nodeEnv === 'production');
 
 const client = new Client({
     host: dbHost,
@@ -47,7 +48,9 @@ async function validatePreparedTable() {
       ) AS exists
     `);
     if (!tableCheck.rows[0]?.exists) {
-        throw new Error('event_logs_new table does not exist. Run db:prepare:event-id-cutover first.');
+        throw new Error(
+            'event_logs_new table does not exist. Run db:prepare:event-id-cutover first.',
+        );
     }
 
     const validation = await client.query(`
@@ -65,7 +68,9 @@ async function validatePreparedTable() {
     const distinctEventId = BigInt(stats.distinct_event_id_count);
 
     if (target < source) {
-        throw new Error(`event_logs_new is not fully backfilled (source=${source}, target=${target})`);
+        throw new Error(
+            `event_logs_new is not fully backfilled (source=${source}, target=${target})`,
+        );
     }
     if (nullEventId !== 0n) {
         throw new Error(`event_logs_new has NULL event_id rows (${nullEventId})`);

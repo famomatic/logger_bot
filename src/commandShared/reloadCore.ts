@@ -1,3 +1,7 @@
+import dotenv from 'dotenv';
+
+import { reloadConfig } from '../config/config.js';
+import { restartLogQueue } from '../queue/logEventQueue.js';
 import { loadEvents, unloadEvents } from '../utils/loadEvents.js';
 import { loadLegacyCommands, unloadLegacyCommands } from '../utils/loadLegacyCommands.js';
 import { loadSlashCommands, unloadSlashCommands } from '../utils/loadSlashCommands.js';

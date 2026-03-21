@@ -2,7 +2,7 @@ import { SlashCommandBuilder, MessageFlags, InteractionContextType } from 'disco
 
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
-import { getChannelReport } from '../db/database.js';
+import { getChannelReport } from '../db/logQueries.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 import { logger } from '../utils/logger.js';
 import {

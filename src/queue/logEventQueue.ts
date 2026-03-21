@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
+
 import { Redis as RedisClient } from 'ioredis';
-import { randomUUID } from 'crypto';
+
 import { config } from '../config/config.js';
 import {
     insertLogEventDirectNow,
@@ -227,7 +229,7 @@ class RedisLogQueue {
     private parsePayload(raw: string): QueuedLogEvent | null {
         try {
             const parsed = JSON.parse(raw) as QueuedLogEvent;
-            if (!parsed?.event?.guildId || !parsed.event.eventType) {
+            if (!parsed.event.guildId || !parsed.event.eventType) {
                 logger.warn('Discarding malformed queued log event payload.');
                 return null;
             }

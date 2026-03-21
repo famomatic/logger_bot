@@ -119,7 +119,13 @@ export const eventConfigurations: Record<string, EventConfig> = {
         friendlyName: '멤버 닉네임 변경',
         dbEventType: 'guildMemberNicknameUpdate',
         category: 'member',
-        searchableFields: ['targetUserId', 'targetUserTag', 'oldNickname', 'newNickname', 'executorUserId'],
+        searchableFields: [
+            'targetUserId',
+            'targetUserTag',
+            'oldNickname',
+            'newNickname',
+            'executorUserId',
+        ],
         includeInChoices: false,
     },
     guildMemberRoleUpdate: {
@@ -127,7 +133,13 @@ export const eventConfigurations: Record<string, EventConfig> = {
         friendlyName: '멤버 역할 변경',
         dbEventType: 'guildMemberRoleUpdate',
         category: 'member',
-        searchableFields: ['targetUserId', 'targetUserTag', 'addedRoles', 'removedRoles', 'executorUserId'],
+        searchableFields: [
+            'targetUserId',
+            'targetUserTag',
+            'addedRoles',
+            'removedRoles',
+            'executorUserId',
+        ],
         includeInChoices: false,
     },
     guildMemberAvatarUpdate: {
@@ -135,7 +147,13 @@ export const eventConfigurations: Record<string, EventConfig> = {
         friendlyName: '멤버 아바타 변경',
         dbEventType: 'guildMemberAvatarUpdate',
         category: 'member',
-        searchableFields: ['targetUserId', 'targetUserTag', 'oldAvatarURL', 'newAvatarURL', 'executorUserId'],
+        searchableFields: [
+            'targetUserId',
+            'targetUserTag',
+            'oldAvatarURL',
+            'newAvatarURL',
+            'executorUserId',
+        ],
         includeInChoices: false,
     },
     guildMemberTimeoutAdd: {
@@ -143,7 +161,13 @@ export const eventConfigurations: Record<string, EventConfig> = {
         friendlyName: '멤버 타임아웃 설정',
         dbEventType: 'guildMemberTimeoutAdd',
         category: 'member',
-        searchableFields: ['targetUserId', 'targetUserTag', 'executorUserId', 'timeoutUntil', 'reason'],
+        searchableFields: [
+            'targetUserId',
+            'targetUserTag',
+            'executorUserId',
+            'timeoutUntil',
+            'reason',
+        ],
         includeInChoices: false,
     },
     guildMemberTimeoutRemove: {
@@ -225,7 +249,14 @@ export const eventConfigurations: Record<string, EventConfig> = {
         friendlyName: '음성 채널 이동',
         dbEventType: 'voiceChannelMove',
         category: 'voice',
-        searchableFields: ['userId', 'userTag', 'oldChannelId', 'newChannelId', 'oldChannelName', 'newChannelName'],
+        searchableFields: [
+            'userId',
+            'userTag',
+            'oldChannelId',
+            'newChannelId',
+            'oldChannelName',
+            'newChannelName',
+        ],
         includeInChoices: true,
     },
     voiceStateUpdateServerMute: {
@@ -233,7 +264,14 @@ export const eventConfigurations: Record<string, EventConfig> = {
         friendlyName: '서버 음소거 변경',
         dbEventType: 'voiceStateUpdateServerMute',
         category: 'voice',
-        searchableFields: ['userId', 'userTag', 'channelId', 'oldStatus', 'newStatus', 'executorUserId'],
+        searchableFields: [
+            'userId',
+            'userTag',
+            'channelId',
+            'oldStatus',
+            'newStatus',
+            'executorUserId',
+        ],
         includeInChoices: false,
     },
     voiceStateUpdateServerDeaf: {
@@ -241,7 +279,14 @@ export const eventConfigurations: Record<string, EventConfig> = {
         friendlyName: '서버 청각차단 변경',
         dbEventType: 'voiceStateUpdateServerDeaf',
         category: 'voice',
-        searchableFields: ['userId', 'userTag', 'channelId', 'oldStatus', 'newStatus', 'executorUserId'],
+        searchableFields: [
+            'userId',
+            'userTag',
+            'channelId',
+            'oldStatus',
+            'newStatus',
+            'executorUserId',
+        ],
         includeInChoices: false,
     },
     voiceStateUpdateSelfMute: {
