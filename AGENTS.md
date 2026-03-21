@@ -295,6 +295,8 @@ Each commit should contain a single logical change.
 
 Avoid mixing unrelated changes.
 
+Commit after each task, and push when you're done.
+
 PR descriptions should include:
 
 - behavior change summary
