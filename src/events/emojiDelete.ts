@@ -1,6 +1,9 @@
-import { Events, GuildEmoji, AuditLogEvent } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildEmoji } from 'discord.js';
 
 const event = {
     name: Events.GuildEmojiDelete,
@@ -29,8 +32,7 @@ const event = {
             // 가장 최근 EmojiDelete 로그 확인 (대상이 삭제된 이모지 ID와 일치하는지)
             const deleteLog = fetchedLogs.entries.first();
             if (
-                deleteLog &&
-                deleteLog.target?.id === targetId &&
+                deleteLog?.target.id === targetId &&
                 Math.abs(Date.now() - deleteLog.createdTimestamp) < 5000
             ) {
                 executorId = deleteLog.executor?.id ?? null;
@@ -74,4 +76,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

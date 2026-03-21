@@ -1,6 +1,9 @@
-import { Events, ThreadChannel, AuditLogEvent, ChannelType } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent, ChannelType } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { ThreadChannel } from 'discord.js';
 
 const event = {
     name: Events.ThreadCreate,
@@ -18,7 +21,7 @@ const event = {
         const parentChannelId = thread.parentId;
         const ownerId = thread.ownerId; // 스레드 생성자 (메시지에서 시작된 경우 메시지 작성자)
         const timestamp = thread.createdAt ?? new Date();
-        let executorId: string | null = null;
+        let executorId: string | null;
 
         try {
             const fetchedLogs = await guild.fetchAuditLogs({
@@ -28,8 +31,7 @@ const event = {
             const createLog = fetchedLogs.entries.first();
             // Audit Log의 target이 생성된 스레드와 일치하는지 확인
             if (
-                createLog &&
-                createLog.target?.id === targetId &&
+                createLog?.target.id === targetId &&
                 Math.abs(Date.now() - createLog.createdTimestamp) < 5000
             ) {
                 executorId = createLog.executor?.id ?? null;
@@ -82,4 +84,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

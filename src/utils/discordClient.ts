@@ -1,4 +1,5 @@
 import { Client, GatewayIntentBits, Partials } from 'discord.js';
+
 import { logger } from './logger.js';
 
 /**
@@ -24,13 +25,8 @@ export const discordClient = new Client({
 /**
  * Discord 클라이언트를 종료해 소켓 연결과 리소스를 해제합니다.
  */
-export function destroyDiscordClient() {
+export async function destroyDiscordClient(): Promise<void> {
     logger.info('Destroying Discord client...');
-    void discordClient.destroy();
+    await discordClient.destroy();
     logger.info('Discord client destroyed.');
 }
-
-/**
- * 전역 Discord 클라이언트 기본 export 입니다.
- */
-export default discordClient;

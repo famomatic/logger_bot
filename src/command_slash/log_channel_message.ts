@@ -1,19 +1,23 @@
 import {
     SlashCommandBuilder,
-    CommandInteraction,
     PermissionsBitField,
+    MessageFlags,
+    InteractionContextType,
+} from 'discord.js';
+
+import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { processMessageCreateLog } from '../services/logGuildMessagesService.js';
+import { logger } from '../utils/logger.js';
+
+import type { SlashCommand } from '../types/commands.js';
+import type {
+    CommandInteraction,
     GuildTextBasedChannel,
     Collection,
     Message,
     Client,
-    MessageFlags,
-    InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
-import type { SlashCommand } from '../types/commands.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
-import { processMessageCreateLog } from '../services/logGuildMessagesService.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -27,6 +31,13 @@ export const command: SlashCommand = {
                 .setName('channel_id')
                 .setDescription(defaultText('messageCmd.channelId'))
                 .setRequired(true),
+        )
+        .addIntegerOption((option) =>
+            option
+                .setName('max_pages')
+                .setDescription(defaultText('backfill.maxPagesOptionDesc'))
+                .setMinValue(1)
+                .setRequired(false),
         )
         .setContexts(InteractionContextType.Guild),
 
@@ -47,6 +58,7 @@ export const command: SlashCommand = {
         logger.info(`/log-channel-messages command executed by ${interaction.user.tag}`);
 
         const targetChannelId = interaction.options.getString('channel_id', true);
+        const maxPages = interaction.options.getInteger('max_pages');
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const logPrefix = `[log-channel-messages ${targetChannelId}]`;
 
@@ -74,7 +86,7 @@ export const command: SlashCommand = {
         }
 
         const botPerms = channel.permissionsFor(channel.guild.members.me!);
-        if (!botPerms?.has(PermissionsBitField.Flags.ReadMessageHistory)) {
+        if (!botPerms.has(PermissionsBitField.Flags.ReadMessageHistory)) {
             await interaction.editReply(
                 t(locale, 'backfill.channelReadDenied', { channel: channel.name }),
             );
@@ -88,6 +100,7 @@ export const command: SlashCommand = {
         let newlyLogged = 0;
         let lastMessageId: string | undefined = undefined;
         let fetchMore = true;
+        let scannedPages = 0;
 
         while (fetchMore) {
             try {
@@ -99,6 +112,7 @@ export const command: SlashCommand = {
                     fetchMore = false;
                     break;
                 }
+                scannedPages++;
                 lastMessageId = messages.lastKey();
 
                 for (const message of messages.values()) {
@@ -113,6 +127,9 @@ export const command: SlashCommand = {
                     if (logged) newlyLogged++;
                 }
 
+                if (maxPages !== null && scannedPages >= maxPages) {
+                    fetchMore = false;
+                }
                 if (messages.size < 100) fetchMore = false;
             } catch (error) {
                 const err = error as Error;
@@ -132,7 +149,7 @@ export const command: SlashCommand = {
             }),
         );
         logger.info(
-            `${logPrefix} Finished logging. Processed ${processed} messages, newly logged ${newlyLogged}.`,
+            `${logPrefix} Finished logging. Processed ${processed} messages, newly logged ${newlyLogged}, scanned pages ${scannedPages}${maxPages !== null ? ` (maxPages=${maxPages})` : ''}.`,
         );
     },
 };

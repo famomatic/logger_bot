@@ -7,6 +7,7 @@ import {
     TextDisplayBuilder,
     type TopLevelComponentData,
 } from 'discord.js';
+
 import type { BuildContainerMessageOptions } from '../types/components.js';
 
 /**

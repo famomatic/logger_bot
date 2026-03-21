@@ -1,5 +1,8 @@
-import { Events, Client, ActivityType } from 'discord.js';
+import { Events, ActivityType } from 'discord.js';
+
 import { logger } from '../utils/logger.js';
+
+import type { Client } from 'discord.js';
 
 const event = {
     name: Events.ClientReady, // discord.js에서 제공하는 이벤트 이름 상수 사용
@@ -13,10 +16,6 @@ const event = {
         logger.info(`Bot is serving ${client.guilds.cache.size} guilds.`);
 
         const user = client.user;
-        if (!user) {
-            logger.error('Client user is not available on ready event.');
-            return;
-        }
 
         const activities = [
             { name: '감시', type: ActivityType.Playing },
@@ -39,4 +38,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

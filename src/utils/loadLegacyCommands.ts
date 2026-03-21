@@ -1,7 +1,10 @@
-import { Collection, Client } from 'discord.js';
+import { Collection } from 'discord.js';
+
 import { logger } from './logger.js';
-import type { LegacyCommand } from '../types/commands.js';
 import { loadModulesFromDirectory, resolveRuntimeSubdirectory } from './moduleLoader.js';
+
+import type { LegacyCommand } from '../types/commands.js';
+import type { Client } from 'discord.js';
 
 function isLegacyCommand(value: unknown): value is LegacyCommand {
     if (!value || typeof value !== 'object') {
@@ -55,5 +58,5 @@ export async function loadLegacyCommands(client: Client): Promise<void> {
  * 메모리에 적재된 레거시 커맨드 캐시를 초기화합니다.
  */
 export function unloadLegacyCommands(client: Client): void {
-    client.legacyCommands?.clear?.();
+    client.legacyCommands?.clear();
 }

@@ -4,11 +4,12 @@ export interface LatestMessageCreateCheckpointRow {
 }
 
 export interface BatchInsertedLogRow {
+    event_id: string;
     event_type: string;
     guild_id: string;
     user_id: string | null;
     channel_id: string | null;
-    target_id: string;
+    target_id: string | null;
     data: Record<string, unknown>;
     timestamp: Date;
 }

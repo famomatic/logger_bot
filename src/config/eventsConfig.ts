@@ -114,6 +114,70 @@ export const eventConfigurations: Record<string, EventConfig> = {
         ],
         includeInChoices: true,
     },
+    guildMemberNicknameUpdate: {
+        eventName: 'GuildMemberUpdate',
+        friendlyName: '멤버 닉네임 변경',
+        dbEventType: 'guildMemberNicknameUpdate',
+        category: 'member',
+        searchableFields: [
+            'targetUserId',
+            'targetUserTag',
+            'oldNickname',
+            'newNickname',
+            'executorUserId',
+        ],
+        includeInChoices: false,
+    },
+    guildMemberRoleUpdate: {
+        eventName: 'GuildMemberUpdate',
+        friendlyName: '멤버 역할 변경',
+        dbEventType: 'guildMemberRoleUpdate',
+        category: 'member',
+        searchableFields: [
+            'targetUserId',
+            'targetUserTag',
+            'addedRoles',
+            'removedRoles',
+            'executorUserId',
+        ],
+        includeInChoices: false,
+    },
+    guildMemberAvatarUpdate: {
+        eventName: 'GuildMemberUpdate',
+        friendlyName: '멤버 아바타 변경',
+        dbEventType: 'guildMemberAvatarUpdate',
+        category: 'member',
+        searchableFields: [
+            'targetUserId',
+            'targetUserTag',
+            'oldAvatarURL',
+            'newAvatarURL',
+            'executorUserId',
+        ],
+        includeInChoices: false,
+    },
+    guildMemberTimeoutAdd: {
+        eventName: 'GuildMemberUpdate',
+        friendlyName: '멤버 타임아웃 설정',
+        dbEventType: 'guildMemberTimeoutAdd',
+        category: 'member',
+        searchableFields: [
+            'targetUserId',
+            'targetUserTag',
+            'executorUserId',
+            'timeoutUntil',
+            'reason',
+        ],
+        includeInChoices: false,
+    },
+    guildMemberTimeoutRemove: {
+        eventName: 'GuildMemberUpdate',
+        friendlyName: '멤버 타임아웃 해제',
+        dbEventType: 'guildMemberTimeoutRemove',
+        category: 'member',
+        searchableFields: ['targetUserId', 'targetUserTag', 'executorUserId', 'reason'],
+        includeInChoices: false,
+    },
     guildBanAdd: {
         eventName: 'GuildBanAdd',
         friendlyName: '멤버 차단',
@@ -163,6 +227,99 @@ export const eventConfigurations: Record<string, EventConfig> = {
             'executorId', // If an admin mutes/moves someone
         ],
         includeInChoices: true,
+    },
+    voiceChannelJoin: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '음성 채널 입장',
+        dbEventType: 'voiceChannelJoin',
+        category: 'voice',
+        searchableFields: ['userId', 'userTag', 'channelId', 'channelName'],
+        includeInChoices: true,
+    },
+    voiceChannelLeave: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '음성 채널 퇴장',
+        dbEventType: 'voiceChannelLeave',
+        category: 'voice',
+        searchableFields: ['userId', 'userTag', 'channelId', 'channelName'],
+        includeInChoices: true,
+    },
+    voiceChannelMove: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '음성 채널 이동',
+        dbEventType: 'voiceChannelMove',
+        category: 'voice',
+        searchableFields: [
+            'userId',
+            'userTag',
+            'oldChannelId',
+            'newChannelId',
+            'oldChannelName',
+            'newChannelName',
+        ],
+        includeInChoices: true,
+    },
+    voiceStateUpdateServerMute: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '서버 음소거 변경',
+        dbEventType: 'voiceStateUpdateServerMute',
+        category: 'voice',
+        searchableFields: [
+            'userId',
+            'userTag',
+            'channelId',
+            'oldStatus',
+            'newStatus',
+            'executorUserId',
+        ],
+        includeInChoices: false,
+    },
+    voiceStateUpdateServerDeaf: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '서버 청각차단 변경',
+        dbEventType: 'voiceStateUpdateServerDeaf',
+        category: 'voice',
+        searchableFields: [
+            'userId',
+            'userTag',
+            'channelId',
+            'oldStatus',
+            'newStatus',
+            'executorUserId',
+        ],
+        includeInChoices: false,
+    },
+    voiceStateUpdateSelfMute: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '자체 음소거 변경',
+        dbEventType: 'voiceStateUpdateSelfMute',
+        category: 'voice',
+        searchableFields: ['userId', 'userTag', 'channelId', 'muted'],
+        includeInChoices: false,
+    },
+    voiceStateUpdateSelfDeaf: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '자체 청각차단 변경',
+        dbEventType: 'voiceStateUpdateSelfDeaf',
+        category: 'voice',
+        searchableFields: ['userId', 'userTag', 'channelId', 'deafened'],
+        includeInChoices: false,
+    },
+    voiceStateUpdateStreaming: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '스트리밍 상태 변경',
+        dbEventType: 'voiceStateUpdateStreaming',
+        category: 'voice',
+        searchableFields: ['userId', 'userTag', 'channelId', 'streaming'],
+        includeInChoices: false,
+    },
+    voiceStateUpdateVideo: {
+        eventName: 'VoiceStateUpdate',
+        friendlyName: '비디오 상태 변경',
+        dbEventType: 'voiceStateUpdateVideo',
+        category: 'voice',
+        searchableFields: ['userId', 'userTag', 'channelId', 'video'],
+        includeInChoices: false,
     },
 
     // --- Channel Events ---
@@ -288,6 +445,30 @@ export const eventConfigurations: Record<string, EventConfig> = {
         ],
         includeInChoices: true,
     },
+    guildNameUpdate: {
+        eventName: 'GuildNameUpdate',
+        friendlyName: '서버 이름 변경',
+        dbEventType: 'guildNameUpdate',
+        category: 'guild',
+        searchableFields: ['oldName', 'newName', 'executorUserId'],
+        includeInChoices: false,
+    },
+    guildIconUpdate: {
+        eventName: 'GuildIconUpdate',
+        friendlyName: '서버 아이콘 변경',
+        dbEventType: 'guildIconUpdate',
+        category: 'guild',
+        searchableFields: ['oldIconURL', 'newIconURL', 'executorUserId'],
+        includeInChoices: false,
+    },
+    guildOwnerUpdate: {
+        eventName: 'GuildOwnerUpdate',
+        friendlyName: '서버 소유자 변경',
+        dbEventType: 'guildOwnerUpdate',
+        category: 'guild',
+        searchableFields: ['oldOwnerId', 'newOwnerId', 'executorUserId'],
+        includeInChoices: false,
+    },
 
     // --- Invite Events ---
     inviteCreate: {
@@ -404,13 +585,14 @@ export const eventConfigurations: Record<string, EventConfig> = {
 /**
  * 슬래시 옵션에 노출할 이벤트 타입 선택지 목록을 생성합니다.
  */
-export function getEventTypeChoices() {
+export function getEventTypeChoices(maxChoices = 25) {
     return Object.values(eventConfigurations)
         .filter((config) => config.includeInChoices)
         .map((config) => ({
             name: `${config.friendlyName} (${config.dbEventType})`,
             value: config.dbEventType,
-        }));
+        }))
+        .slice(0, Math.max(0, maxChoices));
 }
 
 /**

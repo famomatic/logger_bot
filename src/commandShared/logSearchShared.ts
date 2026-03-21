@@ -1,5 +1,4 @@
 import {
-    ChatInputCommandInteraction,
     TextDisplayBuilder,
     ThumbnailBuilder,
     SectionBuilder,
@@ -10,37 +9,54 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
+} from 'discord.js';
+
+import { buildContainerMessage } from './componentsV2.js';
+import { getFriendlyEventName } from '../config/eventsConfig.js';
+import { searchLogs } from '../db/logQueries.js';
+import { getInteractionLocale, t } from '../i18n/index.js';
+import { storageManager } from '../storage/StorageManager.js';
+import { mapWithConcurrency, withTimeout } from '../utils/asyncControl.js';
+import { logger } from '../utils/logger.js';
+import { MAX_TEXT_SIZE, PAGE_SIZE, getLogSearchMessages } from './logSearchShared/constants.js';
+import { str } from './logSearchShared/formatters.js';
+import { renderChannelEvent } from './logSearchShared/renderers/channel.js';
+import { renderEvent as renderEmojiEvent } from './logSearchShared/renderers/emoji.js';
+import { renderGuildEvent } from './logSearchShared/renderers/guild.js';
+import { renderInviteEvent } from './logSearchShared/renderers/invite.js';
+import { renderEvent as renderMemberEvent } from './logSearchShared/renderers/member.js';
+import { renderEvent as renderMessageEvent } from './logSearchShared/renderers/message.js';
+import { renderEvent as renderRoleEvent } from './logSearchShared/renderers/role.js';
+import { renderScheduledEvent } from './logSearchShared/renderers/scheduledEvent.js';
+import { renderEvent as renderStickerEvent } from './logSearchShared/renderers/sticker.js';
+import { renderThreadEvent } from './logSearchShared/renderers/thread.js';
+import { renderUserEvent } from './logSearchShared/renderers/user.js';
+import { renderEvent as renderVoiceStateUpdateEvent } from './logSearchShared/renderers/voice.js';
+
+import type { JsonData } from '../types/json.js';
+import type { AttachmentLogData } from '../types/logs.js';
+import type {
+    User,
+    ChatInputCommandInteraction,
     MessageComponentInteraction,
     InteractionEditReplyOptions,
     MessageActionRowComponentBuilder,
     InteractionReplyOptions,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { getFriendlyEventName } from '../config/eventsConfig.js';
-import { searchLogs } from '../db/database.js';
-import { storageManager } from '../storage/StorageManager.js';
-import { buildContainerMessage } from './componentsV2.js';
-import type { JsonData } from '../types/json.js';
-import type { AttachmentLogData } from '../types/logs.js';
-import { MAX_TEXT_SIZE, PAGE_SIZE, getLogSearchMessages } from './logSearchShared/constants.js';
-import { str } from './logSearchShared/formatters.js';
-import { renderEvent as renderMessageEvent } from './logSearchShared/renderers/message.js';
-import { renderEvent as renderMemberEvent } from './logSearchShared/renderers/member.js';
-import { renderEvent as renderRoleEvent } from './logSearchShared/renderers/role.js';
-import { renderEvent as renderStickerEvent } from './logSearchShared/renderers/sticker.js';
-import { renderEvent as renderEmojiEvent } from './logSearchShared/renderers/emoji.js';
-import { renderEvent as renderVoiceStateUpdateEvent } from './logSearchShared/renderers/voice.js';
-import { renderGuildEvent } from './logSearchShared/renderers/guild.js';
-import { renderScheduledEvent } from './logSearchShared/renderers/scheduledEvent.js';
-import { renderInviteEvent } from './logSearchShared/renderers/invite.js';
-import { renderChannelEvent } from './logSearchShared/renderers/channel.js';
-import { renderThreadEvent } from './logSearchShared/renderers/thread.js';
-import { renderUserEvent } from './logSearchShared/renderers/user.js';
-import { getInteractionLocale, t } from '../i18n/index.js';
-import type { User } from 'discord.js';
 
 /** 로그 검색 명령에서 날짜 파서를 재사용할 수 있도록 re-export 합니다. */
 export { parseDateString } from './logSearchShared/date.js';
+
+const MAX_ATTACHMENT_DOWNLOADS_PER_PAGE = 4;
+const ATTACHMENT_DOWNLOAD_CONCURRENCY = 2;
+const ATTACHMENT_DOWNLOAD_TIMEOUT_MS = 1_500;
+
+interface PendingAttachmentDownload {
+    logId: string;
+    attachmentId: string;
+    filename: string;
+    storagePath: string;
+}
 
 /**
  * 로그 검색 결과를 페이지 단위로 조회해 Components V2 UI(본문/첨부/페이지 버튼)로 렌더링합니다.
@@ -133,6 +149,7 @@ export async function fetchAndDisplayLogs(
         let currentTextSize = summaryMessage.length;
         let logsDisplayed = 0;
         const userCache = new Map<string, User | null>();
+        const pendingDownloads: PendingAttachmentDownload[] = [];
 
         for (let logIndex = 0; logIndex < logs.length; logIndex++) {
             const log = logs[logIndex];
@@ -163,7 +180,7 @@ export async function fetchAndDisplayLogs(
             const timestampText = new TextDisplayBuilder().setContent(timestampContent);
             let eventSpecificsText = t(locale, 'logSearchShared.emptyContent');
 
-            if (log.event_data && typeof log.event_data === 'object') {
+            if (Object.prototype.toString.call(log.event_data) === '[object Object]') {
                 const data = log.event_data as JsonData;
                 switch (log.event_type) {
                     case 'messageCreate':
@@ -402,34 +419,21 @@ export async function fetchAndDisplayLogs(
             logsDisplayed++;
 
             const eventData = log.event_data as JsonData & { attachments?: AttachmentLogData[] };
-            if (eventData && Array.isArray(eventData.attachments)) {
+            if (Array.isArray(eventData.attachments)) {
                 for (const item of eventData.attachments) {
                     const attachmentData = item;
                     const storagePath = str(attachmentData.storagePath);
                     if (storagePath && attachmentData.filename) {
-                        let nasFileBuffer: Buffer | null = null;
-                        try {
-                            nasFileBuffer = await storageManager.download(storagePath);
-                        } catch {
-                            // Suppress error if file not found or download failed, similar to previous behavior
-                            // logger.warn(`Failed to download attachment: ${attachmentData.storagePath}`, error);
-                        }
-                        if (nasFileBuffer) {
-                            const uniqueAttachmentFilename =
-                                `${log.id}_${str(attachmentData.id)}_${str(attachmentData.filename)}`.replace(
-                                    /[^a-zA-Z0-9_.-]/g,
-                                    '_',
-                                );
-                            const discordAttachment = new AttachmentBuilder(nasFileBuffer, {
-                                name: uniqueAttachmentFilename,
+                        if (pendingDownloads.length < MAX_ATTACHMENT_DOWNLOADS_PER_PAGE) {
+                            pendingDownloads.push({
+                                logId: str(log.id),
+                                attachmentId: str(attachmentData.id),
+                                filename: str(attachmentData.filename),
+                                storagePath,
                             });
-                            attachmentsToSend.push(discordAttachment);
-                            const fileComponent = new FileBuilder().setURL(
-                                `attachment://${uniqueAttachmentFilename}`,
-                            );
-                            displayableComponents.push(fileComponent);
-                        } else if (attachmentData.discordUrl) {
-                            const attText = `📎 [${str(attachmentData.filename) || t(locale, 'logSearchShared.attachmentDownloadFail')}](${str(attachmentData.discordUrl)})`;
+                        }
+                        if (attachmentData.discordUrl) {
+                            const attText = `📎 [${str(attachmentData.filename) || t(locale, 'logSearchShared.attachment')}](${str(attachmentData.discordUrl)})`;
                             if (currentTextSize + attText.length > MAX_TEXT_SIZE) break;
                             currentTextSize += attText.length;
                             displayableComponents.push(
@@ -446,6 +450,44 @@ export async function fetchAndDisplayLogs(
             }
             if (logIndex < logs.length - 1) {
                 displayableComponents.push(new SeparatorBuilder());
+            }
+        }
+
+        if (pendingDownloads.length > 0) {
+            const downloadedAttachments = await mapWithConcurrency(
+                pendingDownloads,
+                ATTACHMENT_DOWNLOAD_CONCURRENCY,
+                async (pending) => {
+                    try {
+                        const buffer = await withTimeout(
+                            storageManager.download(pending.storagePath),
+                            ATTACHMENT_DOWNLOAD_TIMEOUT_MS,
+                            `Attachment download timeout: ${pending.storagePath}`,
+                        );
+                        return {
+                            ...pending,
+                            buffer,
+                        };
+                    } catch {
+                        return null;
+                    }
+                },
+            );
+
+            for (const downloaded of downloadedAttachments) {
+                if (!downloaded) continue;
+                const uniqueAttachmentFilename =
+                    `${downloaded.logId}_${downloaded.attachmentId}_${downloaded.filename}`.replace(
+                        /[^a-zA-Z0-9_.-]/g,
+                        '_',
+                    );
+                const discordAttachment = new AttachmentBuilder(downloaded.buffer, {
+                    name: uniqueAttachmentFilename,
+                });
+                attachmentsToSend.push(discordAttachment);
+                displayableComponents.push(
+                    new FileBuilder().setURL(`attachment://${uniqueAttachmentFilename}`),
+                );
             }
         }
 

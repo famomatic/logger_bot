@@ -1,5 +1,5 @@
-import type { Message } from 'discord.js';
 import type { AttachmentData } from './commands.js';
+import type { Message } from 'discord.js';
 
 export interface MessageReactionSnapshot {
     emojiName: string | null;

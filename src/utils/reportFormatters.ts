@@ -1,10 +1,10 @@
-import type { Client } from 'discord.js';
 import type {
     EventTypeCountLike,
     FormatListOptions,
     IdCountLike,
     MentionEntityType,
 } from '../types/reportFormatters.js';
+import type { Client } from 'discord.js';
 
 /**
  * 공통 순위 목록 렌더러입니다. 데이터가 없으면 빈 텍스트를 반환합니다.

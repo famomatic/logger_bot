@@ -1,30 +1,39 @@
-import { Events, Interaction } from 'discord.js';
-import { config } from './config/config.js';
-import { logger } from './utils/logger.js';
-import discordClient, { destroyDiscordClient } from './utils/discordClient.js';
-import { destroyDatabase, loadAuthorizedGuildIds } from './db/database.js';
-import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
-import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';
+import { Events } from 'discord.js';
 
-import { loadAlertSubscriptions } from './utils/alertManager.js';
-import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
-import { registerShutdownHandler, requestShutdown } from './utils/shutdownManager.js';
-import { getInteractionLocale, t } from './i18n/index.js';
 import {
     ensureSlashCommandPermission,
     logPermissionCheckFailure,
 } from './commandShared/slashPermission.js';
-
-// 로더 임포트
+import { config } from './config/config.js';
+import {
+    destroyDatabase,
+    loadAuthorizedGuildIds,
+    migrate,
+    testDatabaseConnection,
+    verifyEventLogsSchemaStrict,
+} from './db/database.js';
+import { getInteractionLocale, t } from './i18n/index.js';
+import { initializeLogQueue, shutdownLogQueue } from './queue/logEventQueue.js';
+import { recoverMissedMessagesOnStartup } from './services/startupMessageRecoveryService.js';
+import { flushAlertDispatchQueue, loadAlertSubscriptions } from './utils/alertManager.js';
+import { destroyDiscordClient, discordClient } from './utils/discordClient.js';
+import { checkAndLeaveUnauthorizedGuilds } from './utils/guildAuthorization.js';
+import { loadEvents } from './utils/loadEvents.js';
 import { loadLegacyCommands } from './utils/loadLegacyCommands.js';
 import { loadSlashCommands } from './utils/loadSlashCommands.js';
-import { loadEvents } from './utils/loadEvents.js';
+import { logger } from './utils/logger.js';
+import { registerShutdownHandler, requestShutdown } from './utils/shutdownManager.js';
+
+import type { Interaction } from 'discord.js';
 
 logger.info('Starting logger bot...');
 
 // --- 초기화 함수 ---
 async function initializeBot() {
     try {
+        // 0. DB 연결 상태 확인 (실패 시 즉시 중단)
+        await testDatabaseConnection();
+
         // 1. 레거시 명령어 로드 (discordClient.legacyCommands에 저장)
         await loadLegacyCommands(discordClient);
 
@@ -35,6 +44,9 @@ async function initializeBot() {
         await loadEvents(discordClient);
 
         // 4. 허가된 길드 목록 로드
+        await testDatabaseConnection();
+        await migrate();
+        await verifyEventLogsSchemaStrict();
         await loadAuthorizedGuildIds();
 
         // 5. 알림 구독 정보 로드
@@ -45,17 +57,21 @@ async function initializeBot() {
 
         // 7. InteractionCreate 리스너 직접 등록 (슬래시 커맨드 실행 로직)
         discordClient.on(Events.InteractionCreate, (interaction) => {
-            void handleInteraction(interaction);
+            handleInteraction(interaction).catch((interactionError) => {
+                logger.error('Unhandled interaction handler error:', interactionError);
+            });
         });
         logger.info('InteractionCreate listener registered.');
 
         // 8. ClientReady 이벤트 등록 (간단 로그)
         discordClient.once(Events.ClientReady, (readyClient) => {
-            void (async () => {
+            (async () => {
                 // 슬래시 커맨드 등록 로그는 loadSlashCommands 에서 출력됨
                 await checkAndLeaveUnauthorizedGuilds(readyClient);
                 await recoverMissedMessagesOnStartup(readyClient);
-            })();
+            })().catch((readyError) => {
+                logger.error('ClientReady startup task failed:', readyError);
+            });
         });
 
         // 6. 봇 로그인
@@ -122,7 +138,9 @@ async function handleInteraction(interaction: Interaction) {
     }
 }
 
-void initializeBot();
+initializeBot().catch((initializeError) => {
+    logger.error('Failed to initialize bot:', initializeError);
+});
 
 function setupGracefulShutdown() {
     registerShutdownHandler(async ({ reason, error }) => {
@@ -131,8 +149,9 @@ function setupGracefulShutdown() {
             logger.error('Shutdown triggered by fatal error:', error);
         }
         try {
+            await flushAlertDispatchQueue();
             await shutdownLogQueue();
-            destroyDiscordClient();
+            await destroyDiscordClient();
             await destroyDatabase();
             logger.info('Shutdown complete.');
         } catch (err) {
@@ -141,10 +160,14 @@ function setupGracefulShutdown() {
     });
 
     process.once('SIGINT', () => {
-        void requestShutdown('SIGINT', { exitCode: 0 });
+        requestShutdown('SIGINT', { exitCode: 0 }).catch((shutdownError) => {
+            logger.error('Failed to request SIGINT shutdown:', shutdownError);
+        });
     });
     process.once('SIGTERM', () => {
-        void requestShutdown('SIGTERM', { exitCode: 0 });
+        requestShutdown('SIGTERM', { exitCode: 0 }).catch((shutdownError) => {
+            logger.error('Failed to request SIGTERM shutdown:', shutdownError);
+        });
     });
 }
 

@@ -1,4 +1,4 @@
-import path from 'path';
+import path from 'node:path';
 
 /**
  * 파일명에서 경로 요소/허용되지 않는 문자를 제거해 안전한 저장용 이름으로 정규화합니다.

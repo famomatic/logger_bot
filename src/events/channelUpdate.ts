@@ -1,6 +1,10 @@
-import { Events, GuildChannel, ChannelType, DMChannel, AuditLogEvent } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, ChannelType, AuditLogEvent } from 'discord.js';
+
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildChannel, DMChannel } from 'discord.js';
 
 // 채널 타입 이름을 문자열로 변환하는 헬퍼 함수 (다른 파일에서 가져오는 것이 좋음)
 function getChannelTypeName(type: ChannelType): string {
@@ -84,15 +88,16 @@ const event = {
 
         // Audit Log 조회 시도 (채널 업데이트 실행자 확인)
         try {
-            const fetchedLogs = await guild.fetchAuditLogs({
+            const fetchedLogs = await fetchAuditLogsCached(guild, {
                 limit: 5,
                 type: AuditLogEvent.ChannelUpdate, // 11
+                ttlMs: 2_000,
             });
             // 채널 ID가 일치하고 변경 사항 키가 일치하는 로그 찾기
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target?.id === channelId &&
-                    entry.changes?.some((c) => changes[c.key] !== undefined) && // 실제 변경된 내용과 관련된 로그인지 확인
+                    entry.targetId === channelId &&
+                    entry.changes.some((c) => c.key in changes) && // 실제 변경된 내용과 관련된 로그인지 확인
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
             if (updateLog) {
@@ -147,4 +152,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

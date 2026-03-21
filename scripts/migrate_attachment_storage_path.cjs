@@ -12,7 +12,9 @@ if (!botDbName || !botDbUser || !botDbPassword) {
     console.error(
         'Error: Missing required environment variables (BOT_DB_NAME, BOT_DB_USER, BOT_DB_PASSWORD).',
     );
-    process.exit(1);
+    throw new Error(
+        'Missing required environment variables (BOT_DB_NAME, BOT_DB_USER, BOT_DB_PASSWORD).',
+    );
 }
 
 const countRowsQuery = `

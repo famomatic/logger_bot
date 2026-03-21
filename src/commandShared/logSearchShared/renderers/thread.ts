@@ -1,8 +1,10 @@
 import { ThumbnailBuilder } from 'discord.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
+import { getInteractionLocale, t } from '../deps.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
+
+import type { GroupRendererInput, GroupRendererResult } from '../deps.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,
@@ -27,7 +29,11 @@ const buildUserThumbnail = async (
  * thread payload에서 표준 스레드 데이터 객체를 추출합니다.
  */
 const getThreadData = (input: GroupRendererInput) =>
-    isJsonData(input.eventData.thread) ? input.eventData.thread : input.eventData;
+    isJsonData(input.eventData.thread)
+        ? input.eventData.thread
+        : isJsonData(input.eventData)
+          ? input.eventData
+          : undefined;
 
 /**
  * threadCreate 로그의 상세 텍스트와 썸네일을 생성합니다.
@@ -67,7 +73,7 @@ const renderThreadCreate = async (input: GroupRendererInput): Promise<GroupRende
         }
     }
 
-    const ownerIdForThumbnail = str(thread.ownerId);
+    const ownerIdForThumbnail = str(thread?.ownerId);
     const thumbnailComponent = ownerIdForThumbnail
         ? await buildUserThumbnail(input, ownerIdForThumbnail)
         : undefined;

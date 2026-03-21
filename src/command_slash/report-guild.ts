@@ -1,21 +1,25 @@
 import {
     SlashCommandBuilder,
-    ChatInputCommandInteraction,
     GuildPremiumTier,
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { config } from '../config/config.js';
-import { getGuildReport, isGuildAuthorized } from '../db/database.js';
+
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
+import { isSuperAdmin } from '../commandShared/slashPermission.js';
+import { config } from '../config/config.js';
+import { isGuildAuthorized } from '../db/database.js';
+import { getGuildReport } from '../db/logQueries.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
 import {
     formatEntityCountList,
     formatEventTypeCountList,
     formatLocalizedNumber,
     formatUserTagListFromIds,
 } from '../utils/reportFormatters.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -65,8 +69,9 @@ export const command = {
                 config.superAdminIds,
                 { emptyText: t(locale, 'report.none') },
             );
+            const requesterIsSuperAdmin = isSuperAdmin(interaction.user.id);
 
-            const premiumTierName = GuildPremiumTier[guild.premiumTier] ?? guild.premiumTier;
+            const premiumTierName = GuildPremiumTier[guild.premiumTier];
 
             const infoLines = [
                 `**ID:** ${guild.id}`,
@@ -79,10 +84,7 @@ export const command = {
                     value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:F>`,
                 }),
                 t(locale, 'reportCommand.memberCount', {
-                    value:
-                        guild.memberCount !== null && guild.memberCount !== undefined
-                            ? formatLocalizedNumber(guild.memberCount, numberLocale)
-                            : t(locale, 'reportCommand.unknown'),
+                    value: formatLocalizedNumber(guild.memberCount, numberLocale),
                 }),
                 t(locale, 'reportCommand.boostLevel', { value: premiumTierName }),
             ];
@@ -149,7 +151,13 @@ export const command = {
                 }),
             ];
 
-            const accessLines = [t(locale, 'reportCommand.superAdmins', { value: superAdminList })];
+            const accessLines = [
+                requesterIsSuperAdmin
+                    ? t(locale, 'reportCommand.superAdmins', { value: superAdminList })
+                    : t(locale, 'reportCommand.superAdmins', {
+                          value: t(locale, 'common.commandNotAllowed'),
+                      }),
+            ];
 
             await interaction.editReply(
                 buildContainerMessage({

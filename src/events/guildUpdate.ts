@@ -1,6 +1,10 @@
-import { Events, Guild, AuditLogEvent, AuditLogChange } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Guild, AuditLogChange } from 'discord.js';
 
 // 헬퍼 함수: 특정 키 변경에 대한 Audit Log 찾기
 async function findGuildUpdateLog(
@@ -8,13 +12,14 @@ async function findGuildUpdateLog(
     changeKey: string,
 ): Promise<{ executorId: string | null; logTimestamp: Date | null }> {
     try {
-        const fetchedLogs = await guild.fetchAuditLogs({
+        const fetchedLogs = await fetchAuditLogsCached(guild, {
             limit: 5,
             type: AuditLogEvent.GuildUpdate, // 1
+            ttlMs: 2000,
         });
         const updateLog = fetchedLogs.entries.find(
             (entry) =>
-                entry.changes?.some((c: AuditLogChange) => c.key === changeKey) &&
+                entry.changes.some((c: AuditLogChange) => c.key === changeKey) &&
                 Math.abs(Date.now() - entry.createdTimestamp) < 6000, // 시간차 6초로 약간 늘림
         );
         if (updateLog) {
@@ -144,4 +149,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

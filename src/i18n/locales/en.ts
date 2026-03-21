@@ -89,6 +89,12 @@ export const en = {
         permListCommandResult: 'Allowed users for `{command}`: {users}',
         permUnknownCommand:
             'This command is not permission-manageable: `{command}`. Available commands: {available}',
+        permPanelRefreshed: 'Permission panel refreshed.',
+        permPanelSelectCommandFirst: 'Select a command first.',
+        permPanelSelectUserFirst: 'Select a user first.',
+        permPanelSelectCommandAndUserFirst: 'Select both a command and a user first.',
+        logDlqRedriveDescription: 'Move log queue DLQ items back to pending.',
+        logDlqRedriveCountDescription: 'How many DLQ items to redrive.',
     },
     logAlert: {
         addDescription: 'Sends alert messages for a specific event category to a channel.',
@@ -564,6 +570,7 @@ export const en = {
     },
     backfill: {
         logChannelDesc: 'Scans all messages in {channel_id} and logs them into DB.',
+        maxPagesOptionDesc: 'Maximum number of pages to scan (100 messages per page).',
         logGuildDesc: 'Fetches all messages in {guild_id} and logs them into DB.',
         completeTitle: '✅ **Message Logging Check Completed**',
         processedChannels: '> - **Processed channels:** {count}',
@@ -622,8 +629,3 @@ export const locale = {
     },
     messages: en,
 } as const satisfies LocaleDefinition;
-
-/**
- * 영어 로케일 번들의 기본 export 입니다.
- */
-export default locale;

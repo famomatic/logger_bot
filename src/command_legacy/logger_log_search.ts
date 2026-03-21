@@ -1,18 +1,18 @@
+import { ComponentType, MessageFlags, TextDisplayBuilder } from 'discord.js';
+
+import { parseDateString, fetchAndDisplayLogs } from '../commandShared/logSearchShared.js';
+import { config } from '../config/config.js';
+import { isValidEventType } from '../config/eventsConfig.js';
+import { getMessageLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
 import type { LegacyCommand } from '../types/commands.js';
-import {
+import type {
     Message,
-    ComponentType,
     ChatInputCommandInteraction,
     InteractionEditReplyOptions,
     MessagePayload,
-    MessageFlags,
-    TextDisplayBuilder,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { config } from '../config/config.js';
-import { isValidEventType } from '../config/eventsConfig.js';
-import { parseDateString, fetchAndDisplayLogs } from '../commandShared/logSearchShared.js';
-import { getMessageLocale, t } from '../i18n/index.js';
 
 function parseArgs(content: string) {
     const args: Record<string, string> = {};

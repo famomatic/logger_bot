@@ -1,12 +1,25 @@
-import { Client, Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
+import { isLegacyCommandByDev, processMessageCreateLog } from './logGuildMessagesService.js';
 import { config } from '../config/config.js';
 import { fetchLatestMessageCreateTargetIdsByChannel, isGuildAuthorized } from '../db/database.js';
-import type { ErrorWithCode } from '../types/errors.js';
+import { mapWithConcurrency } from '../utils/asyncControl.js';
 import { logger } from '../utils/logger.js';
-import { isLegacyCommandByDev, processMessageCreateLog } from './logGuildMessagesService.js';
+
+import type { ErrorWithCode } from '../types/errors.js';
+import type { Client, Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
 
 interface RecoverySummary {
     guildsProcessed: number;
+    channelsProcessed: number;
+    messagesChecked: number;
+    messagesRecovered: number;
+    errors: number;
+}
+
+const RECOVERY_GUILD_CONCURRENCY = 2;
+const RECOVERY_CHANNEL_CONCURRENCY = 3;
+
+interface ChannelRecoverySummary {
+    channelId: string;
     channelsProcessed: number;
     messagesChecked: number;
     messagesRecovered: number;
@@ -30,26 +43,25 @@ async function recoverGuildMessages(
             ch.isTextBased() &&
             !ch.isThread() &&
             ch.viewable &&
-            (ch.permissionsFor(guild.members.me!)?.has('ReadMessageHistory') ?? false),
+            ch.permissionsFor(guild.members.me!).has('ReadMessageHistory'),
     );
     logger.info(
         `[message-recovery] Guild ${guild.id} has ${channels.size} accessible text channels (checkpoints=${checkpoints.size}).`,
     );
 
-    let channelsProcessed = 0;
-    let messagesChecked = 0;
-    let messagesRecovered = 0;
-    let errors = 0;
-
-    for (const channel of channels.values()) {
+    const scanSingleChannel = async (
+        channel: GuildTextBasedChannel,
+    ): Promise<ChannelRecoverySummary> => {
         logger.debug(
             `[message-recovery] Scanning channel guild=${guild.id} channel=${channel.id} checkpoint=${checkpoints.get(channel.id) ?? 'none'}.`,
         );
-        channelsProcessed++;
         const checkpointMessageId = checkpoints.get(channel.id);
         let before: string | undefined = undefined;
         let pages = 0;
         let reachedCheckpoint = false;
+        let messagesChecked = 0;
+        let messagesRecovered = 0;
+        let errors = 0;
 
         while (!reachedCheckpoint && pages < maxPagesPerChannel) {
             try {
@@ -101,7 +113,26 @@ async function recoverGuildMessages(
                 break;
             }
         }
-    }
+
+        return {
+            channelId: channel.id,
+            channelsProcessed: 1,
+            messagesChecked,
+            messagesRecovered,
+            errors,
+        };
+    };
+
+    const channelResults = await mapWithConcurrency(
+        [...channels.values()],
+        RECOVERY_CHANNEL_CONCURRENCY,
+        async (channel) => await scanSingleChannel(channel),
+    );
+
+    const channelsProcessed = channelResults.reduce((acc, row) => acc + row.channelsProcessed, 0);
+    const messagesChecked = channelResults.reduce((acc, row) => acc + row.messagesChecked, 0);
+    const messagesRecovered = channelResults.reduce((acc, row) => acc + row.messagesRecovered, 0);
+    const errors = channelResults.reduce((acc, row) => acc + row.errors, 0);
 
     return {
         guildsProcessed: 1,
@@ -140,28 +171,42 @@ export async function recoverMissedMessagesOnStartup(client: Client): Promise<vo
     let messagesRecovered = 0;
     let errors = 0;
 
-    for (const guild of authorizedGuilds.values()) {
-        try {
-            const result = await recoverGuildMessages(
-                guild,
-                legacyCommandPrefixes,
-                config.messageRecovery.maxPagesPerChannel,
-            );
-            logger.info(
-                `[message-recovery] Guild completed guild=${guild.id} channels=${result.channelsProcessed} checked=${result.messagesChecked} recovered=${result.messagesRecovered} errors=${result.errors}.`,
-            );
-            guildsProcessed += result.guildsProcessed;
-            channelsProcessed += result.channelsProcessed;
-            messagesChecked += result.messagesChecked;
-            messagesRecovered += result.messagesRecovered;
-            errors += result.errors;
-        } catch (error) {
-            logger.error(
-                `[message-recovery] Unexpected recovery failure in guild ${guild.id}:`,
-                error,
-            );
-            errors++;
-        }
+    const guildResults = await mapWithConcurrency(
+        [...authorizedGuilds.values()],
+        RECOVERY_GUILD_CONCURRENCY,
+        async (guild) => {
+            try {
+                const result = await recoverGuildMessages(
+                    guild,
+                    legacyCommandPrefixes,
+                    config.messageRecovery.maxPagesPerChannel,
+                );
+                logger.info(
+                    `[message-recovery] Guild completed guild=${guild.id} channels=${result.channelsProcessed} checked=${result.messagesChecked} recovered=${result.messagesRecovered} errors=${result.errors}.`,
+                );
+                return result;
+            } catch (error) {
+                logger.error(
+                    `[message-recovery] Unexpected recovery failure in guild ${guild.id}:`,
+                    error,
+                );
+                return {
+                    guildsProcessed: 0,
+                    channelsProcessed: 0,
+                    messagesChecked: 0,
+                    messagesRecovered: 0,
+                    errors: 1,
+                } as RecoverySummary;
+            }
+        },
+    );
+
+    for (const result of guildResults) {
+        guildsProcessed += result.guildsProcessed;
+        channelsProcessed += result.channelsProcessed;
+        messagesChecked += result.messagesChecked;
+        messagesRecovered += result.messagesRecovered;
+        errors += result.errors;
     }
 
     logger.info(

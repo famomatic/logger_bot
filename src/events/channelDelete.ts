@@ -1,6 +1,9 @@
-import { Events, GuildChannel, ChannelType, DMChannel, AuditLogEvent } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, ChannelType, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { GuildChannel, DMChannel } from 'discord.js';
 
 // 채널 타입 이름을 문자열로 변환하는 헬퍼 함수 (channelCreate와 동일하게 사용 가능)
 // 실제로는 별도 유틸리티 파일로 분리하는 것이 더 좋음
@@ -65,7 +68,7 @@ const event = {
             // targetId가 삭제된 채널 ID와 일치하는 로그 찾기
             const deleteLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target?.id === channelId &&
+                    entry.target.id === channelId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
             if (deleteLog) {
@@ -137,4 +140,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

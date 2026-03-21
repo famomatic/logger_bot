@@ -1,7 +1,10 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { SlashCommandBuilder } from 'discord.js';
+
 import { buildStatusReply, collectStatusSnapshot } from '../commandShared/statusCore.js';
 import { getInteractionLocale, localizations, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.

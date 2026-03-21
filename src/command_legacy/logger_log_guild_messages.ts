@@ -1,12 +1,13 @@
-import { Message } from 'discord.js';
 import { config } from '../config/config.js';
-import { logger } from '../utils/logger.js';
-import type { ClientWithLegacyCommands, LegacyCommand } from '../types/commands.js';
+import { getMessageLocale, t } from '../i18n/index.js';
 import {
     NoAccessibleGuildChannelsError,
     runGuildMessageBackfill,
 } from '../services/logGuildMessagesService.js';
-import { getMessageLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { ClientWithLegacyCommands, LegacyCommand } from '../types/commands.js';
+import type { Message } from 'discord.js';
 
 const command: LegacyCommand = {
     name: 'log-guild-messages',

@@ -1,36 +1,7 @@
-import dotenv from 'dotenv';
 import chalk from 'chalk';
+import dotenv from 'dotenv';
 
 dotenv.config();
-
-/**
- * `10s`, `500ms`, `2m` 같은 duration 문자열을 밀리초 값으로 변환합니다.
- */
-function parseDurationToMs(input?: string | null): number | undefined {
-    if (!input) {
-        return undefined;
-    }
-
-    const trimmed = input.trim();
-    if (!trimmed) {
-        return undefined;
-    }
-
-    const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)?$/i.exec(trimmed);
-    if (!match) {
-        return undefined;
-    }
-
-    const value = Number(match[1]);
-    if (Number.isNaN(value)) {
-        return undefined;
-    }
-
-    const unit = (match[2] ?? 's').toLowerCase();
-    const multiplier = unit === 'ms' ? 1 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 1_000;
-
-    return Math.round(value * multiplier);
-}
 
 /**
  * 정수 환경변수를 파싱하고 실패 시 기본값을 반환합니다.
@@ -58,10 +29,76 @@ function parseBoolean(input: string | undefined, fallback: boolean): boolean {
     return fallback;
 }
 
+interface RuntimeConfig {
+    discordBotToken: string;
+    clientId: string;
+    dbName: string;
+    dbUser: string;
+    dbPassword: string;
+    dbHost: string;
+    dbPort: number;
+    dbSsl: boolean;
+    dbSslRejectUnauthorized: boolean;
+    redis: {
+        enabled: boolean;
+        host: string;
+        port: number;
+        db: number;
+        password: string | undefined;
+        queueName: string;
+        clearOnStartup: boolean;
+        dlqRedriveOnStartup: boolean;
+        dlqRedriveBatchSize: number;
+        batchSize: number;
+        flushIntervalMs: number;
+        maxRetries: number;
+    };
+    messageRecovery: {
+        enabled: boolean;
+        maxPagesPerChannel: number;
+        backfillConcurrency: number;
+        backfillChannelConcurrency: number;
+        attachmentDownloadTimeoutMs: number;
+        attachmentMaxBytes: number;
+    };
+    sentryDsn: string | undefined;
+    nodeEnv: string;
+    superAdminIds: string[];
+    storage: {
+        type: 'webdav' | 's3' | 'smb' | 'local';
+        local: {
+            path: string;
+        };
+        webdav: {
+            enabled: boolean;
+            url: string | null;
+            host: string | undefined;
+            port: string | undefined;
+            https: boolean;
+            username: string | undefined;
+            password: string | undefined;
+            basePath: string;
+        };
+        s3: {
+            region: string;
+            bucket: string;
+            accessKeyId: string;
+            secretAccessKey: string;
+            endpoint: string | undefined;
+        };
+        smb: {
+            url: string;
+            domain: string;
+            username: string;
+            password: string;
+        };
+    };
+}
+
 /**
  * 환경변수에서 런타임 설정을 구성하고 필수값 누락 시 예외를 던집니다.
  */
-function loadConfig() {
+const buildConfigTemplate = (): RuntimeConfig => {
     const requiredEnvVars = [
         'DISCORD_BOT_TOKEN',
         'DISCORD_CLIENT_ID',
@@ -111,6 +148,12 @@ function loadConfig() {
             db: parseInteger(process.env.REDIS_DB, 0),
             password: process.env.REDIS_PASSWORD,
             queueName: process.env.REDIS_QUEUE_NAME ?? 'logger:events',
+            clearOnStartup: parseBoolean(process.env.REDIS_CLEAR_ON_STARTUP, true),
+            dlqRedriveOnStartup: parseBoolean(process.env.REDIS_DLQ_REDRIVE_ON_STARTUP, false),
+            dlqRedriveBatchSize: Math.max(
+                1,
+                parseInteger(process.env.REDIS_DLQ_REDRIVE_BATCH_SIZE, 100),
+            ),
             batchSize: parseInteger(process.env.LOG_QUEUE_BATCH_SIZE, 100),
             flushIntervalMs: parseInteger(process.env.LOG_QUEUE_FLUSH_INTERVAL_MS, 1000),
             maxRetries: parseInteger(process.env.LOG_QUEUE_MAX_RETRIES, 3),
@@ -120,6 +163,22 @@ function loadConfig() {
             maxPagesPerChannel: Math.max(
                 1,
                 parseInteger(process.env.MESSAGE_RECOVERY_MAX_PAGES_PER_CHANNEL, 20),
+            ),
+            backfillConcurrency: Math.max(
+                1,
+                parseInteger(process.env.MESSAGE_RECOVERY_BACKFILL_CONCURRENCY, 8),
+            ),
+            backfillChannelConcurrency: Math.max(
+                1,
+                parseInteger(process.env.MESSAGE_RECOVERY_BACKFILL_CHANNEL_CONCURRENCY, 2),
+            ),
+            attachmentDownloadTimeoutMs: Math.max(
+                1000,
+                parseInteger(process.env.MESSAGE_RECOVERY_ATTACHMENT_DOWNLOAD_TIMEOUT_MS, 15000),
+            ),
+            attachmentMaxBytes: Math.max(
+                1,
+                parseInteger(process.env.MESSAGE_RECOVERY_ATTACHMENT_MAX_BYTES, 25 * 1024 * 1024),
             ),
         },
         sentryDsn: process.env.SENTRY_DSN,
@@ -160,13 +219,10 @@ function loadConfig() {
                 password: process.env.SMB_PASSWORD ?? '',
             },
         },
-        sudoPassword: process.env.SUDO_PASSWORD,
-        sudoPasswordCommand: process.env.SUDO_PASSWORD_COMMAND,
-        execCommandTimeoutMs: parseDurationToMs(
-            process.env.EXEC_COMMAND_TIMEOUT ?? process.env.EXEC_COMMAND_TIMEOUT_MS,
-        ),
     };
-}
+};
+const buildConfig = (): ReturnType<typeof buildConfigTemplate> => buildConfigTemplate();
+const loadConfig = (): ReturnType<typeof buildConfig> => buildConfig();
 
 // 설정 객체 내보내기
 export let config = loadConfig();

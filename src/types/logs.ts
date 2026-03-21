@@ -4,11 +4,12 @@ export type AttachmentLogData = Pick<AttachmentData, 'id' | 'filename'> &
     Partial<Pick<AttachmentData, 'storagePath' | 'discordUrl'>>;
 
 export interface LogEventRecord {
+    eventId: string;
     eventType: string;
     guildId: string;
     userId: string | null;
     channelId: string | null;
-    targetId: string;
+    targetId: string | null;
     data: Record<string, unknown>;
     timestamp: Date;
 }
@@ -64,6 +65,7 @@ export interface SearchLogsParams {
 
 export interface LogEntry {
     id: number;
+    event_id?: string;
     event_type: string;
     guild_id: string;
     user_id: string | null;

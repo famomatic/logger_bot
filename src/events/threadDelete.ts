@@ -1,6 +1,9 @@
-import { Events, ThreadChannel, AuditLogEvent, ChannelType } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent, ChannelType } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { ThreadChannel } from 'discord.js';
 
 const event = {
     name: Events.ThreadDelete,
@@ -32,8 +35,7 @@ const event = {
             const deleteLog = fetchedLogs.entries.first();
             // Audit Log의 target이 삭제된 스레드와 일치하는지 확인
             if (
-                deleteLog &&
-                deleteLog.target?.id === targetId &&
+                deleteLog?.target.id === targetId &&
                 Math.abs(Date.now() - deleteLog.createdTimestamp) < 5000
             ) {
                 executorId = deleteLog.executor?.id ?? null;
@@ -76,4 +78,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

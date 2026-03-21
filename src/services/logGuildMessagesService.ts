@@ -1,14 +1,17 @@
-import { Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
 import axios from 'axios';
+
 import { config } from '../config/config.js';
-import { storageManager } from '../storage/StorageManager.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
-import type { AttachmentData } from '../types/commands.js';
-import type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
-import type { ErrorWithCode } from '../types/errors.js';
-import type { BuildMessageCreateDataParams, MessageReactionSnapshot } from '../types/messageLog.js';
+import { storageManager } from '../storage/StorageManager.js';
+import { mapWithConcurrency } from '../utils/asyncControl.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
+
+import type { ChannelBackfillStat, GuildBackfillResult } from '../types/backfill.js';
+import type { AttachmentData } from '../types/commands.js';
+import type { ErrorWithCode } from '../types/errors.js';
+import type { BuildMessageCreateDataParams, MessageReactionSnapshot } from '../types/messageLog.js';
+import type { Collection, Guild, GuildTextBasedChannel, Message } from 'discord.js';
 
 /**
  * 백필 대상 길드에서 읽을 수 있는 텍스트 채널이 없을 때 발생시키는 오류입니다.
@@ -30,7 +33,48 @@ interface MessageBackfillOutcome {
     failed: boolean;
 }
 
-const BACKFILL_CONCURRENCY = 8;
+interface ChannelBackfillOutcome {
+    channelId: string;
+    stat: ChannelBackfillStat;
+    processedCount: number;
+    newlyLoggedCount: number;
+    errorCount: number;
+    uniqueUserIds: Set<string>;
+}
+
+async function fetchMessagesWithRetry(
+    channel: GuildTextBasedChannel,
+    before?: string,
+): Promise<Collection<string, Message>> {
+    const maxAttempts = 2;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await channel.messages.fetch({
+                limit: 100,
+                before,
+            });
+        } catch (error) {
+            const fetchError = error as ErrorWithCode;
+            const message = String(fetchError.message ?? '');
+            const isTimeout =
+                message.includes('Connect Timeout') ||
+                message.includes('ETIMEDOUT') ||
+                message.includes('Request timed out');
+
+            if (!isTimeout || attempt === maxAttempts) {
+                throw error;
+            }
+
+            logger.warn(
+                `Retrying message fetch for channel ${channel.id} after timeout (attempt ${attempt}/${maxAttempts}).`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        }
+    }
+
+    throw new Error(`Unreachable: failed to fetch messages for channel ${channel.id}`);
+}
 
 /**
  * 첨부파일 다운로드를 지수형 대기(1s, 2s, 3s...)로 재시도합니다.
@@ -40,12 +84,20 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             logger.debug(`Downloading attachment: ${url} (try ${attempt}/${maxRetries})`);
-            const res = await axios.get(url, { responseType: 'arraybuffer' });
+            const res = await axios.get(url, {
+                responseType: 'arraybuffer',
+                timeout: config.messageRecovery.attachmentDownloadTimeoutMs,
+                maxContentLength: config.messageRecovery.attachmentMaxBytes,
+                maxBodyLength: config.messageRecovery.attachmentMaxBytes,
+            });
             return Buffer.from(res.data);
         } catch (err) {
             lastError = err;
             const errorMessage = err instanceof Error ? err.message : String(err);
             logger.warn(`Failed to download ${url} on attempt ${attempt}: ${errorMessage}`);
+            if (errorMessage.includes('maxContentLength')) {
+                break;
+            }
             if (attempt < maxRetries) {
                 await new Promise((r) => setTimeout(r, 1000 * attempt));
             }
@@ -93,17 +145,24 @@ export async function buildAttachmentData(
     for (const attachment of message.attachments.values()) {
         let storagePath: string | null = null;
         let downloadError: string | null = null;
-        if (config.storage.type) {
+        {
             try {
-                const fileBuffer = await downloadWithRetry(attachment.url, 3);
-                const relativePath = createAttachmentStoragePath(
-                    guildId,
-                    channelId,
-                    messageId,
-                    attachment.id,
-                    attachment.name,
-                );
-                storagePath = await storageManager.upload(relativePath, fileBuffer);
+                if (attachment.size > config.messageRecovery.attachmentMaxBytes) {
+                    downloadError = `Attachment too large (${attachment.size} bytes > ${config.messageRecovery.attachmentMaxBytes} bytes)`;
+                    logger.warn(
+                        `Skipping oversized attachment ${attachment.id} (${attachment.name}) size=${attachment.size}`,
+                    );
+                } else {
+                    const fileBuffer = await downloadWithRetry(attachment.url, 3);
+                    const relativePath = createAttachmentStoragePath(
+                        guildId,
+                        channelId,
+                        messageId,
+                        attachment.id,
+                        attachment.name,
+                    );
+                    storagePath = await storageManager.upload(relativePath, fileBuffer);
+                }
             } catch (error) {
                 const err = error as Error;
                 downloadError = err.message || 'Unknown download/upload error';
@@ -207,27 +266,28 @@ export async function runGuildMessageBackfill({
             ch.isTextBased() &&
             !ch.isThread() &&
             ch.viewable &&
-            (ch.permissionsFor(guild.members.me!)?.has('ReadMessageHistory') ?? false),
+            ch.permissionsFor(guild.members.me!).has('ReadMessageHistory'),
     );
 
     if (channels.size === 0) {
         throw new NoAccessibleGuildChannelsError(guild.id);
     }
 
-    for (const channel of channels.values()) {
+    const processSingleChannel = async (
+        channel: GuildTextBasedChannel,
+    ): Promise<ChannelBackfillOutcome> => {
         logger.debug(`Processing channel ${channel.name} (${channel.id})`);
         let lastMessageId: string | undefined = undefined;
         let fetchMore = true;
         let channelProcessedCount = 0;
         let channelNewlyLoggedCount = 0;
+        let channelErrorCount = 0;
+        const channelUniqueUserIds = new Set<string>();
         const channelStartTime = Date.now();
 
         while (fetchMore) {
             try {
-                const messages: Collection<string, Message> = await channel.messages.fetch({
-                    limit: 100,
-                    before: lastMessageId,
-                });
+                const messages = await fetchMessagesWithRetry(channel, lastMessageId);
 
                 if (messages.size === 0) {
                     fetchMore = false;
@@ -238,7 +298,7 @@ export async function runGuildMessageBackfill({
                 const candidates: Message[] = [];
 
                 for (const message of messages.values()) {
-                    uniqueUserIds.add(message.author.id);
+                    channelUniqueUserIds.add(message.author.id);
 
                     if (
                         message.author.bot ||
@@ -247,13 +307,19 @@ export async function runGuildMessageBackfill({
                         continue;
                     }
 
-                    processedCount++;
                     channelProcessedCount++;
                     candidates.push(message);
                 }
 
-                for (let start = 0; start < candidates.length; start += BACKFILL_CONCURRENCY) {
-                    const chunk = candidates.slice(start, start + BACKFILL_CONCURRENCY);
+                for (
+                    let start = 0;
+                    start < candidates.length;
+                    start += config.messageRecovery.backfillConcurrency
+                ) {
+                    const chunk = candidates.slice(
+                        start,
+                        start + config.messageRecovery.backfillConcurrency,
+                    );
                     const outcomes = await Promise.all(
                         chunk.map(async (message): Promise<MessageBackfillOutcome> => {
                             try {
@@ -274,11 +340,10 @@ export async function runGuildMessageBackfill({
                     );
                     for (const outcome of outcomes) {
                         if (outcome.logged) {
-                            newlyLoggedCount++;
                             channelNewlyLoggedCount++;
                         }
                         if (outcome.failed) {
-                            errorCount++;
+                            channelErrorCount++;
                         }
                     }
                 }
@@ -297,14 +362,14 @@ export async function runGuildMessageBackfill({
                 }
 
                 logger.error(
-                    `Failed to fetch messages in channel ${channel.id}: ${fetchError.message}`,
+                    `Failed to fetch messages in channel ${channel.id}: ${String(fetchError.message)}`,
                 );
-                errorCount++;
+                channelErrorCount++;
                 fetchMore = false;
             }
         }
 
-        channelStats[channel.id] = {
+        const stat = {
             processed: channelProcessedCount,
             newlyLogged: channelNewlyLoggedCount,
             name: channel.name,
@@ -312,6 +377,31 @@ export async function runGuildMessageBackfill({
         logger.info(
             `Finished processing channel ${channel.id} (${channel.name}). Checked ${channelProcessedCount} messages, newly logged ${channelNewlyLoggedCount}. Took ${((Date.now() - channelStartTime) / 1000).toFixed(2)}s.`,
         );
+
+        return {
+            channelId: channel.id,
+            stat,
+            processedCount: channelProcessedCount,
+            newlyLoggedCount: channelNewlyLoggedCount,
+            errorCount: channelErrorCount,
+            uniqueUserIds: channelUniqueUserIds,
+        };
+    };
+
+    const channelResults = await mapWithConcurrency(
+        [...channels.values()],
+        config.messageRecovery.backfillChannelConcurrency,
+        async (channel) => await processSingleChannel(channel),
+    );
+
+    for (const result of channelResults) {
+        channelStats[result.channelId] = result.stat;
+        processedCount += result.processedCount;
+        newlyLoggedCount += result.newlyLoggedCount;
+        errorCount += result.errorCount;
+        for (const userId of result.uniqueUserIds) {
+            uniqueUserIds.add(userId);
+        }
     }
 
     return {

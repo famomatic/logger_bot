@@ -1,9 +1,10 @@
-import { Message } from 'discord.js';
-import type { LegacyCommand } from '../types/commands.js';
-import { config } from '../config/config.js';
-import { logger } from '../utils/logger.js';
 import { buildStatusReply, collectStatusSnapshot } from '../commandShared/statusCore.js';
+import { config } from '../config/config.js';
 import { getMessageLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { LegacyCommand } from '../types/commands.js';
+import type { Message } from 'discord.js';
 
 const command: LegacyCommand = {
     name: 'status',

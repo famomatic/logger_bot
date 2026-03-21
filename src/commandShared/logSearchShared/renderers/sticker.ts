@@ -3,11 +3,13 @@ import {
     type ChatInputCommandInteraction,
     type MessageComponentInteraction,
 } from 'discord.js';
-import type { JsonData, JsonValue } from '../../../types/json.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
 import { STICKER_FORMAT_LABELS } from '../constants.js';
+import { getInteractionLocale, t } from '../deps.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
+
+import type { JsonData, JsonValue } from '../deps.js';
 
 type StickerEventType = 'stickerCreate' | 'stickerUpdate' | 'stickerDelete';
 

@@ -1,6 +1,9 @@
-import { Events, Role, AuditLogEvent } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Role } from 'discord.js';
 
 const event = {
     name: Events.GuildRoleDelete,
@@ -38,8 +41,7 @@ const event = {
             // 로그 자체의 targetId 필드를 확인하는 것이 더 안전할 수 있으나,
             // discord.js 타입상 target이 Role일 것으로 예상하고 비교
             if (
-                deleteLog &&
-                deleteLog.target?.id === targetId &&
+                deleteLog?.target.id === targetId &&
                 Math.abs(Date.now() - deleteLog.createdTimestamp) < 5000
             ) {
                 executorId = deleteLog.executor?.id ?? null;
@@ -84,4 +86,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

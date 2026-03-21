@@ -1,19 +1,22 @@
-import {
-    Events,
-    Message,
-    PartialMessage,
-    AuditLogEvent,
-    User,
-    GuildAuditLogsEntry,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
+import { mapWithConcurrency } from '../utils/asyncControl.js';
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Message, PartialMessage, User, GuildAuditLogsEntry } from 'discord.js';
 
 const deleteBuffer: (Message | PartialMessage)[] = [];
 let bufferTimer: NodeJS.Timeout | null = null;
+let bufferDrainRunning = false;
+let droppedDeleteEvents = 0;
 
-async function processBuffer() {
-    const items = deleteBuffer.splice(0);
+const DELETE_BUFFER_MAX_SIZE = 5_000;
+const DELETE_BUFFER_BATCH_SIZE = 500;
+const DELETE_PROCESS_CONCURRENCY_PER_GUILD = 8;
+
+async function processBufferBatch(items: (Message | PartialMessage)[]) {
     const guildMap = new Map<string, (Message | PartialMessage)[]>();
     for (const msg of items) {
         const gid = msg.guild?.id;
@@ -26,17 +29,42 @@ async function processBuffer() {
         const guild = msgs[0].guild!;
         let fetchedEntries: GuildAuditLogsEntry[] | null = null;
         try {
-            const fetchedLogs = await guild.fetchAuditLogs({
+            const fetchedLogs = await fetchAuditLogsCached(guild, {
                 limit: 5,
                 type: AuditLogEvent.MessageDelete,
+                ttlMs: 1_500,
             });
-            fetchedEntries = [...fetchedLogs.entries.values()];
+            fetchedEntries = [...fetchedLogs.entries.values()] as GuildAuditLogsEntry[];
         } catch (err) {
             logger.error(`Failed to fetch audit logs for guild ${gid}:`, err);
         }
 
-        for (const message of msgs) {
+        await mapWithConcurrency(msgs, DELETE_PROCESS_CONCURRENCY_PER_GUILD, async (message) => {
             await handleDelete(message, fetchedEntries);
+        });
+    }
+}
+
+async function drainDeleteBuffer(): Promise<void> {
+    if (bufferDrainRunning) {
+        return;
+    }
+
+    bufferDrainRunning = true;
+    try {
+        while (deleteBuffer.length > 0) {
+            const items = deleteBuffer.splice(0, DELETE_BUFFER_BATCH_SIZE);
+            await processBufferBatch(items);
+        }
+    } finally {
+        bufferDrainRunning = false;
+        if (deleteBuffer.length > 0) {
+            bufferTimer ??= setTimeout(() => {
+                bufferTimer = null;
+                drainDeleteBuffer().catch((error) => {
+                    logger.error('Failed to drain message delete buffer:', error);
+                });
+            }, 1000);
         }
     }
 }
@@ -55,7 +83,7 @@ async function handleDelete(
         return;
     }
 
-    let messageContent: string | null = null;
+    let messageContent: string | null;
     let author: User | null = null;
     let executorId: string | null = null;
     let authorId: string | null = null;
@@ -65,8 +93,8 @@ async function handleDelete(
     } else {
         messageContent = message.content;
         author = message.author;
-        authorId = author?.id ?? null;
-        if (fetchedEntries && author && message.guild) {
+        authorId = author.id;
+        if (fetchedEntries && message.guild) {
             const deleteLog = fetchedEntries.find(
                 (entry) =>
                     entry.extra &&
@@ -118,13 +146,24 @@ async function handleDelete(
 const event = {
     name: Events.MessageDelete,
     execute(message: Message | PartialMessage) {
-        if (!message.partial && message.author?.bot) {
+        if (!message.partial && message.author.bot) {
+            return;
+        }
+        if (deleteBuffer.length >= DELETE_BUFFER_MAX_SIZE) {
+            droppedDeleteEvents++;
+            if (droppedDeleteEvents % 100 === 1) {
+                logger.warn(
+                    `messageDelete buffer overflow: dropped=${droppedDeleteEvents}, max=${DELETE_BUFFER_MAX_SIZE}`,
+                );
+            }
             return;
         }
         deleteBuffer.push(message);
         bufferTimer ??= setTimeout(() => {
             bufferTimer = null;
-            void processBuffer();
+            drainDeleteBuffer().catch((error) => {
+                logger.error('Failed to drain message delete buffer:', error);
+            });
         }, 1000);
     },
 } as const;
@@ -132,4 +171,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

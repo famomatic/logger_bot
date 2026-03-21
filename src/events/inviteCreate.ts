@@ -1,6 +1,9 @@
-import { Events, Invite, AuditLogEvent, AuditLogChange } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Invite, AuditLogChange } from 'discord.js';
 
 const event = {
     name: Events.InviteCreate,
@@ -32,7 +35,7 @@ const event = {
                 });
                 // 코드가 일치하는 가장 최근 InviteCreate 로그 찾기
                 const createLog = fetchedLogs.entries.find((entry) =>
-                    entry.changes?.some(
+                    entry.changes.some(
                         (c: AuditLogChange) => c.key === 'code' && c.new === inviteCode,
                     ),
                 );
@@ -98,4 +101,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

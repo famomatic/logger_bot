@@ -1,15 +1,11 @@
-import {
-    SlashCommandBuilder,
-    ChatInputCommandInteraction,
-    ChannelType,
-    MessageFlags,
-    GuildTextBasedChannel,
-    InteractionContextType,
-} from 'discord.js';
-import { removeSubscription, categoryEventMap } from '../utils/alertManager.js';
-import { logger } from '../utils/logger.js';
+import { SlashCommandBuilder, ChannelType, MessageFlags, InteractionContextType } from 'discord.js';
+
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { removeSubscription, categoryEventMap } from '../utils/alertManager.js';
+import { logger } from '../utils/logger.js';
+
+import type { ChatInputCommandInteraction, GuildTextBasedChannel } from 'discord.js';
 
 const choices = Object.keys(categoryEventMap)
     .map((cat) => ({ name: cat, value: cat }))

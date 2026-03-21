@@ -1,8 +1,12 @@
-import { Client, WebSocketShardStatus, version as djsVersion } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { WebSocketShardStatus, version as djsVersion } from 'discord.js';
+
 import { buildContainerMessage } from './componentsV2.js';
-import type { SupportedLocale } from '../types/i18n.js';
 import { t } from '../i18n/index.js';
+import { getLogQueueStats } from '../queue/logEventQueue.js';
+import { logger } from '../utils/logger.js';
+
+import type { SupportedLocale } from '../types/i18n.js';
+import type { Client } from 'discord.js';
 
 interface StatusSnapshot {
     uptime: string;
@@ -16,6 +20,9 @@ interface StatusSnapshot {
     memoryRssMb: string;
     memoryHeapTotalMb: string;
     memoryHeapUsedMb: string;
+    queuePending: number | null;
+    queueProcessing: number | null;
+    queueDlq: number | null;
 }
 
 /**
@@ -47,19 +54,20 @@ export async function collectStatusSnapshot(
     if (client.application) {
         try {
             const fetchedCommands = await client.application.commands.fetch();
-            slashCommandsCount = fetchedCommands?.size ?? 0;
+            slashCommandsCount = fetchedCommands.size;
         } catch (fetchError) {
             logger.warn(`Failed to fetch application commands for ${source} status:`, fetchError);
-            slashCommandsCount = client.application.commands.cache.size ?? 0;
+            slashCommandsCount = client.application.commands.cache.size;
         }
     }
 
     const memoryUsage = process.memoryUsage();
+    const queueStats = await getLogQueueStats();
 
     return {
         uptime: formatUptime(process.uptime(), locale),
         apiLatency,
-        wsStatus: WebSocketShardStatus[client.ws.status] ?? client.ws.status.toString(),
+        wsStatus: WebSocketShardStatus[client.ws.status] || client.ws.status.toString(),
         guilds: client.guilds.cache.size,
         users: client.guilds.cache.reduce((acc, guild) => acc + guild.memberCount, 0),
         nodeVersion: process.version,
@@ -68,6 +76,9 @@ export async function collectStatusSnapshot(
         memoryRssMb: (memoryUsage.rss / 1024 / 1024).toFixed(2),
         memoryHeapTotalMb: (memoryUsage.heapTotal / 1024 / 1024).toFixed(2),
         memoryHeapUsedMb: (memoryUsage.heapUsed / 1024 / 1024).toFixed(2),
+        queuePending: queueStats?.pending ?? null,
+        queueProcessing: queueStats?.processing ?? null,
+        queueDlq: queueStats?.dlq ?? null,
     };
 }
 
@@ -104,7 +115,10 @@ export function buildStatusReply(
                 body:
                     `RSS: ${snapshot.memoryRssMb} MB\n` +
                     `Heap Total: ${snapshot.memoryHeapTotalMb} MB\n` +
-                    `Heap Used: ${snapshot.memoryHeapUsedMb} MB`,
+                    `Heap Used: ${snapshot.memoryHeapUsedMb} MB\n` +
+                    `Queue Pending: ${snapshot.queuePending ?? 'N/A'}\n` +
+                    `Queue Processing: ${snapshot.queueProcessing ?? 'N/A'}\n` +
+                    `Queue DLQ: ${snapshot.queueDlq ?? 'N/A'}`,
             },
             {
                 title: t(locale, 'status.guildStats'),

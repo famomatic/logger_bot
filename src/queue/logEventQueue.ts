@@ -1,12 +1,16 @@
+import { randomUUID } from 'node:crypto';
+
 import { Redis as RedisClient } from 'ioredis';
+
 import { config } from '../config/config.js';
 import {
     insertLogEventDirectNow,
     insertLogEventsBatch,
     setLogEventDispatcher,
 } from '../db/database.js';
-import type { LogEventRecord } from '../types/logs.js';
 import { logger } from '../utils/logger.js';
+
+import type { LogEventRecord } from '../types/logs.js';
 
 interface QueuedLogEvent {
     event: Omit<LogEventRecord, 'timestamp'> & { timestamp: string };
@@ -17,6 +21,12 @@ interface QueuedLogEvent {
 interface BufferedQueueItem {
     raw: string;
     payload: QueuedLogEvent;
+}
+
+export interface LogQueueStats {
+    pending: number;
+    processing: number;
+    dlq: number;
 }
 
 class RedisLogQueue {
@@ -59,12 +69,74 @@ class RedisLogQueue {
 
     async start(): Promise<void> {
         await this.redis.ping();
+        if (config.redis.clearOnStartup) {
+            await this.clearStaleQueueState();
+        }
+        if (!config.redis.clearOnStartup && config.redis.dlqRedriveOnStartup) {
+            const redriven = await this.redriveDlq(config.redis.dlqRedriveBatchSize);
+            if (redriven > 0) {
+                logger.warn(`Redriven ${redriven} events from DLQ to pending on startup.`);
+            }
+        }
         await this.recoverProcessingQueue();
         this.running = true;
         this.workerPromise = this.runWorker();
         logger.info(
             `Redis log queue started (${config.redis.host}:${config.redis.port}, batch=${this.batchSize}, flush=${this.flushIntervalMs}ms)`,
         );
+    }
+
+    private async clearStaleQueueState(): Promise<void> {
+        const [pending, processing] = await Promise.all([
+            this.redis.llen(this.pendingKey),
+            this.redis.llen(this.processingKey),
+        ]);
+
+        if (pending === 0 && processing === 0) {
+            return;
+        }
+
+        await this.redis.del(this.pendingKey, this.processingKey);
+        logger.warn(
+            `Cleared stale redis queue state on startup (pending=${pending}, processing=${processing}).`,
+        );
+    }
+
+    async getStats(): Promise<LogQueueStats> {
+        const [pending, processing, dlq] = await Promise.all([
+            this.redis.llen(this.pendingKey),
+            this.redis.llen(this.processingKey),
+            this.redis.llen(this.dlqKey),
+        ]);
+        return { pending, processing, dlq };
+    }
+
+    async redriveDlq(maxItems: number): Promise<number> {
+        const limit = Math.max(1, maxItems);
+        let moved = 0;
+        const pipeline = this.redis.pipeline();
+
+        while (moved < limit) {
+            const raw = await this.redis.rpop(this.dlqKey);
+            if (!raw) {
+                break;
+            }
+
+            const payload = this.parsePayload(raw);
+            if (!payload) {
+                continue;
+            }
+
+            payload.attempts = 0;
+            payload.queuedAt = new Date().toISOString();
+            pipeline.lpush(this.pendingKey, JSON.stringify(payload));
+            moved++;
+        }
+
+        if (moved > 0) {
+            await pipeline.exec();
+        }
+        return moved;
     }
 
     async stop(): Promise<void> {
@@ -106,7 +178,7 @@ class RedisLogQueue {
 
     private async recoverProcessingQueue(): Promise<void> {
         let recovered = 0;
-        while (true) {
+        for (;;) {
             const moved = await this.redis.lmove(
                 this.processingKey,
                 this.pendingKey,
@@ -157,9 +229,13 @@ class RedisLogQueue {
     private parsePayload(raw: string): QueuedLogEvent | null {
         try {
             const parsed = JSON.parse(raw) as QueuedLogEvent;
-            if (!parsed?.event?.guildId || !parsed.event.eventType || !parsed.event.targetId) {
+            if (!parsed.event.guildId || !parsed.event.eventType) {
                 logger.warn('Discarding malformed queued log event payload.');
                 return null;
+            }
+            if (!parsed.event.eventId) {
+                // Backward compatibility for pre-cutover queued payloads.
+                parsed.event.eventId = randomUUID();
             }
             return parsed;
         } catch (error) {
@@ -171,7 +247,9 @@ class RedisLogQueue {
     private ensureFlushTimer(): void {
         if (this.flushTimer) return;
         this.flushTimer = setTimeout(() => {
-            void this.flush('time');
+            this.flush('time').catch((error) => {
+                logger.error('Failed to flush log queue on timer:', error);
+            });
         }, this.flushIntervalMs);
     }
 
@@ -271,7 +349,16 @@ export async function initializeLogQueue(): Promise<void> {
     }
 
     const queue = new RedisLogQueue();
-    await queue.start();
+    try {
+        await queue.start();
+    } catch (error) {
+        logger.error(
+            'Failed to start Redis log queue. Falling back to direct DB writes for this process.',
+            error,
+        );
+        setLogEventDispatcher(null);
+        return;
+    }
 
     setLogEventDispatcher(async (event) => {
         const queued = await queue.enqueue(event);
@@ -282,6 +369,39 @@ export async function initializeLogQueue(): Promise<void> {
         return await insertLogEventDirectNow(event);
     });
     queueInstance = queue;
+}
+
+/**
+ * 현재 로그 큐 길이 상태(pending/processing/dlq)를 조회합니다.
+ */
+export async function getLogQueueStats(): Promise<LogQueueStats | null> {
+    if (!config.redis.enabled) {
+        return null;
+    }
+    if (!queueInstance) {
+        return null;
+    }
+    try {
+        return await queueInstance.getStats();
+    } catch (error) {
+        logger.error('Failed to query log queue stats:', error);
+        return null;
+    }
+}
+
+/**
+ * DLQ에서 pending 큐로 이벤트를 재주입합니다.
+ */
+export async function redriveLogQueueDlq(maxItems: number): Promise<number> {
+    if (!config.redis.enabled || !queueInstance) {
+        return 0;
+    }
+    try {
+        return await queueInstance.redriveDlq(maxItems);
+    } catch (error) {
+        logger.error('Failed to redrive log queue DLQ:', error);
+        return 0;
+    }
 }
 
 /**

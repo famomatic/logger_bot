@@ -1,9 +1,10 @@
 import { ThumbnailBuilder } from 'discord.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
+import { getInteractionLocale, t } from '../deps.js';
 import { num, str } from '../formatters.js';
 import { isJsonData } from '../types.js';
-import type { JsonData } from '../../../types/json.js';
-import type { GroupRendererInput, GroupRendererResult } from '../../../types/logSearchRenderers.js';
+
+import type { JsonData, GroupRendererInput, GroupRendererResult } from '../deps.js';
 
 const buildUserThumbnail = async (
     input: GroupRendererInput,

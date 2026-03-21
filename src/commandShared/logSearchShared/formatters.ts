@@ -1,6 +1,7 @@
-import type { JsonValue } from '../../types/json.js';
 import { STICKER_FORMAT_LABELS } from './constants.js';
 import { isJsonData } from './types.js';
+
+import type { JsonValue } from '../../types/json.js';
 
 /**
  * JsonValue를 문자열로 안전 변환합니다. nullish면 fallback을 반환합니다.

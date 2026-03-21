@@ -1,6 +1,10 @@
-import { Events, VoiceState, AuditLogEvent, Guild, AuditLogChange, User } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
+import { fetchAuditLogsCached } from '../utils/auditLogCache.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { VoiceState, Guild, AuditLogChange, User } from 'discord.js';
 
 async function logVoiceEvent(
     eventType: string,
@@ -16,10 +20,6 @@ async function logVoiceEvent(
     // 서버 뮤트/데프의 경우 executorId가 user_id, 대상 유저가 target_id
     // 그 외에는 사용자 자신이 user_id 및 target_id
     const dbUserId = executorId ?? userId;
-    // 기존 UNIQUE 제약 조건 (guild_id, event_type, target_id) 때문에
-    // 동일 사용자에 대한 중복 이벤트가 기록되지 않는 문제가 있었다.
-    // 각 음성 이벤트가 고유하게 기록되도록 타겟 ID에 타임스탬프를 조합한다.
-    const dbTargetId = `${userId}-${timestamp.getTime().toString(36)}`;
     const combinedData = { userId: userId, userTag: user.tag, ...data }; // 기본 유저 정보 추가
 
     try {
@@ -28,7 +28,7 @@ async function logVoiceEvent(
             guildId,
             dbUserId, // user_id: 실행자 (없으면 본인)
             channelId, // channel_id: 현재 또는 이전 채널
-            dbTargetId, // target_id: 사용자별 고유 이벤트 ID
+            userId, // target_id: 대상 사용자 ID
             combinedData, // data: 이벤트 관련 정보 (user 정보 포함)
             timestamp,
         );
@@ -38,7 +38,7 @@ async function logVoiceEvent(
             );
         } else {
             logger.debug(
-                `Skipped logging duplicate ${eventType} for user ${userId} (${user.tag}) in channel ${channelId}`,
+                `Skipped logging duplicate ${eventType} for user ${userId} (${user.tag}) in channel ${channelId ?? 'unknown'}`,
             );
         }
     } catch (error) {
@@ -109,14 +109,15 @@ const event = {
 
                 let executorId: string | null = null;
                 try {
-                    const fetchedLogs = await guild.fetchAuditLogs({
+                    const fetchedLogs = await fetchAuditLogsCached(guild, {
                         limit: 5,
                         type: AuditLogEvent.MemberUpdate, // 24
+                        ttlMs: 2_000,
                     });
                     const stateLog = fetchedLogs.entries.find(
                         (entry) =>
-                            entry.target?.id === user.id &&
-                            entry.changes?.some((c: AuditLogChange) => c.key === changeKey) &&
+                            entry.targetId === user.id &&
+                            entry.changes.some((c: AuditLogChange) => c.key === changeKey) &&
                             Math.abs(Date.now() - entry.createdTimestamp) < 5000,
                     );
                     if (stateLog) {
@@ -215,4 +216,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

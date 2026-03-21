@@ -1,18 +1,17 @@
 import {
     SlashCommandBuilder,
-    CommandInteraction,
     PermissionsBitField,
-    Client,
-    GuildTextBasedChannel,
     Collection,
-    Message,
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
+
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
-import type { SlashCommand } from '../types/commands.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { SlashCommand } from '../types/commands.js';
+import type { CommandInteraction, Client, GuildTextBasedChannel, Message } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -86,6 +85,10 @@ export const command: SlashCommand = {
                 return;
             }
             channel = fetched as GuildTextBasedChannel;
+            if (channel.guildId !== interaction.guildId) {
+                await interaction.editReply(t(locale, 'common.commandNotAllowed'));
+                return;
+            }
         } catch (err) {
             logger.error(`${logPrefix} Failed to fetch channel`, err);
             await interaction.editReply(t(locale, 'messageCmd.fetchChannelFailed'));
@@ -94,8 +97,8 @@ export const command: SlashCommand = {
 
         const botPerms = channel.permissionsFor(channel.guild.members.me!);
         if (
-            !botPerms?.has(PermissionsBitField.Flags.ReadMessageHistory) ||
-            !botPerms?.has(PermissionsBitField.Flags.ManageMessages)
+            !botPerms.has(PermissionsBitField.Flags.ReadMessageHistory) ||
+            !botPerms.has(PermissionsBitField.Flags.ManageMessages)
         ) {
             await interaction.editReply(
                 t(locale, 'messageCmd.noDeletePermission', { channel: channel.name }),

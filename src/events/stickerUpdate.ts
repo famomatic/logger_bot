@@ -1,6 +1,9 @@
-import { Events, Sticker, AuditLogEvent, AuditLogChange } from 'discord.js';
-import { logger } from '../utils/logger.js';
+import { Events, AuditLogEvent } from 'discord.js';
+
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
+import { logger } from '../utils/logger.js';
+
+import type { Sticker, AuditLogChange } from 'discord.js';
 
 // 변경된 내용을 사람이 읽기 쉬운 형태로 변환하는 헬퍼 함수 (roleUpdate와 유사)
 function formatStickerChange(change: AuditLogChange): string {
@@ -12,13 +15,9 @@ function formatStickerChange(change: AuditLogChange): string {
     };
     const keyName = keyMap[change.key] ?? change.key;
     const oldStr =
-        typeof change.old === 'object' && change.old !== null
-            ? JSON.stringify(change.old)
-            : String(change.old ?? '');
+        typeof change.old === 'object' ? JSON.stringify(change.old) : String(change.old ?? '');
     const newStr =
-        typeof change.new === 'object' && change.new !== null
-            ? JSON.stringify(change.new)
-            : String(change.new ?? '');
+        typeof change.new === 'object' ? JSON.stringify(change.new) : String(change.new ?? '');
     return `${keyName}: '${oldStr}' -> '${newStr}'`;
 }
 
@@ -40,8 +39,8 @@ const event = {
         const guildId = guild.id;
         const targetId = newSticker.id; // 변경된 스티커 ID
         const timestamp = new Date();
-        let executorId: string | null = null;
-        let changesDescription = '';
+        let executorId: string | null;
+        let changesDescription: string;
 
         // Audit Log 조회 시도
         try {
@@ -51,16 +50,18 @@ const event = {
             });
             const updateLog = fetchedLogs.entries.find(
                 (entry) =>
-                    entry.target?.id === targetId &&
+                    entry.target.id === targetId &&
                     Math.abs(Date.now() - entry.createdTimestamp) < 5000,
             );
 
             if (updateLog) {
                 executorId = updateLog.executor?.id ?? null;
-                changesDescription =
-                    updateLog.changes?.map(formatStickerChange).join('\n') ??
-                    '변경 내역을 Audit Log에서 찾을 수 없음';
+                changesDescription = updateLog.changes.map(formatStickerChange).join('\n');
+                if (!changesDescription) {
+                    changesDescription = '변경 내역을 Audit Log에서 찾을 수 없음';
+                }
             } else {
+                executorId = null;
                 logger.warn(
                     `Could not find exact Audit Log entry for ${eventType} (sticker ${targetId}) in guild ${guildId}. Executor and precise changes might be missing.`,
                 );
@@ -70,13 +71,16 @@ const event = {
                     detectedChanges.push(`이름: '${oldSticker.name}' -> '${newSticker.name}'`);
                 if (oldSticker.description !== newSticker.description)
                     detectedChanges.push(
-                        `설명: '${oldSticker.description}' -> '${newSticker.description}'`,
+                        `설명: '${String(oldSticker.description ?? '')}' -> '${String(newSticker.description ?? '')}'`,
                     );
                 if (oldSticker.tags !== newSticker.tags)
-                    detectedChanges.push(`태그: '${oldSticker.tags}' -> '${newSticker.tags}'`);
+                    detectedChanges.push(
+                        `태그: '${String(oldSticker.tags ?? '')}' -> '${String(newSticker.tags ?? '')}'`,
+                    );
                 changesDescription = detectedChanges.join('\n');
             }
         } catch (error) {
+            executorId = null;
             logger.error(`Failed to fetch Audit Logs for ${eventType} in guild ${guildId}:`, error);
             // 에러 시 직접 비교 결과 사용
             const detectedChanges: string[] = [];
@@ -84,10 +88,12 @@ const event = {
                 detectedChanges.push(`이름: '${oldSticker.name}' -> '${newSticker.name}'`);
             if (oldSticker.description !== newSticker.description)
                 detectedChanges.push(
-                    `설명: '${oldSticker.description}' -> '${newSticker.description}'`,
+                    `설명: '${String(oldSticker.description ?? '')}' -> '${String(newSticker.description ?? '')}'`,
                 );
             if (oldSticker.tags !== newSticker.tags)
-                detectedChanges.push(`태그: '${oldSticker.tags}' -> '${newSticker.tags}'`);
+                detectedChanges.push(
+                    `태그: '${String(oldSticker.tags ?? '')}' -> '${String(newSticker.tags ?? '')}'`,
+                );
             changesDescription = detectedChanges.join('\n');
         }
 
@@ -124,4 +130,4 @@ const event = {
 /**
  * 이벤트 로더가 참조하는 기본 export 이벤트 핸들러입니다.
  */
-export default event;
+export { event };

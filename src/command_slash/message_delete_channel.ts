@@ -1,11 +1,7 @@
 import {
     SlashCommandBuilder,
-    CommandInteraction,
     PermissionsBitField,
-    GuildTextBasedChannel,
     Collection,
-    Message,
-    Client,
     ButtonBuilder,
     ButtonStyle,
     ActionRowBuilder,
@@ -13,10 +9,19 @@ import {
     MessageFlags,
     InteractionContextType,
 } from 'discord.js';
-import { logger } from '../utils/logger.js';
+
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
-import type { SlashCommand } from '../types/commands.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { SlashCommand } from '../types/commands.js';
+import type {
+    CommandInteraction,
+    GuildTextBasedChannel,
+    Message,
+    MessageComponentInteraction,
+    Client,
+} from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -83,6 +88,13 @@ export const command: SlashCommand = {
                 return;
             }
             targetChannel = fetchedChannel as GuildTextBasedChannel;
+            if (targetChannel.guildId !== interaction.guildId) {
+                await interaction.reply({
+                    content: t(locale, 'common.commandNotAllowed'),
+                    flags: MessageFlags.Ephemeral,
+                });
+                return;
+            }
         } catch (error) {
             logger.error(`${logPrefix} Failed to fetch channel ${targetChannelId}:`, error);
             await interaction.reply({
@@ -96,7 +108,7 @@ export const command: SlashCommand = {
         const botPermissionsInChannel = targetChannel.permissionsFor(client.user!);
         if (
             !botPermissionsInChannel?.has(PermissionsBitField.Flags.ReadMessageHistory) ||
-            !botPermissionsInChannel?.has(PermissionsBitField.Flags.ManageMessages)
+            !botPermissionsInChannel.has(PermissionsBitField.Flags.ManageMessages)
         ) {
             logger.warn(
                 `${logPrefix} Missing permissions (ReadMessageHistory or ManageMessages) in channel ${targetChannel.id} for guild ${interaction.guildId}.`,
@@ -150,7 +162,7 @@ export const command: SlashCommand = {
         });
 
         try {
-            const collectorFilter = (i: import('discord.js').MessageComponentInteraction) =>
+            const collectorFilter = (i: MessageComponentInteraction) =>
                 i.user.id === interaction.user.id;
             const confirmation = await reply.awaitMessageComponent({
                 filter: collectorFilter,
@@ -199,8 +211,6 @@ export const command: SlashCommand = {
             return;
         }
 
-        let totalDeletedCount = 0;
-        let totalErrorMessages: string[] = [];
         const channelStartTime = Date.now(); // Renamed from guildStartTime
 
         try {
@@ -307,7 +317,7 @@ export const command: SlashCommand = {
                                         );
                                     } else {
                                         logger.warn(
-                                            `${logPrefix} Failed to delete old message ${message.id}: ${deleteError.message} (Code: ${deleteError.code})`,
+                                            `${logPrefix} Failed to delete old message ${message.id}: ${deleteError.message} (Code: ${String(deleteError.code ?? 'unknown')})`,
                                         );
                                         if (
                                             !channelErrorMessages.includes(
@@ -335,9 +345,6 @@ export const command: SlashCommand = {
                 }
             } // end while(fetchMore)
 
-            totalDeletedCount = channelDeletedCount; // Assign to total for the final report
-            totalErrorMessages = channelErrorMessages; // Assign to total for the final report
-
             const channelEndTime = Date.now(); // Renamed from guildEndTime
             const duration = ((channelEndTime - channelStartTime) / 1000).toFixed(2);
 
@@ -345,17 +352,17 @@ export const command: SlashCommand = {
                 userMention: interaction.user.toString(),
                 channel: targetChannel.name,
                 channelId: targetChannel.id,
-                count: totalDeletedCount,
+                count: channelDeletedCount,
                 duration,
             });
-            if (totalErrorMessages.length > 0) {
+            if (channelErrorMessages.length > 0) {
                 finalReportLocalized += t(locale, 'messageCmd.errorSummaryHeader', {
-                    count: totalErrorMessages.length,
-                    errors: totalErrorMessages.slice(0, 10).join('\n- '),
+                    count: channelErrorMessages.length,
+                    errors: channelErrorMessages.slice(0, 10).join('\n- '),
                 });
-                if (totalErrorMessages.length > 10) {
+                if (channelErrorMessages.length > 10) {
                     finalReportLocalized += t(locale, 'messageCmd.errorSummaryMore', {
-                        count: totalErrorMessages.length - 10,
+                        count: channelErrorMessages.length - 10,
                     });
                 }
             }
@@ -367,7 +374,7 @@ export const command: SlashCommand = {
                 );
             });
             logger.info(
-                `${logPrefix} Finished CHANNEL-WIDE message deletion for channel ${targetChannel.id}. Deleted ~${totalDeletedCount} messages with ${totalErrorMessages.length} errors in ${duration}s.`,
+                `${logPrefix} Finished CHANNEL-WIDE message deletion for channel ${targetChannel.id}. Deleted ~${channelDeletedCount} messages with ${channelErrorMessages.length} errors in ${duration}s.`,
             );
         } catch (error) {
             const err = error as Error;
@@ -380,16 +387,12 @@ export const command: SlashCommand = {
                 channel: targetChannel.name,
                 error: err.message,
             });
-            if (channelToSendResponse) {
-                await channelToSendResponse
-                    .send(criticalErrorMessage)
-                    .catch((sendError: unknown) => {
-                        logger.error(
-                            `${logPrefix} Failed to send critical error report for CHANNEL deletion:`,
-                            sendError,
-                        );
-                    });
-            }
+            await channelToSendResponse.send(criticalErrorMessage).catch((sendError: unknown) => {
+                logger.error(
+                    `${logPrefix} Failed to send critical error report for CHANNEL deletion:`,
+                    sendError,
+                );
+            });
         }
     },
 };

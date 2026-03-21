@@ -1,18 +1,15 @@
-import {
-    SlashCommandBuilder,
-    CommandInteraction,
-    Client,
-    MessageFlags,
-    InteractionContextType,
-} from 'discord.js';
-import { logger } from '../utils/logger.js';
-import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
-import type { SlashCommand } from '../types/commands.js';
+import { SlashCommandBuilder, MessageFlags, InteractionContextType } from 'discord.js';
+
+import { ensureSlashCommandPermission, isSuperAdmin } from '../commandShared/slashPermission.js';
+import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 import {
     NoAccessibleGuildChannelsError,
     runGuildMessageBackfill,
 } from '../services/logGuildMessagesService.js';
-import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
+import { logger } from '../utils/logger.js';
+
+import type { SlashCommand } from '../types/commands.js';
+import type { CommandInteraction, Client } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -44,7 +41,7 @@ export const command: SlashCommand = {
         }
 
         const targetGuildId = interaction.options.getString('guild_id', true);
-        if (targetGuildId !== interaction.guildId) {
+        if (targetGuildId !== interaction.guildId && !isSuperAdmin(interaction.user.id)) {
             await interaction.reply({
                 content: t(locale, 'common.commandNotAllowed'),
                 flags: MessageFlags.Ephemeral,
@@ -86,7 +83,7 @@ export const command: SlashCommand = {
                 return;
             }
 
-            await interaction.followUp(finalReply);
+            await interaction.editReply(finalReply);
             logger.info(
                 `Finished bulk message logging check for guild ${targetGuildId}. Processed ${result.totalChannels} channels, checked ${result.processedCount} messages, newly logged ${result.newlyLoggedCount} from approx ${result.uniqueUserCount} users with ${result.errorCount} errors in ${result.durationSeconds}s.`,
             );
@@ -106,10 +103,7 @@ export const command: SlashCommand = {
             });
 
             if (interaction.deferred || interaction.replied) {
-                await interaction.followUp({
-                    content: errorMessage,
-                    flags: MessageFlags.Ephemeral,
-                });
+                await interaction.editReply(errorMessage);
             } else {
                 await interaction.reply({
                     content: errorMessage,

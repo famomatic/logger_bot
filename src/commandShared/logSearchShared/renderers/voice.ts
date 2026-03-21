@@ -3,10 +3,12 @@ import {
     type ChatInputCommandInteraction,
     type MessageComponentInteraction,
 } from 'discord.js';
-import type { JsonData, JsonValue } from '../../../types/json.js';
-import { getInteractionLocale, t } from '../../../i18n/index.js';
+
+import { getInteractionLocale, t } from '../deps.js';
 import { str } from '../formatters.js';
 import { isJsonData } from '../types.js';
+
+import type { JsonData, JsonValue } from '../deps.js';
 
 interface RenderVoiceStateUpdateEventParams {
     data: JsonData;

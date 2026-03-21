@@ -1,78 +1,57 @@
-<div style="display: flex; justify-content: center; gap: 1rem; margin-top: 20px;">
-  <a href="/README.ko.md" style="text-decoration: none; cursor: pointer; font-weight: bold; color: inherit;">한국어</a>
-  <a href="/README.md" style="text-decoration: none; cursor: pointer; font-weight: bold; color: inherit;">English</a>
-</div>
+[한국어](./README.ko.md) | [English](./README.md)
 
 # Discord 로그 봇
 
-이 봇은 TypeScript로 작성된 Discord.js v14 기반 로거 봇으로, 다양한 서버 이벤트를 PostgreSQL 데이터베이스에 기록합니다. 첨부 파일은 WebDAV 서버에 저장할 수 있으며 여러 슬래시 명령어를 통해 메시지 관리와 로그 조회 기능을 제공합니다.
+TypeScript + Discord.js v14 기반의 운영형 로거 봇입니다.  
+대량 길드 이벤트를 PostgreSQL에 안정적으로 적재하고, 검색/내보내기/알림/리포트/운영 명령을 슬래시 커맨드로 제공합니다.
 
-## 주요 특징
+## 핵심 강점
 
-- **메시지, 멤버, 채널, 역할, 스레드 등** 광범위한 이벤트 기록
-- 길드별 파티션을 이용한 **PostgreSQL 저장소**와 중복 방지 로직
-- 메시지 전송/삭제, 과거 메시지 일괄 기록, 조건별 로그 검색 등 다양한 **슬래시 명령어**
-- 개발자 레벨이 있는 사용자 전용 **레거시 명령어**(`logger ping`, `logger status`)
-- 메시지 첨부 파일을 외부에 저장하기 위한 **WebDAV 연동**
-- 오류 추적을 위한 **Sentry 통합**
-- 모든 소스가 **TypeScript**로 작성되어 유지보수가 용이
+- 메시지, 수정/삭제, 리액션, 멤버, 역할, 채널, 스레드, 음성, 초대, 예약 이벤트, 스티커 등 폭넓은 이벤트 로깅.
+- PostgreSQL 중심 구조와 중복 방지 적재 로직.
+- 트래픽 급증 대응을 위한 Redis 기반 선택형 큐 적재.
+- 재시작 후 누락 `messageCreate` 로그를 메우는 시작 복구 기능.
+- 실무형 슬래시 명령 세트:
+- 로그 작업: `log-search`, `log-export`, `log-alert-*`
+- 메시지 작업: `message-send-*`, `message-delete-*`, `log-*-messages`
+- 리포트: `report-guild`, `report-channel`, `report-user`
+- 운영/관리: `status`, `reload`, `perm`
+- 첨부 파일 저장소 다중 백엔드 지원: `local`, `webdav`, `s3`, `smb`.
+- 권한 검사, 허용 길드 관리, 그레이스풀 셧다운, Sentry 연동 등 운영 안정성 기능 포함.
+- `en`, `ko` i18n 리소스 기본 제공.
 
-## 시작하기
+## 빠른 시작
 
-1. 의존성 설치
+1. 의존성을 설치합니다.
     ```bash
     npm install
     ```
-2. 프로젝트 빌드
+2. `.env.example`를 복사해 `.env`를 만들고 값을 채웁니다.
     ```bash
-    npm run build
+    cp .env.example .env
     ```
-3. `.env.example` 파일을 참고해 환경 변수를 설정
-4. 데이터베이스 마이그레이션 실행
+3. DB 스키마를 초기화/마이그레이션합니다.
     ```bash
+    npm run db:setup
     npm run db:migrate
     ```
-5. 봇 실행
+4. 빌드 후 실행합니다.
     ```bash
-    npm start
-    ```
-6. 봇을 실행하면 자동으로 샤딩이 관리됩니다.
-    ```bash
+    npm run build
     npm start
     ```
 
-## 환경 변수 예시
+## 개발 명령어
 
-```dotenv
-DISCORD_BOT_TOKEN=
-DISCORD_CLIENT_ID=
-BOT_DB_NAME=
-BOT_DB_USER=
-BOT_DB_PASSWORD=
-PG_HOST=
-PG_PORT=
-REDIS_ENABLED=
-REDIS_HOST=
-REDIS_PORT=
-REDIS_DB=
-REDIS_PASSWORD=
-REDIS_QUEUE_NAME=
-LOG_QUEUE_BATCH_SIZE=
-LOG_QUEUE_FLUSH_INTERVAL_MS=
-LOG_QUEUE_MAX_RETRIES=
-WEBDAV_HOST=
-WEBDAV_PORT=
-WEBDAV_HTTPS=
-WEBDAV_USERNAME=
-WEBDAV_PASSWORD=
-WEBDAV_BASE_PATH=
-SENTRY_DSN=
-DEV_LVL1_IDS=
-DEV_LVL2_IDS=
-DEV_LVL3_IDS=
-```
+- `npm run dev`: 빌드 후 개발 모드 실행.
+- `npm run dev:build:watch`: TypeScript watch 빌드.
+- `npm run dev:run:watch`: 컴파일 결과 변경 감지 후 재실행.
+- `npm run lint`: ESLint 실행.
+- `npm run format`: Prettier 포맷 적용.
+- `npm run type`: 타입 검사만 수행.
+- `npm run verify:release`: 릴리즈 전 엄격 검증(lint/type/build/audit).
 
-더 자세한 항목은 `.env.example` 파일을 참고하세요.
+환경 변수 상세 설명은 `.env.example`만 기준으로 유지합니다.
 
 ## 라이선스
 
