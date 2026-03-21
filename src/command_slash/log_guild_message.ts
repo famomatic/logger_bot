@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, MessageFlags, InteractionContextType } from 'discord.js';
 
-import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
+import { ensureSlashCommandPermission, isSuperAdmin } from '../commandShared/slashPermission.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 import {
     NoAccessibleGuildChannelsError,
@@ -41,7 +41,7 @@ export const command: SlashCommand = {
         }
 
         const targetGuildId = interaction.options.getString('guild_id', true);
-        if (targetGuildId !== interaction.guildId) {
+        if (targetGuildId !== interaction.guildId && !isSuperAdmin(interaction.user.id)) {
             await interaction.reply({
                 content: t(locale, 'common.commandNotAllowed'),
                 flags: MessageFlags.Ephemeral,
