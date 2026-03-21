@@ -3,6 +3,7 @@ import axios from 'axios';
 import { config } from '../config/config.js';
 import { createAttachmentStoragePath } from '../storage/attachmentPath.js';
 import { storageManager } from '../storage/StorageManager.js';
+import { mapWithConcurrency } from '../utils/asyncControl.js';
 import { logEventIfAuthorized as logEvent } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
 
@@ -30,6 +31,49 @@ interface GuildBackfillParams {
 interface MessageBackfillOutcome {
     logged: boolean;
     failed: boolean;
+}
+
+interface ChannelBackfillOutcome {
+    channelId: string;
+    stat: ChannelBackfillStat;
+    processedCount: number;
+    newlyLoggedCount: number;
+    errorCount: number;
+    uniqueUserIds: Set<string>;
+}
+
+async function fetchMessagesWithRetry(
+    channel: GuildTextBasedChannel,
+    before?: string,
+): Promise<Collection<string, Message>> {
+    const maxAttempts = 2;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            return await channel.messages.fetch({
+                limit: 100,
+                before,
+            });
+        } catch (error) {
+            const fetchError = error as ErrorWithCode;
+            const message = String(fetchError.message ?? '');
+            const isTimeout =
+                message.includes('Connect Timeout') ||
+                message.includes('ETIMEDOUT') ||
+                message.includes('Request timed out');
+
+            if (!isTimeout || attempt === maxAttempts) {
+                throw error;
+            }
+
+            logger.warn(
+                `Retrying message fetch for channel ${channel.id} after timeout (attempt ${attempt}/${maxAttempts}).`,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+        }
+    }
+
+    throw new Error(`Unreachable: failed to fetch messages for channel ${channel.id}`);
 }
 
 /**
@@ -229,20 +273,21 @@ export async function runGuildMessageBackfill({
         throw new NoAccessibleGuildChannelsError(guild.id);
     }
 
-    for (const channel of channels.values()) {
+    const processSingleChannel = async (
+        channel: GuildTextBasedChannel,
+    ): Promise<ChannelBackfillOutcome> => {
         logger.debug(`Processing channel ${channel.name} (${channel.id})`);
         let lastMessageId: string | undefined = undefined;
         let fetchMore = true;
         let channelProcessedCount = 0;
         let channelNewlyLoggedCount = 0;
+        let channelErrorCount = 0;
+        const channelUniqueUserIds = new Set<string>();
         const channelStartTime = Date.now();
 
         while (fetchMore) {
             try {
-                const messages: Collection<string, Message> = await channel.messages.fetch({
-                    limit: 100,
-                    before: lastMessageId,
-                });
+                const messages = await fetchMessagesWithRetry(channel, lastMessageId);
 
                 if (messages.size === 0) {
                     fetchMore = false;
@@ -253,7 +298,7 @@ export async function runGuildMessageBackfill({
                 const candidates: Message[] = [];
 
                 for (const message of messages.values()) {
-                    uniqueUserIds.add(message.author.id);
+                    channelUniqueUserIds.add(message.author.id);
 
                     if (
                         message.author.bot ||
@@ -262,7 +307,6 @@ export async function runGuildMessageBackfill({
                         continue;
                     }
 
-                    processedCount++;
                     channelProcessedCount++;
                     candidates.push(message);
                 }
@@ -296,11 +340,10 @@ export async function runGuildMessageBackfill({
                     );
                     for (const outcome of outcomes) {
                         if (outcome.logged) {
-                            newlyLoggedCount++;
                             channelNewlyLoggedCount++;
                         }
                         if (outcome.failed) {
-                            errorCount++;
+                            channelErrorCount++;
                         }
                     }
                 }
@@ -321,12 +364,12 @@ export async function runGuildMessageBackfill({
                 logger.error(
                     `Failed to fetch messages in channel ${channel.id}: ${String(fetchError.message)}`,
                 );
-                errorCount++;
+                channelErrorCount++;
                 fetchMore = false;
             }
         }
 
-        channelStats[channel.id] = {
+        const stat = {
             processed: channelProcessedCount,
             newlyLogged: channelNewlyLoggedCount,
             name: channel.name,
@@ -334,6 +377,31 @@ export async function runGuildMessageBackfill({
         logger.info(
             `Finished processing channel ${channel.id} (${channel.name}). Checked ${channelProcessedCount} messages, newly logged ${channelNewlyLoggedCount}. Took ${((Date.now() - channelStartTime) / 1000).toFixed(2)}s.`,
         );
+
+        return {
+            channelId: channel.id,
+            stat,
+            processedCount: channelProcessedCount,
+            newlyLoggedCount: channelNewlyLoggedCount,
+            errorCount: channelErrorCount,
+            uniqueUserIds: channelUniqueUserIds,
+        };
+    };
+
+    const channelResults = await mapWithConcurrency(
+        [...channels.values()],
+        config.messageRecovery.backfillChannelConcurrency,
+        async (channel) => await processSingleChannel(channel),
+    );
+
+    for (const result of channelResults) {
+        channelStats[result.channelId] = result.stat;
+        processedCount += result.processedCount;
+        newlyLoggedCount += result.newlyLoggedCount;
+        errorCount += result.errorCount;
+        for (const userId of result.uniqueUserIds) {
+            uniqueUserIds.add(userId);
+        }
     }
 
     return {

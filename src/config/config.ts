@@ -57,6 +57,7 @@ interface RuntimeConfig {
         enabled: boolean;
         maxPagesPerChannel: number;
         backfillConcurrency: number;
+        backfillChannelConcurrency: number;
         attachmentDownloadTimeoutMs: number;
         attachmentMaxBytes: number;
     };
@@ -166,6 +167,10 @@ const buildConfigTemplate = (): RuntimeConfig => {
             backfillConcurrency: Math.max(
                 1,
                 parseInteger(process.env.MESSAGE_RECOVERY_BACKFILL_CONCURRENCY, 8),
+            ),
+            backfillChannelConcurrency: Math.max(
+                1,
+                parseInteger(process.env.MESSAGE_RECOVERY_BACKFILL_CHANNEL_CONCURRENCY, 2),
             ),
             attachmentDownloadTimeoutMs: Math.max(
                 1000,

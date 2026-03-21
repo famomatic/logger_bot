@@ -88,6 +88,10 @@ export const ko = {
         permListCommandResult: '`{command}` 허용 유저: {users}',
         permUnknownCommand:
             '권한 관리 대상이 아닌 명령어입니다: `{command}`. 사용 가능한 명령어: {available}',
+        permPanelRefreshed: '권한 패널을 새로고침했습니다.',
+        permPanelSelectCommandFirst: '먼저 명령어를 선택해주세요.',
+        permPanelSelectUserFirst: '먼저 유저를 선택해주세요.',
+        permPanelSelectCommandAndUserFirst: '먼저 명령어와 유저를 모두 선택해주세요.',
         logDlqRedriveDescription: '로그 큐 DLQ 항목을 대기열로 되돌립니다.',
         logDlqRedriveCountDescription: '재처리할 DLQ 항목 수를 지정합니다.',
     },
@@ -567,6 +571,7 @@ export const ko = {
     },
     backfill: {
         logChannelDesc: '{channel_id} 채널의 모든 메시지를 확인하여 DB에 기록합니다.',
+        maxPagesOptionDesc: '조회할 최대 페이지 수입니다. (페이지당 100개 메시지)',
         logGuildDesc: '{guild_id} 서버의 모든 메시지를 가져와 DB에 기록합니다.',
         completeTitle: '✅ **메시지 기록 확인 완료**',
         processedChannels: '> - **처리된 채널:** {count}개',

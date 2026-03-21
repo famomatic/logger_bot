@@ -32,6 +32,13 @@ export const command: SlashCommand = {
                 .setDescription(defaultText('messageCmd.channelId'))
                 .setRequired(true),
         )
+        .addIntegerOption((option) =>
+            option
+                .setName('max_pages')
+                .setDescription(defaultText('backfill.maxPagesOptionDesc'))
+                .setMinValue(1)
+                .setRequired(false),
+        )
         .setContexts(InteractionContextType.Guild),
 
     async execute(interaction: CommandInteraction, client: Client) {
@@ -51,6 +58,7 @@ export const command: SlashCommand = {
         logger.info(`/log-channel-messages command executed by ${interaction.user.tag}`);
 
         const targetChannelId = interaction.options.getString('channel_id', true);
+        const maxPages = interaction.options.getInteger('max_pages');
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const logPrefix = `[log-channel-messages ${targetChannelId}]`;
 
@@ -92,6 +100,7 @@ export const command: SlashCommand = {
         let newlyLogged = 0;
         let lastMessageId: string | undefined = undefined;
         let fetchMore = true;
+        let scannedPages = 0;
 
         while (fetchMore) {
             try {
@@ -103,6 +112,7 @@ export const command: SlashCommand = {
                     fetchMore = false;
                     break;
                 }
+                scannedPages++;
                 lastMessageId = messages.lastKey();
 
                 for (const message of messages.values()) {
@@ -117,6 +127,9 @@ export const command: SlashCommand = {
                     if (logged) newlyLogged++;
                 }
 
+                if (maxPages !== null && scannedPages >= maxPages) {
+                    fetchMore = false;
+                }
                 if (messages.size < 100) fetchMore = false;
             } catch (error) {
                 const err = error as Error;
@@ -136,7 +149,7 @@ export const command: SlashCommand = {
             }),
         );
         logger.info(
-            `${logPrefix} Finished logging. Processed ${processed} messages, newly logged ${newlyLogged}.`,
+            `${logPrefix} Finished logging. Processed ${processed} messages, newly logged ${newlyLogged}, scanned pages ${scannedPages}${maxPages !== null ? ` (maxPages=${maxPages})` : ''}.`,
         );
     },
 };
