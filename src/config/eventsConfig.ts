@@ -585,13 +585,14 @@ export const eventConfigurations: Record<string, EventConfig> = {
 /**
  * 슬래시 옵션에 노출할 이벤트 타입 선택지 목록을 생성합니다.
  */
-export function getEventTypeChoices() {
+export function getEventTypeChoices(maxChoices = 25) {
     return Object.values(eventConfigurations)
         .filter((config) => config.includeInChoices)
         .map((config) => ({
             name: `${config.friendlyName} (${config.dbEventType})`,
             value: config.dbEventType,
-        }));
+        }))
+        .slice(0, Math.max(0, maxChoices));
 }
 
 /**

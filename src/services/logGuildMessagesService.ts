@@ -55,6 +55,9 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
             lastError = err;
             const errorMessage = err instanceof Error ? err.message : String(err);
             logger.warn(`Failed to download ${url} on attempt ${attempt}: ${errorMessage}`);
+            if (errorMessage.includes('maxContentLength')) {
+                break;
+            }
             if (attempt < maxRetries) {
                 await new Promise((r) => setTimeout(r, 1000 * attempt));
             }
@@ -104,15 +107,22 @@ export async function buildAttachmentData(
         let downloadError: string | null = null;
         {
             try {
-                const fileBuffer = await downloadWithRetry(attachment.url, 3);
-                const relativePath = createAttachmentStoragePath(
-                    guildId,
-                    channelId,
-                    messageId,
-                    attachment.id,
-                    attachment.name,
-                );
-                storagePath = await storageManager.upload(relativePath, fileBuffer);
+                if (attachment.size > ATTACHMENT_MAX_BYTES) {
+                    downloadError = `Attachment too large (${attachment.size} bytes > ${ATTACHMENT_MAX_BYTES} bytes)`;
+                    logger.warn(
+                        `Skipping oversized attachment ${attachment.id} (${attachment.name}) size=${attachment.size}`,
+                    );
+                } else {
+                    const fileBuffer = await downloadWithRetry(attachment.url, 3);
+                    const relativePath = createAttachmentStoragePath(
+                        guildId,
+                        channelId,
+                        messageId,
+                        attachment.id,
+                        attachment.name,
+                    );
+                    storagePath = await storageManager.upload(relativePath, fileBuffer);
+                }
             } catch (error) {
                 const err = error as Error;
                 downloadError = err.message || 'Unknown download/upload error';
