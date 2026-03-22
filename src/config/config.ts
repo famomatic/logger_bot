@@ -32,6 +32,7 @@ function parseBoolean(input: string | undefined, fallback: boolean): boolean {
 interface RuntimeConfig {
     discordBotToken: string;
     clientId: string;
+    distributedMode: boolean;
     dbName: string;
     dbUser: string;
     dbPassword: string;
@@ -128,12 +129,27 @@ const buildConfigTemplate = (): RuntimeConfig => {
         .map((id) => id.trim())
         .filter((id) => id.length > 0);
     const nodeEnv = process.env.NODE_ENV ?? 'development';
+    const distributedMode = parseBoolean(process.env.DISTRIBUTED_MODE, false);
     const dbSsl = parseBoolean(process.env.PG_SSL, nodeEnv === 'production');
     const dbSslRejectUnauthorized = parseBoolean(process.env.PG_SSL_REJECT_UNAUTHORIZED, true);
+    const clearOnStartupRequested = parseBoolean(
+        process.env.REDIS_CLEAR_ON_STARTUP,
+        distributedMode ? false : true,
+    );
+    const clearOnStartupEffective = distributedMode ? false : clearOnStartupRequested;
+
+    if (distributedMode && clearOnStartupRequested) {
+        console.log(
+            chalk.yellow(
+                'DISTRIBUTED_MODE=true forces REDIS_CLEAR_ON_STARTUP=false to prevent event loss.',
+            ),
+        );
+    }
 
     return {
         discordBotToken: process.env.DISCORD_BOT_TOKEN!,
         clientId: process.env.DISCORD_CLIENT_ID!,
+        distributedMode,
         dbName: process.env.BOT_DB_NAME!,
         dbUser: process.env.BOT_DB_USER!,
         dbPassword: process.env.BOT_DB_PASSWORD!,
@@ -148,7 +164,7 @@ const buildConfigTemplate = (): RuntimeConfig => {
             db: parseInteger(process.env.REDIS_DB, 0),
             password: process.env.REDIS_PASSWORD,
             queueName: process.env.REDIS_QUEUE_NAME ?? 'logger:events',
-            clearOnStartup: parseBoolean(process.env.REDIS_CLEAR_ON_STARTUP, true),
+            clearOnStartup: clearOnStartupEffective,
             dlqRedriveOnStartup: parseBoolean(process.env.REDIS_DLQ_REDRIVE_ON_STARTUP, false),
             dlqRedriveBatchSize: Math.max(
                 1,

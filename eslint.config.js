@@ -157,6 +157,324 @@ const localRules = {
                 };
             },
         },
+        'no-direct-process-env': {
+            meta: {
+                type: 'problem',
+                docs: {
+                    description:
+                        'Disallow direct or indirect access to process.env outside the validated environment module.',
+                },
+                schema: [
+                    {
+                        type: 'object',
+                        properties: {
+                            allowInFiles: {
+                                type: 'array',
+                                items: { type: 'string' },
+                            },
+                        },
+                        additionalProperties: false,
+                    },
+                ],
+                messages: {
+                    noDirectProcessEnv:
+                        'Do not access `process.env` directly. Use the validated environment module instead.',
+                    noProcessImport:
+                        'Do not import from `process` or `node:process` here. Use the validated environment module instead.',
+                    noProcessAlias:
+                        'Do not create aliases of `process` here. Use the validated environment module instead.',
+                    noEnvDestructure:
+                        'Do not destructure `env` from `process` here. Use the validated environment module instead.',
+                    noReflectEnv:
+                        'Do not access `process.env` through `Reflect.get`. Use the validated environment module instead.',
+                },
+            },
+
+            create(context) {
+                const filename = context.filename ?? context.getFilename();
+                const options = context.options[0] ?? {};
+                const allowInFiles = new Set(options.allowInFiles ?? []);
+
+                if (allowInFiles.has(filename)) {
+                    return {};
+                }
+
+                function isIdentifierNamed(node, name) {
+                    return node?.type === 'Identifier' && node.name === name;
+                }
+
+                function isLiteralString(node, value) {
+                    return (
+                        node?.type === 'Literal' &&
+                        typeof node.value === 'string' &&
+                        node.value === value
+                    );
+                }
+
+                function isPropertyNamed(node, name) {
+                    return isIdentifierNamed(node, name) || isLiteralString(node, name);
+                }
+
+                function isProcessImportSource(node) {
+                    return (
+                        node?.type === 'Literal' &&
+                        (node.value === 'process' || node.value === 'node:process')
+                    );
+                }
+
+                function isGlobalThisRef(node) {
+                    return isIdentifierNamed(node, 'globalThis');
+                }
+
+                function isProcessRef(node) {
+                    if (!node) return false;
+
+                    if (isIdentifierNamed(node, 'process')) {
+                        return true;
+                    }
+
+                    if (
+                        node.type === 'MemberExpression' &&
+                        isGlobalThisRef(node.object) &&
+                        isPropertyNamed(node.property, 'process')
+                    ) {
+                        return true;
+                    }
+
+                    return false;
+                }
+
+                function isProcessEnvMember(node) {
+                    return (
+                        node?.type === 'MemberExpression' &&
+                        isProcessRef(node.object) &&
+                        isPropertyNamed(node.property, 'env')
+                    );
+                }
+
+                function isReflectGet(node) {
+                    return (
+                        node?.type === 'CallExpression' &&
+                        node.callee?.type === 'MemberExpression' &&
+                        isIdentifierNamed(node.callee.object, 'Reflect') &&
+                        isPropertyNamed(node.callee.property, 'get')
+                    );
+                }
+
+                function isProcessEnvReflectGet(node) {
+                    if (!isReflectGet(node)) return false;
+                    if (node.arguments.length < 2) return false;
+
+                    const [target, key] = node.arguments;
+                    return isProcessRef(target) && isLiteralString(key, 'env');
+                }
+
+                function collectPatternBindings(pattern, bindings = []) {
+                    if (!pattern) return bindings;
+
+                    switch (pattern.type) {
+                        case 'Identifier':
+                            bindings.push({ name: pattern.name, node: pattern });
+                            break;
+
+                        case 'ObjectPattern':
+                            for (const prop of pattern.properties) {
+                                if (prop.type === 'Property') {
+                                    const keyIsEnv = isPropertyNamed(prop.key, 'env');
+                                    if (keyIsEnv && prop.value.type === 'Identifier') {
+                                        bindings.push({
+                                            name: prop.value.name,
+                                            node: prop.value,
+                                            fromProcessEnvDestructure: true,
+                                        });
+                                    } else {
+                                        collectPatternBindings(prop.value, bindings);
+                                    }
+                                } else if (prop.type === 'RestElement') {
+                                    collectPatternBindings(prop.argument, bindings);
+                                }
+                            }
+                            break;
+
+                        case 'ArrayPattern':
+                            for (const element of pattern.elements) {
+                                if (element) collectPatternBindings(element, bindings);
+                            }
+                            break;
+
+                        case 'AssignmentPattern':
+                            collectPatternBindings(pattern.left, bindings);
+                            break;
+
+                        case 'RestElement':
+                            collectPatternBindings(pattern.argument, bindings);
+                            break;
+                    }
+
+                    return bindings;
+                }
+
+                function getScope(contextNode) {
+                    return context.sourceCode.getScope(contextNode);
+                }
+
+                function findVariableInScopeChain(scope, name) {
+                    let current = scope;
+
+                    while (current) {
+                        const found = current.variables.find((variable) => variable.name === name);
+                        if (found) return found;
+                        current = current.upper;
+                    }
+
+                    return null;
+                }
+
+                function variableIsSingleInitFrom(variable, predicate) {
+                    for (const def of variable.defs) {
+                        if (
+                            def.type === 'Variable' &&
+                            def.node?.type === 'VariableDeclarator' &&
+                            def.node.init &&
+                            predicate(def.node.init)
+                        ) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                }
+
+                function resolvesToProcessAlias(identifierNode) {
+                    if (!isIdentifierNamed(identifierNode, identifierNode.name)) return false;
+
+                    const scope = getScope(identifierNode);
+                    const variable = findVariableInScopeChain(scope, identifierNode.name);
+                    if (!variable) return false;
+
+                    return variableIsSingleInitFrom(variable, (init) => isProcessRef(init));
+                }
+
+                function resolvesToProcessEnvAlias(identifierNode) {
+                    if (!isIdentifierNamed(identifierNode, identifierNode.name)) return false;
+
+                    const scope = getScope(identifierNode);
+                    const variable = findVariableInScopeChain(scope, identifierNode.name);
+                    if (!variable) return false;
+
+                    return variableIsSingleInitFrom(
+                        variable,
+                        (init) => isProcessEnvMember(init) || isProcessEnvReflectGet(init),
+                    );
+                }
+
+                function isMaybeAliasedProcessRef(node) {
+                    if (!node) return false;
+
+                    if (isProcessRef(node)) return true;
+
+                    if (node.type === 'Identifier' && resolvesToProcessAlias(node)) {
+                        return true;
+                    }
+
+                    return false;
+                }
+
+                function isMaybeAliasedProcessEnv(node) {
+                    if (!node) return false;
+
+                    if (isProcessEnvMember(node) || isProcessEnvReflectGet(node)) {
+                        return true;
+                    }
+
+                    if (node.type === 'Identifier' && resolvesToProcessEnvAlias(node)) {
+                        return true;
+                    }
+
+                    return false;
+                }
+
+                return {
+                    ImportDeclaration(node) {
+                        if (!isProcessImportSource(node.source)) {
+                            return;
+                        }
+
+                        context.report({
+                            node,
+                            messageId: 'noProcessImport',
+                        });
+                    },
+
+                    VariableDeclarator(node) {
+                        if (!node.init) return;
+
+                        if (node.id.type === 'Identifier' && isProcessRef(node.init)) {
+                            context.report({
+                                node,
+                                messageId: 'noProcessAlias',
+                            });
+                            return;
+                        }
+
+                        if (
+                            node.id.type === 'ObjectPattern' &&
+                            isMaybeAliasedProcessRef(node.init)
+                        ) {
+                            for (const binding of collectPatternBindings(node.id)) {
+                                if (binding.fromProcessEnvDestructure) {
+                                    context.report({
+                                        node: binding.node,
+                                        messageId: 'noEnvDestructure',
+                                    });
+                                }
+                            }
+                            return;
+                        }
+
+                        if (
+                            node.id.type === 'Identifier' &&
+                            (isProcessEnvMember(node.init) || isProcessEnvReflectGet(node.init))
+                        ) {
+                            context.report({
+                                node,
+                                messageId: 'noDirectProcessEnv',
+                            });
+                            return;
+                        }
+                    },
+
+                    MemberExpression(node) {
+                        if (
+                            isMaybeAliasedProcessRef(node.object) &&
+                            isPropertyNamed(node.property, 'env')
+                        ) {
+                            context.report({
+                                node,
+                                messageId: 'noDirectProcessEnv',
+                            });
+                            return;
+                        }
+
+                        if (isMaybeAliasedProcessEnv(node.object)) {
+                            context.report({
+                                node,
+                                messageId: 'noDirectProcessEnv',
+                            });
+                        }
+                    },
+
+                    CallExpression(node) {
+                        if (isProcessEnvReflectGet(node)) {
+                            context.report({
+                                node,
+                                messageId: 'noReflectEnv',
+                            });
+                        }
+                    },
+                };
+            },
+        },
     },
 };
 
@@ -345,6 +663,22 @@ const appRules = {
     ...tsBaseRules,
 
     'no-restricted-syntax': ['error', ...syntaxPolicy.app],
+    'local/no-direct-process-env': 'error',
+    'no-restricted-imports': [
+        'error',
+        {
+            paths: [
+                {
+                    name: 'node:process',
+                    message: 'Use the validated environment module instead.',
+                },
+                {
+                    name: 'process',
+                    message: 'Use the validated environment module instead.',
+                },
+            ],
+        },
+    ],
 };
 
 const configRules = {
