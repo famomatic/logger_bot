@@ -59,3 +59,8 @@ export interface RankedEventTypeRow {
     event_type: string;
     count: string;
 }
+
+export interface EventPeakDayRow {
+    event_day: Date | null;
+    count: string;
+}
