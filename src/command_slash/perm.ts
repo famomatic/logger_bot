@@ -1,5 +1,6 @@
 import {
     ActionRowBuilder,
+    ApplicationIntegrationType,
     ButtonBuilder,
     ButtonStyle,
     InteractionContextType,
@@ -252,6 +253,10 @@ export const command = {
     data: new SlashCommandBuilder()
         .setName('perm')
         .setDescription(defaultText('command.permDescription'))
+        .setIntegrationTypes(
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
+        )
         .setContexts(InteractionContextType.Guild),
     permission: {
         public: false,

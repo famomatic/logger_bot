@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { ApplicationIntegrationType, SlashCommandBuilder } from 'discord.js';
 
 import { buildStatusReply, collectStatusSnapshot } from '../commandShared/statusCore.js';
 import { getInteractionLocale, localizations, t } from '../i18n/index.js';
@@ -13,7 +13,11 @@ export const command = {
     data: new SlashCommandBuilder()
         .setName('status')
         .setDescription(localizations('command.statusDescription').ko)
-        .setDescriptionLocalizations(localizations('command.statusDescription')),
+        .setDescriptionLocalizations(localizations('command.statusDescription'))
+        .setIntegrationTypes(
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
+        ),
     permission: {
         public: true,
         listable: false,
