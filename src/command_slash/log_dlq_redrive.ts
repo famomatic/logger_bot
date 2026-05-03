@@ -1,4 +1,9 @@
-import { InteractionContextType, MessageFlags, SlashCommandBuilder } from 'discord.js';
+import {
+    ApplicationIntegrationType,
+    InteractionContextType,
+    MessageFlags,
+    SlashCommandBuilder,
+} from 'discord.js';
 
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { config } from '../config/config.js';
@@ -22,6 +27,10 @@ export const command = {
                 .setMinValue(1)
                 .setMaxValue(MAX_REDRIVE_LIMIT)
                 .setRequired(false),
+        )
+        .setIntegrationTypes(
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
         )
         .setContexts(InteractionContextType.Guild),
     permission: {

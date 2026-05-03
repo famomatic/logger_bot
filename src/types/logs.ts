@@ -49,6 +49,15 @@ export interface LogScopeReport {
     topEventTypes: RankedEventType[];
     topChannels: RankedEntity[];
     topUsers: RankedEntity[];
+    selectedEventType: string | null;
+    selectedEventPeakDate: Date | null;
+    selectedEventPeakCount: number;
+}
+
+export interface LogScopeReportFilters {
+    startDate?: Date;
+    endDate?: Date;
+    eventType?: string;
 }
 
 export interface SearchLogsParams {

@@ -1,7 +1,9 @@
 import { SlashCommandBuilder, MessageFlags, InteractionContextType } from 'discord.js';
 
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
+import { parseDateString } from '../commandShared/logSearchShared.js';
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
+import { getEventTypeChoices, isValidEventType } from '../config/eventsConfig.js';
 import { getChannelReport } from '../db/logQueries.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 import { logger } from '../utils/logger.js';
@@ -25,6 +27,25 @@ export const command = {
                 .setName('channel_id')
                 .setDescription(defaultText('reportCommand.channelId'))
                 .setRequired(true),
+        )
+        .addStringOption((option) =>
+            option
+                .setName('start-date')
+                .setDescription(defaultText('reportCommand.startDate'))
+                .setRequired(false),
+        )
+        .addStringOption((option) =>
+            option
+                .setName('end-date')
+                .setDescription(defaultText('reportCommand.endDate'))
+                .setRequired(false),
+        )
+        .addStringOption((option) =>
+            option
+                .setName('event-type')
+                .setDescription(defaultText('reportCommand.eventType'))
+                .setRequired(false)
+                .addChoices(...getEventTypeChoices()),
         )
         .addBooleanOption((option) =>
             option.setName('ephemeral').setDescription(defaultText('reportCommand.ephemeral')),
@@ -52,6 +73,61 @@ export const command = {
             });
             return;
         }
+        const startDateString = interaction.options.getString('start-date');
+        const endDateString = interaction.options.getString('end-date');
+        const eventTypeInput = interaction.options.getString('event-type');
+
+        let startDate: Date | undefined = undefined;
+        let endDate: Date | undefined = undefined;
+        if (startDateString) {
+            const parsed = parseDateString(startDateString, false);
+            if (!parsed) {
+                await interaction.reply({
+                    content: t(locale, 'common.invalidStartDate'),
+                    flags: MessageFlags.Ephemeral,
+                });
+                return;
+            }
+            startDate = parsed;
+        }
+        if (endDateString) {
+            const parsed = parseDateString(endDateString, true);
+            if (!parsed) {
+                await interaction.reply({
+                    content: t(locale, 'common.invalidEndDate'),
+                    flags: MessageFlags.Ephemeral,
+                });
+                return;
+            }
+            endDate = parsed;
+        }
+        if (startDate && endDate && startDate.getTime() > endDate.getTime()) {
+            await interaction.reply({
+                content: t(locale, 'common.startAfterEnd'),
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
+        if (startDate && !endDate) {
+            endDate = new Date(startDate);
+            endDate.setUTCHours(23, 59, 59, 999);
+        }
+        if (!startDate && endDate) {
+            startDate = new Date(endDate);
+            startDate.setUTCHours(0, 0, 0, 0);
+        }
+
+        let validatedEventType: string | undefined = undefined;
+        if (eventTypeInput) {
+            if (!isValidEventType(eventTypeInput)) {
+                await interaction.reply({
+                    content: t(locale, 'common.invalidEventType', { eventType: eventTypeInput }),
+                    flags: MessageFlags.Ephemeral,
+                });
+                return;
+            }
+            validatedEventType = eventTypeInput;
+        }
 
         logger.info(
             `/report-channel command executed by ${interaction.user.tag} for ${channelIdRaw}`,
@@ -64,11 +140,24 @@ export const command = {
                 : MessageFlags.IsComponentsV2,
         });
 
-        const report = await getChannelReport(interaction.guildId, channelIdRaw);
+        const report = await getChannelReport(interaction.guildId, channelIdRaw, {
+            startDate,
+            endDate,
+            eventType: validatedEventType,
+        });
         const trendText =
             report.trendPercent === null
                 ? t(locale, 'report.trendNew')
                 : `${report.trendPercent > 0 ? '+' : ''}${report.trendPercent}%`;
+        const periodText =
+            startDate && endDate
+                ? `<t:${Math.floor(startDate.getTime() / 1000)}:D> ~ <t:${Math.floor(endDate.getTime() / 1000)}:D>`
+                : t(locale, 'reportCommand.filterAny');
+        const eventText = validatedEventType ?? t(locale, 'reportCommand.filterAny');
+        const selectedEventPeakDateText =
+            report.selectedEventPeakDate === null
+                ? t(locale, 'report.recordsNone')
+                : `<t:${Math.floor(report.selectedEventPeakDate.getTime() / 1000)}:D>`;
 
         await interaction.editReply(
             buildContainerMessage({
@@ -84,6 +173,8 @@ export const command = {
                             t(locale, 'reportCommand.totalLogs', {
                                 count: formatLocalizedNumber(report.totalLogs, numberLocale),
                             }),
+                            t(locale, 'reportCommand.filterPeriod', { value: periodText }),
+                            t(locale, 'reportCommand.filterEvent', { value: eventText }),
                             t(locale, 'reportCommand.msg3', {
                                 create: formatLocalizedNumber(
                                     report.messageCreateCount,
@@ -141,6 +232,37 @@ export const command = {
                             }),
                         ].join('\n'),
                     },
+                    ...(validatedEventType
+                        ? [
+                              {
+                                  title: t(locale, 'reportCommand.sectionEventFocus'),
+                                  body: [
+                                      t(locale, 'reportCommand.selectedEventSummary', {
+                                          eventType: validatedEventType,
+                                          count: formatLocalizedNumber(
+                                              report.totalLogs,
+                                              numberLocale,
+                                          ),
+                                      }),
+                                      t(locale, 'reportCommand.selectedEventPeakDate', {
+                                          value: selectedEventPeakDateText,
+                                      }),
+                                      t(locale, 'reportCommand.selectedEventPeakCount', {
+                                          count: formatLocalizedNumber(
+                                              report.selectedEventPeakCount,
+                                              numberLocale,
+                                          ),
+                                      }),
+                                      t(locale, 'reportCommand.topUsers', {
+                                          value: formatEntityCountList(report.topUsers, 'user', {
+                                              locale: numberLocale,
+                                              emptyText: t(locale, 'report.none'),
+                                          }),
+                                      }),
+                                  ].join('\n'),
+                              },
+                          ]
+                        : []),
                 ],
                 footer: t(locale, 'report.requester', { tag: interaction.user.tag }),
             }),

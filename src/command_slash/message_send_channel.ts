@@ -1,4 +1,5 @@
 import {
+    ApplicationIntegrationType,
     SlashCommandBuilder,
     PermissionsBitField,
     MessageFlags,
@@ -30,6 +31,10 @@ export const command: SlashCommand = {
                 .setName('content')
                 .setDescription(defaultText('messageCmd.content'))
                 .setRequired(true),
+        )
+        .setIntegrationTypes(
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
         )
         .setContexts(InteractionContextType.Guild),
 

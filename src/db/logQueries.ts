@@ -4,13 +4,19 @@ import { logger } from '../utils/logger.js';
 import type { GuildLogStats } from '../types/database.js';
 import type {
     CountRow,
+    EventPeakDayRow,
     FetchedLogRow,
     GuildLogStatsRow,
     RankedEventTypeRow,
     RankedRow,
     ScopeSummaryRow,
 } from '../types/dbRows.js';
-import type { LogEntry, LogScopeReport, SearchLogsParams } from '../types/logs.js';
+import type {
+    LogEntry,
+    LogScopeReport,
+    LogScopeReportFilters,
+    SearchLogsParams,
+} from '../types/logs.js';
 
 export async function fetchLogs(
     guildId: string,
@@ -156,9 +162,28 @@ function computeTrendPercent(last24h: number, prev24h: number): number | null {
 }
 
 async function getLogScopeReport(
-    whereClause: string,
-    queryParams: string[],
+    baseWhereClause: string,
+    baseQueryParams: string[],
+    filters: LogScopeReportFilters = {},
 ): Promise<LogScopeReport> {
+    const whereConditions = [baseWhereClause];
+    const queryParams = [...baseQueryParams];
+
+    if (filters.startDate) {
+        whereConditions.push(`"timestamp" >= $${queryParams.length + 1}`);
+        queryParams.push(filters.startDate.toISOString());
+    }
+    if (filters.endDate) {
+        whereConditions.push(`"timestamp" <= $${queryParams.length + 1}`);
+        queryParams.push(filters.endDate.toISOString());
+    }
+    if (filters.eventType) {
+        whereConditions.push(`event_type = $${queryParams.length + 1}`);
+        queryParams.push(filters.eventType);
+    }
+
+    const whereClause = whereConditions.join(' AND ');
+
     const summaryQuery = `
     SELECT
       COUNT(*) AS total_logs,
@@ -198,6 +223,14 @@ async function getLogScopeReport(
     ORDER BY COUNT(*) DESC
     LIMIT 5;
   `;
+    const selectedEventPeakDayQuery = `
+    SELECT DATE_TRUNC('day', "timestamp") AS event_day, COUNT(*)::text AS count
+    FROM event_logs
+    WHERE ${whereClause}
+    GROUP BY DATE_TRUNC('day', "timestamp")
+    ORDER BY COUNT(*) DESC, event_day DESC
+    LIMIT 1;
+  `;
 
     try {
         const [summaryResult, topEventTypesResult, topChannelsResult, topUsersResult] =
@@ -207,6 +240,9 @@ async function getLogScopeReport(
                 pool.query<RankedRow>(topChannelsQuery, queryParams),
                 pool.query<RankedRow>(topUsersQuery, queryParams),
             ]);
+        const selectedEventPeakDayResult = filters.eventType
+            ? await pool.query<EventPeakDayRow>(selectedEventPeakDayQuery, queryParams)
+            : null;
 
         const summaryRow = summaryResult.rows[0];
         const totalLogs = toCount(summaryRow.total_logs);
@@ -218,6 +254,7 @@ async function getLogScopeReport(
         const stickerCount = toCount(summaryRow.sticker_count);
         const last24hCount = toCount(summaryRow.last_24h_count);
         const prev24hCount = toCount(summaryRow.prev_24h_count);
+        const selectedEventPeakDayRow = selectedEventPeakDayResult?.rows[0];
 
         return {
             totalLogs,
@@ -247,6 +284,9 @@ async function getLogScopeReport(
                     id: row.id ?? '',
                     count: toCount(row.count),
                 })),
+            selectedEventType: filters.eventType ?? null,
+            selectedEventPeakDate: selectedEventPeakDayRow?.event_day ?? null,
+            selectedEventPeakCount: toCount(selectedEventPeakDayRow?.count),
         };
     } catch (error) {
         logger.error('Error building log scope report:', {
@@ -269,23 +309,38 @@ async function getLogScopeReport(
             topEventTypes: [],
             topChannels: [],
             topUsers: [],
+            selectedEventType: filters.eventType ?? null,
+            selectedEventPeakDate: null,
+            selectedEventPeakCount: 0,
         };
     }
 }
 
-export async function getGuildReport(guildId: string): Promise<LogScopeReport> {
-    return await getLogScopeReport('guild_id = $1', [guildId]);
+export async function getGuildReport(
+    guildId: string,
+    filters: LogScopeReportFilters = {},
+): Promise<LogScopeReport> {
+    return await getLogScopeReport('guild_id = $1', [guildId], filters);
 }
 
 export async function getChannelReport(
     guildId: string,
     channelId: string,
+    filters: LogScopeReportFilters = {},
 ): Promise<LogScopeReport> {
-    return await getLogScopeReport('guild_id = $1 AND channel_id = $2', [guildId, channelId]);
+    return await getLogScopeReport(
+        'guild_id = $1 AND channel_id = $2',
+        [guildId, channelId],
+        filters,
+    );
 }
 
-export async function getUserReport(guildId: string, userId: string): Promise<LogScopeReport> {
-    return await getLogScopeReport('guild_id = $1 AND user_id = $2', [guildId, userId]);
+export async function getUserReport(
+    guildId: string,
+    userId: string,
+    filters: LogScopeReportFilters = {},
+): Promise<LogScopeReport> {
+    return await getLogScopeReport('guild_id = $1 AND user_id = $2', [guildId, userId], filters);
 }
 
 export async function searchLogs(

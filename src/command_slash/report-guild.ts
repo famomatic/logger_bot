@@ -6,8 +6,10 @@ import {
 } from 'discord.js';
 
 import { buildContainerMessage } from '../commandShared/componentsV2.js';
+import { parseDateString } from '../commandShared/logSearchShared.js';
 import { isSuperAdmin } from '../commandShared/slashPermission.js';
 import { config } from '../config/config.js';
+import { getEventTypeChoices, isValidEventType } from '../config/eventsConfig.js';
 import { isGuildAuthorized } from '../db/database.js';
 import { getGuildReport } from '../db/logQueries.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
@@ -28,6 +30,25 @@ export const command = {
     data: new SlashCommandBuilder()
         .setName('report-guild')
         .setDescription(defaultText('reportCommand.guildDescription'))
+        .addStringOption((option) =>
+            option
+                .setName('start-date')
+                .setDescription(defaultText('reportCommand.startDate'))
+                .setRequired(false),
+        )
+        .addStringOption((option) =>
+            option
+                .setName('end-date')
+                .setDescription(defaultText('reportCommand.endDate'))
+                .setRequired(false),
+        )
+        .addStringOption((option) =>
+            option
+                .setName('event-type')
+                .setDescription(defaultText('reportCommand.eventType'))
+                .setRequired(false)
+                .addChoices(...getEventTypeChoices()),
+        )
         .addBooleanOption((option) =>
             option.setName('ephemeral').setDescription(defaultText('reportCommand.ephemeral')),
         )
@@ -50,6 +71,64 @@ export const command = {
         }
 
         try {
+            const startDateString = interaction.options.getString('start-date');
+            const endDateString = interaction.options.getString('end-date');
+            const eventTypeInput = interaction.options.getString('event-type');
+
+            let startDate: Date | undefined = undefined;
+            let endDate: Date | undefined = undefined;
+            if (startDateString) {
+                const parsed = parseDateString(startDateString, false);
+                if (!parsed) {
+                    await interaction.reply({
+                        content: t(locale, 'common.invalidStartDate'),
+                        flags: MessageFlags.Ephemeral,
+                    });
+                    return;
+                }
+                startDate = parsed;
+            }
+            if (endDateString) {
+                const parsed = parseDateString(endDateString, true);
+                if (!parsed) {
+                    await interaction.reply({
+                        content: t(locale, 'common.invalidEndDate'),
+                        flags: MessageFlags.Ephemeral,
+                    });
+                    return;
+                }
+                endDate = parsed;
+            }
+            if (startDate && endDate && startDate.getTime() > endDate.getTime()) {
+                await interaction.reply({
+                    content: t(locale, 'common.startAfterEnd'),
+                    flags: MessageFlags.Ephemeral,
+                });
+                return;
+            }
+            if (startDate && !endDate) {
+                endDate = new Date(startDate);
+                endDate.setUTCHours(23, 59, 59, 999);
+            }
+            if (!startDate && endDate) {
+                startDate = new Date(endDate);
+                startDate.setUTCHours(0, 0, 0, 0);
+            }
+
+            let validatedEventType: string | undefined = undefined;
+            if (eventTypeInput) {
+                if (!isValidEventType(eventTypeInput)) {
+                    await interaction.reply({
+                        content: t(locale, 'common.invalidEventType', {
+                            eventType: eventTypeInput,
+                        }),
+                        flags: MessageFlags.Ephemeral,
+                    });
+                    return;
+                }
+                validatedEventType = eventTypeInput;
+            }
+
             const ephemeral = interaction.options.getBoolean('ephemeral') ?? true;
             await interaction.deferReply({
                 flags: ephemeral
@@ -59,7 +138,11 @@ export const command = {
 
             const guild = interaction.guild!;
             const authorized = isGuildAuthorized(guild.id);
-            const report = await getGuildReport(guild.id);
+            const report = await getGuildReport(guild.id, {
+                startDate,
+                endDate,
+                eventType: validatedEventType,
+            });
             const owner = await guild.fetchOwner().catch(() => null);
             const guildIconUrl = guild.iconURL({ size: 1024, forceStatic: false }) ?? undefined;
             const guildBannerUrl = guild.bannerURL({ size: 1024, forceStatic: false }) ?? undefined;
@@ -72,6 +155,15 @@ export const command = {
             const requesterIsSuperAdmin = isSuperAdmin(interaction.user.id);
 
             const premiumTierName = GuildPremiumTier[guild.premiumTier];
+            const periodText =
+                startDate && endDate
+                    ? `<t:${Math.floor(startDate.getTime() / 1000)}:D> ~ <t:${Math.floor(endDate.getTime() / 1000)}:D>`
+                    : t(locale, 'reportCommand.filterAny');
+            const eventText = validatedEventType ?? t(locale, 'reportCommand.filterAny');
+            const selectedEventPeakDateText =
+                report.selectedEventPeakDate === null
+                    ? t(locale, 'report.recordsNone')
+                    : `<t:${Math.floor(report.selectedEventPeakDate.getTime() / 1000)}:D>`;
 
             const infoLines = [
                 `**ID:** ${guild.id}`,
@@ -98,6 +190,8 @@ export const command = {
                 t(locale, 'reportCommand.totalLogs', {
                     count: formatLocalizedNumber(report.totalLogs, numberLocale),
                 }),
+                t(locale, 'reportCommand.filterPeriod', { value: periodText }),
+                t(locale, 'reportCommand.filterEvent', { value: eventText }),
                 t(locale, 'reportCommand.msg3', {
                     create: formatLocalizedNumber(report.messageCreateCount, numberLocale),
                     update: formatLocalizedNumber(report.messageUpdateCount, numberLocale),
@@ -158,6 +252,32 @@ export const command = {
                           value: t(locale, 'common.commandNotAllowed'),
                       }),
             ];
+            const eventFocusLines = validatedEventType
+                ? [
+                      t(locale, 'reportCommand.selectedEventSummary', {
+                          eventType: validatedEventType,
+                          count: formatLocalizedNumber(report.totalLogs, numberLocale),
+                      }),
+                      t(locale, 'reportCommand.selectedEventPeakDate', {
+                          value: selectedEventPeakDateText,
+                      }),
+                      t(locale, 'reportCommand.selectedEventPeakCount', {
+                          count: formatLocalizedNumber(report.selectedEventPeakCount, numberLocale),
+                      }),
+                      t(locale, 'reportCommand.topUsers', {
+                          value: formatEntityCountList(report.topUsers, 'user', {
+                              locale: numberLocale,
+                              emptyText: t(locale, 'report.none'),
+                          }),
+                      }),
+                      t(locale, 'reportCommand.topChannels', {
+                          value: formatEntityCountList(report.topChannels, 'channel', {
+                              locale: numberLocale,
+                              emptyText: t(locale, 'report.none'),
+                          }),
+                      }),
+                  ]
+                : [];
 
             await interaction.editReply(
                 buildContainerMessage({
@@ -206,6 +326,14 @@ export const command = {
                             title: t(locale, 'reportCommand.sectionAccess'),
                             body: accessLines.join('\n'),
                         },
+                        ...(validatedEventType
+                            ? [
+                                  {
+                                      title: t(locale, 'reportCommand.sectionEventFocus'),
+                                      body: eventFocusLines.join('\n'),
+                                  },
+                              ]
+                            : []),
                     ],
                     footer: t(locale, 'report.requester', { tag: interaction.user.tag }),
                 }),

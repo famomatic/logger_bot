@@ -339,6 +339,11 @@ export function isLogQueueRunning(): boolean {
  */
 export async function initializeLogQueue(): Promise<void> {
     if (!config.redis.enabled) {
+        if (config.distributedMode) {
+            throw new Error(
+                'Redis log queue must be enabled when DISTRIBUTED_MODE=true (fail-closed policy).',
+            );
+        }
         setLogEventDispatcher(null);
         logger.info('Redis log queue is disabled. Using direct DB writes.');
         return;
@@ -352,6 +357,15 @@ export async function initializeLogQueue(): Promise<void> {
     try {
         await queue.start();
     } catch (error) {
+        if (config.distributedMode) {
+            logger.error(
+                'Failed to start Redis log queue in distributed mode; aborting process by fail-closed policy.',
+                error,
+            );
+            throw new Error(
+                'Failed to start Redis log queue in distributed mode; aborting process by fail-closed policy.',
+            );
+        }
         logger.error(
             'Failed to start Redis log queue. Falling back to direct DB writes for this process.',
             error,
@@ -364,6 +378,12 @@ export async function initializeLogQueue(): Promise<void> {
         const queued = await queue.enqueue(event);
         if (queued) {
             return true;
+        }
+        if (config.distributedMode) {
+            logger.error(
+                'Queue enqueue failed in distributed mode. Direct DB fallback is blocked by fail-closed policy.',
+            );
+            return false;
         }
         logger.warn('Queue enqueue failed. Falling back to direct log write.');
         return await insertLogEventDirectNow(event);

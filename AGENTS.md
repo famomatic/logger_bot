@@ -57,6 +57,36 @@ Choose verification based on that classification and avoid unrelated commands.
 
 ---
 
+## SubAgents Usage
+
+Use **SubAgents** efficiently and where they provide clear leverage.
+
+SubAgents should be used:
+
+- when the task naturally decomposes into parallelizable investigations
+- when specialized inspection can reduce context load or improve accuracy
+- when comparing multiple modules, files, or implementation paths
+- when verification, root-cause analysis, and change impact assessment can be separated cleanly
+
+SubAgents should **not** be used mechanically or excessively.
+
+Avoid using SubAgents when:
+
+- the task is narrow and can be completed faster directly
+- the overhead of delegation exceeds the likely benefit
+- the work requires tightly shared context that would be fragmented by delegation
+
+When using SubAgents:
+
+- assign them concrete, bounded objectives
+- keep their scope minimal and non-overlapping
+- consolidate their findings into the main plan
+- treat their output as input for judgment, not as unquestioned truth
+
+SubAgents are a force multiplier, not a default requirement.
+
+---
+
 # Scope & Change Control
 
 ## Scope Detection
@@ -82,7 +112,7 @@ Avoid modifying files that are clearly unrelated to the request.
 
 ## Protected Configuration Files
 
-The following files are considered **locked configuration** and must never be modified unless explicitly instructed:
+The following files are considered **locked configuration** and must never be intentionally modified unless explicitly instructed:
 
 - `eslint.config.js`
 - `tsconfig.json`
@@ -91,12 +121,20 @@ These files define project-wide linting and TypeScript behavior.
 
 Agents must treat them as immutable and must not:
 
-- modify
+- manually modify
 - rewrite
 - regenerate
-- reformat
 
 them during normal tasks.
+
+However, if running `npm run format` causes incidental formatting-only changes to locked files or documentation files, that is acceptable.
+
+Rules for this exception:
+
+- formatting drift caused by Prettier is allowed
+- do not use this exception to justify intentional edits to locked files
+- do not trigger repository-wide formatting gratuitously
+- do not abuse formatting as a way to smuggle unrelated changes
 
 ---
 
@@ -115,6 +153,8 @@ Avoid:
 Every changed line must have a clear relationship to the task.
 
 However, if verification reveals breakage in **directly connected code**, fix only what is required to restore correct behavior.
+
+Also, formatting-only diffs caused by `npm run format` are acceptable when they affect touched files, locked files, or documentation files incidentally, as long as they are not abused to widen scope.
 
 ---
 
@@ -197,6 +237,11 @@ Rules:
 - Do not run `npm run build`
 - Run formatting only for modified files if needed
 
+Note:
+
+- if `npm run format` also changes nearby documentation formatting or other incidental Prettier-managed formatting, that is acceptable
+- avoid broad, unnecessary formatting runs when a narrower check is sufficient
+
 ---
 
 #### Config-only changes
@@ -257,7 +302,7 @@ For risky logic changes:
 
 Run full verification:
 
-```
+```sh
 npm run format
 npm run lint
 npm run build
@@ -271,7 +316,8 @@ Run relevant focused tests if available.
 
 - Prefer the smallest verification capable of detecting regressions
 - Avoid unrelated test suites for narrow changes
-- Avoid repository-wide formatting for small diffs
+- Avoid repository-wide formatting for small diffs unless required
+- Incidental formatting-only changes from `npm run format` are acceptable, including on locked files or docs, but should remain minimal and non-abusive
 
 In the final report, explain:
 

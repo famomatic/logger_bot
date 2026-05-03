@@ -1,4 +1,9 @@
-import { SlashCommandBuilder, MessageFlags, InteractionContextType } from 'discord.js';
+import {
+    ApplicationIntegrationType,
+    SlashCommandBuilder,
+    MessageFlags,
+    InteractionContextType,
+} from 'discord.js';
 
 import { ensureSlashCommandPermission } from '../commandShared/slashPermission.js';
 import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
@@ -27,6 +32,10 @@ export const command: SlashCommand = {
                 .setDescription(defaultText('messageCmd.content'))
                 .setRequired(true),
         ) // 관리자만 사용 가능하도록 설정
+        .setIntegrationTypes(
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
+        )
         .setContexts(InteractionContextType.Guild), // 서버 내에서만 사용 가능
 
     async execute(interaction: CommandInteraction, client: Client) {

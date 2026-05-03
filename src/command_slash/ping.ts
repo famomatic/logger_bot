@@ -1,4 +1,4 @@
-import { SlashCommandBuilder } from 'discord.js';
+import { ApplicationIntegrationType, SlashCommandBuilder } from 'discord.js';
 
 import {
     createPendingPingReply,
@@ -19,7 +19,11 @@ export const command = {
     data: new SlashCommandBuilder()
         .setName('ping')
         .setDescription(localizations('command.pingDescription').ko)
-        .setDescriptionLocalizations(localizations('command.pingDescription')),
+        .setDescriptionLocalizations(localizations('command.pingDescription'))
+        .setIntegrationTypes(
+            ApplicationIntegrationType.GuildInstall,
+            ApplicationIntegrationType.UserInstall,
+        ),
     permission: {
         public: true,
         listable: false,
