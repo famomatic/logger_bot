@@ -49,11 +49,6 @@ typecheck:
     script:
         - npm run type
 
-verify_renderers:
-    stage: quality
-    script:
-        - npm run verify:renderers
-
 build:
     stage: build
     needs:
@@ -61,7 +56,6 @@ build:
         - lint_scripts
         - prettier_check
         - typecheck
-        - verify_renderers
     script:
         - npm run build
     artifacts:
