@@ -50,11 +50,11 @@ Bad:
 
 Use the shortest level that preserves correctness.
 
-| Level | Use when | Style |
-|---|---|---|
-| `clear` | default for normal task work | concise full sentences, no filler |
-| `compact` | status updates, routine findings, small diffs | fragments allowed, arrows allowed |
-| `full` | architecture, security, migrations, destructive changes | complete reasoning, explicit ordering |
+| Level     | Use when                                                | Style                                 |
+| --------- | ------------------------------------------------------- | ------------------------------------- |
+| `clear`   | default for normal task work                            | concise full sentences, no filler     |
+| `compact` | status updates, routine findings, small diffs           | fragments allowed, arrows allowed     |
+| `full`    | architecture, security, migrations, destructive changes | complete reasoning, explicit ordering |
 
 Do not use extreme compression when it can change meaning.
 
@@ -185,6 +185,7 @@ Only print a Markdown plan when no structured mechanism exists. If using Markdow
 
 ```md
 Plan:
+
 - Inspect: `src/auth/**`, `middleware.ts`, session tests.
 - Hypothesis: expiry boundary accepts token at exact expiry.
 - Change: comparison + boundary test only.
@@ -430,11 +431,11 @@ Bad:
 
 ```ts
 try {
-  if (x) {
-    if (x.value) {
-      // speculative nested guard maze
+    if (x) {
+        if (x.value) {
+            // speculative nested guard maze
+        }
     }
-  }
 } catch {}
 ```
 
@@ -693,15 +694,18 @@ Final report format:
 
 ```md
 Summary:
+
 - changed X to fix Y
 - added/updated Z
 
 Verification:
+
 - `npm run format` — passed
 - `npm run lint` — skipped; docs-only change
 - `npm run build` — skipped; docs-only change
 
 Notes:
+
 - any real caveat, or omit section
 ```
 
@@ -1095,9 +1099,11 @@ Use this default shape:
 
 ```md
 Summary:
+
 - ...
 
 Verification:
+
 - `command` — result or skipped reason
 ```
 
