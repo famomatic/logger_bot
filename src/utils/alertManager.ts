@@ -153,7 +153,7 @@ async function resolveTextChannel(
     }
 
     const fromCache = client.channels.cache.get(channelId);
-    let channel: GuildTextBasedChannel | null = null;
+    let channel: GuildTextBasedChannel | null;
     if (fromCache?.isTextBased()) {
         channel = fromCache as GuildTextBasedChannel;
     } else {

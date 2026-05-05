@@ -364,6 +364,7 @@ export async function initializeLogQueue(): Promise<void> {
             );
             throw new Error(
                 'Failed to start Redis log queue in distributed mode; aborting process by fail-closed policy.',
+                { cause: error },
             );
         }
         logger.error(

@@ -4,15 +4,137 @@ import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
 import eslintComments from '@eslint-community/eslint-plugin-eslint-comments';
-import importPlugin from 'eslint-plugin-import';
+import importPlugin from 'eslint-plugin-import-x';
 import promisePlugin from 'eslint-plugin-promise';
 import unicornPlugin from 'eslint-plugin-unicorn';
 import securityPlugin from 'eslint-plugin-security';
 import regexpPlugin from 'eslint-plugin-regexp';
-import nPlugin from 'eslint-plugin-n';
+
+const processModuleNames = new Set(['process', 'node:process']);
+const bufferModuleNames = new Set(['buffer', 'node:buffer']);
+
+function isProcessExitCall(node) {
+    return (
+        node.callee?.type === 'MemberExpression' &&
+        node.callee.object.type === 'Identifier' &&
+        node.callee.object.name === 'process' &&
+        node.callee.property.type === 'Identifier' &&
+        node.callee.property.name === 'exit'
+    );
+}
+
+function isLiteralModuleName(node, moduleNames) {
+    return (
+        node?.type === 'Literal' && typeof node.value === 'string' && moduleNames.has(node.value)
+    );
+}
+
+function isRequireCall(node, moduleNames) {
+    return (
+        node?.type === 'CallExpression' &&
+        node.callee.type === 'Identifier' &&
+        node.callee.name === 'require' &&
+        isLiteralModuleName(node.arguments[0], moduleNames)
+    );
+}
+
+function isProcessGetBuiltinModuleCall(node, moduleNames) {
+    return (
+        node?.type === 'CallExpression' &&
+        node.callee.type === 'MemberExpression' &&
+        node.callee.object.type === 'Identifier' &&
+        node.callee.object.name === 'process' &&
+        node.callee.property.type === 'Identifier' &&
+        node.callee.property.name === 'getBuiltinModule' &&
+        isLiteralModuleName(node.arguments[0], moduleNames)
+    );
+}
+
+function createPreferGlobalRule({ moduleNames, importedNames, message }) {
+    function importsTargetGlobal(specifier) {
+        if (importedNames === null) return true;
+        if (
+            specifier.type === 'ImportDefaultSpecifier' ||
+            specifier.type === 'ImportNamespaceSpecifier'
+        ) {
+            return true;
+        }
+        return (
+            specifier.imported.type === 'Identifier' && importedNames.has(specifier.imported.name)
+        );
+    }
+
+    return {
+        meta: {
+            type: 'suggestion',
+            docs: {
+                description: 'Prefer Node.js globals over importing equivalent built-in modules.',
+            },
+            schema: [],
+            messages: {
+                preferGlobal: message,
+            },
+        },
+        create(context) {
+            return {
+                ImportDeclaration(node) {
+                    if (!moduleNames.has(node.source.value)) return;
+                    if (node.specifiers.some(importsTargetGlobal)) {
+                        context.report({ node, messageId: 'preferGlobal' });
+                    }
+                },
+
+                CallExpression(node) {
+                    if (
+                        isRequireCall(node, moduleNames) ||
+                        isProcessGetBuiltinModuleCall(node, moduleNames)
+                    ) {
+                        context.report({ node, messageId: 'preferGlobal' });
+                    }
+                },
+            };
+        },
+    };
+}
 
 const localRules = {
     rules: {
+        'no-process-exit': {
+            meta: {
+                type: 'suggestion',
+                docs: {
+                    description: 'Disallow process.exit().',
+                },
+                schema: [],
+                messages: {
+                    noProcessExit: "Don't use process.exit(); throw an error instead.",
+                },
+            },
+            create(context) {
+                return {
+                    CallExpression(node) {
+                        if (isProcessExitCall(node)) {
+                            context.report({ node, messageId: 'noProcessExit' });
+                        }
+                    },
+                };
+            },
+        },
+
+        'prefer-global-process': createPreferGlobalRule({
+            moduleNames: processModuleNames,
+            importedNames: null,
+            message:
+                'Unexpected use of the process module. Use the global variable process instead.',
+        }),
+
+        'prefer-global-buffer': createPreferGlobalRule({
+            moduleNames: bufferModuleNames,
+            importedNames: new Set(['Buffer']),
+            message:
+                'Unexpected use of the buffer module for Buffer. Use the global variable Buffer instead.',
+        }),
+
         'no-import-reexport-hack': {
             meta: {
                 type: 'problem',
@@ -480,12 +602,11 @@ const localRules = {
 
 const plugins = {
     'eslint-comments': eslintComments,
-    import: importPlugin,
+    'import-x': importPlugin,
     promise: promisePlugin,
     unicorn: unicornPlugin,
     security: securityPlugin,
     regexp: regexpPlugin,
-    n: nPlugin,
     local: localRules,
 };
 
@@ -501,7 +622,7 @@ const baseLanguageOptions = {
 };
 
 const importResolverSettings = {
-    'import/resolver': {
+    'import-x/resolver': {
         node: true,
     },
 };
@@ -611,11 +732,11 @@ const tsBaseRules = {
 
     'eslint-comments/no-use': 'error',
 
-    'import/no-self-import': 'error',
-    'import/no-duplicates': 'error',
-    'import/first': 'error',
-    'import/newline-after-import': 'error',
-    'import/order': [
+    'import-x/no-self-import': 'error',
+    'import-x/no-duplicates': 'error',
+    'import-x/first': 'error',
+    'import-x/newline-after-import': 'error',
+    'import-x/order': [
         'error',
         {
             groups: [
@@ -694,9 +815,9 @@ const configRules = {
 
     'unicorn/no-array-for-each': 'warn',
 
-    'n/no-process-exit': 'error',
-    'n/prefer-global/process': 'error',
-    'n/prefer-global/buffer': 'error',
+    'local/no-process-exit': 'error',
+    'local/prefer-global-process': 'error',
+    'local/prefer-global-buffer': 'error',
 
     'no-restricted-syntax': ['error', ...syntaxPolicy.config],
 };
@@ -747,9 +868,9 @@ export default defineConfig(
             },
         },
         rules: {
-            'n/no-process-exit': 'error',
-            'n/prefer-global/process': 'error',
-            'n/prefer-global/buffer': 'error',
+            'local/no-process-exit': 'error',
+            'local/prefer-global-process': 'error',
+            'local/prefer-global-buffer': 'error',
         },
     },
 
