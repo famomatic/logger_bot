@@ -1,89 +1,308 @@
 # Repository Guidelines
 
-## Response Workflow
+This file is the operating contract for agents working in this repository.
 
-Before answering implementation, design, or bug questions:
+Primary goals:
 
-- Inspect the relevant source files first.
-- Do not answer based on assumptions when code can be checked in-repo.
-- If context is unclear, locate related modules using search (`rg`) and inspect them.
+1. solve the requested task correctly
+2. inspect real repository state before implementation claims
+3. keep changes minimal and directly related
+4. verify only what the diff requires
+5. reduce token waste without losing technical accuracy
+
+Token economy matters. Be concise, but never ambiguous where precision affects safety, correctness, or maintainability.
 
 ---
 
-## Planning Requirement
+# Communication Mode
 
-Always start non-trivial work by creating and maintaining a **detailed plan**.
+## Default Style
 
-The plan acts as a working memory for the session and must remain updated during the task.
+Use compact technical communication.
+
+Prefer:
+
+- short sentences
+- direct claims
+- concrete file paths, symbols, commands, and outcomes
+- bullets only when they improve scanability
+- one explanation per issue
+- exact error strings when relevant
+
+Avoid:
+
+- filler: "sure", "certainly", "of course", "happy to", "basically", "actually", "simply"
+- hedging when evidence exists: "maybe", "probably", "it seems", "I think"
+- restating the user's request
+- motivational or decorative text
+- long preambles
+- repeating the same rule in different words
+
+Good:
+
+> `src/auth/session.ts`: expiry comparison uses `<`, so expired-at-now token remains valid. Change to `<=` and add boundary test.
+
+Bad:
+
+> I took a look at your authentication flow and it appears that there may be an issue with how token expiration is being handled. I would recommend considering a change to the comparison operator.
+
+## Compression Levels
+
+Use the shortest level that preserves correctness.
+
+| Level | Use when | Style |
+|---|---|---|
+| `clear` | default for normal task work | concise full sentences, no filler |
+| `compact` | status updates, routine findings, small diffs | fragments allowed, arrows allowed |
+| `full` | architecture, security, migrations, destructive changes | complete reasoning, explicit ordering |
+
+Do not use extreme compression when it can change meaning.
+
+Examples:
+
+- `clear`: "Inline object prop creates a new reference each render. Wrap it in useMemo."
+- `compact`: "Inline object prop → new ref each render → rerender. Use useMemo."
+- `full`: "This migration drops a column. Confirm backup and deployment order before applying because rollback cannot recover deleted column data."
+
+## Auto-Clarity Rule
+
+Use fuller wording when compression creates risk.
+
+Expand communication for:
+
+- destructive commands
+- security issues
+- data migrations
+- authentication/authorization changes
+- payment, billing, or permission logic
+- production incidents
+- multi-step sequences where order matters
+- ambiguous user instructions
+- conflicting evidence
+- verification failures
+- final reports that need auditability
+
+After the risky part is clear, return to compact style.
+
+## Preserve Exactly
+
+Never rewrite or compress these unless the task explicitly asks to modify them:
+
+- code blocks
+- inline code
+- commands
+- file paths
+- URLs
+- environment variable names
+- API names
+- package names
+- version numbers
+- database table/column names
+- error messages
+- stack traces
+- logs used as evidence
+- user-provided identifiers
+
+## Status Updates
+
+For long work, give short updates only when useful.
+
+A status update should include one of:
+
+- what was inspected
+- what was found
+- what changed in the plan
+- what verification is running or skipped and why
+
+Avoid progress theater.
+
+Good:
+
+> Inspected auth middleware + session tests. Root cause is expiry boundary, not refresh flow.
+
+Bad:
+
+> I am continuing to look through the repository and will now proceed to inspect additional files.
+
+---
+
+# Response Workflow
+
+Before answering implementation, design, or bug questions:
+
+1. Inspect relevant source files first.
+2. Search related modules with `rg` when exact files are unknown.
+3. Read call sites before changing shared functions.
+4. Check tests and scripts before assuming how verification works.
+5. Do not answer from memory when repository state can be checked.
+
+If code can be inspected, inspect it.
+
+If context is unclear:
+
+- locate relevant modules with `rg`
+- inspect imports, exports, route registration, config wiring, and tests
+- state uncertainty only after checking available evidence
+
+Do not invent repository behavior.
+
+---
+
+# Token Economy Rules
+
+## Core Rule
+
+Save tokens by removing noise, not by removing reasoning.
+
+Keep:
+
+- root cause
+- change scope
+- risks
+- verification
+- exact commands
+- exact files
+- user-visible behavior
+
+Drop:
+
+- pleasantries
+- repeated summaries
+- obvious narration
+- generic disclaimers
+- duplicated explanations
+- broad tutorials unless requested
+
+## Compact Working Notes
+
+Plans and investigation notes should be dense.
+
+Use this shape:
+
+```md
+Plan:
+- Inspect: `src/auth/**`, `middleware.ts`, session tests.
+- Hypothesis: expiry boundary accepts token at exact expiry.
+- Change: comparison + boundary test only.
+- Verify: format touched files; run auth test; build if types/imports change.
+- Revise if: refresh flow owns expiry or tests show related breakage.
+```
+
+Do not use generic plan steps such as:
+
+- inspect code
+- fix bug
+- run tests
+
+## Output Budget
+
+Default final report target:
+
+- summary: 1-3 bullets
+- changed files: only important files
+- verification: commands run or skipped with reason
+- caveats: only if real
+
+Do not include full diffs unless requested.
+
+Do not paste large unchanged files.
+
+## Avoid Duplicate Context
+
+If the same fact appears in a plan, update, and final report, compress later mentions.
+
+Example:
+
+- Update: "Root cause: `token.exp < now` accepts exact-expiry tokens."
+- Final: "Fixed expiry boundary in `src/auth/session.ts`; added exact-expiry test."
+
+No need to re-explain the whole mechanism again.
+
+## Use Evidence Labels
+
+When reporting findings, label the certainty source compactly:
+
+- `inspected`: confirmed in code
+- `tested`: confirmed by command
+- `inferred`: supported but not directly executed
+- `blocked`: could not verify; explain why
+
+Example:
+
+> inspected: `src/api/users.ts` still exports `getUserProfile`; no import migration needed.
+
+---
+
+# Planning Requirement
+
+Always start non-trivial work by creating and maintaining a detailed plan.
+
+The plan acts as working memory for the session. Keep it updated when evidence changes.
 
 A valid plan must include:
 
-- investigation targets (files, modules, or components to inspect)
-- the current behavior and a root-cause hypothesis
-- the intended change scope
-- directly connected files that may also require modification
+- task classification
+- investigation targets: files, modules, commands, or components to inspect
+- current behavior and root-cause hypothesis
+- intended change scope
+- directly connected files that may require modification
 - exact verification steps
-- conditions that would require revising the plan
+- conditions that require revising the plan
 
-Generic plans are not acceptable.
+Plans are provisional notes, not constraints.
 
-Invalid examples:
+Revise the plan immediately when inspection or verification disproves earlier assumptions.
+
+Do not begin editing until the plan is specific enough to execute without guesswork.
+
+## Plan Format
+
+Use compact format:
+
+```md
+Plan:
+- Class: code | scope: single file/module/cross-module.
+- Inspect: `fileA`, `fileB`, call sites via `rg "symbol"`.
+- Hypothesis: concrete failure cause.
+- Change: exact intended edit.
+- Related: directly connected files only.
+- Verify: exact commands, in order.
+- Revise if: concrete condition.
+```
+
+## Invalid Plans
+
+Invalid:
 
 - inspect code
 - apply fix
 - run checks
+- update docs
+- improve tests
 
-Each step must be concrete enough to execute without guesswork.
+Valid:
 
-Do not begin editing until the plan is specific enough to guide the task.
-
-Plans are **provisional working notes**, not constraints.
-
-If inspection or verification disproves earlier assumptions, revise the plan immediately.
-
----
-
-## Task Classification
-
-Before making changes, classify the task as one of:
-
-- docs-only
-- config-only
-- env-only
-- code
-- cross-cutting
-
-Choose verification based on that classification and avoid unrelated commands.
+- inspect `src/lib/env.ts` and `src/lib/env.test.ts` for missing `DATABASE_URL` validation
+- update `.env.example` only if code introduces or renames env variables
+- run `npm run format -- src/lib/env.ts src/lib/env.test.ts` if script supports file args; otherwise run documented formatter path
 
 ---
 
-## SubAgents Usage
+# Task Classification
 
-Use **SubAgents** efficiently and where they provide clear leverage.
+Before changes, classify the task:
 
-SubAgents should be used:
+- `docs-only`: Markdown, comments, prose docs. Generated docs only when they are the repository source of truth.
+- `config-only`: CI, formatter, lint, example config, package config
+- `env-only`: `.env.example`, env loader, env docs
+- `code`: application/runtime/test code
+- `cross-cutting`: touches multiple layers or behavior areas
 
-- when the task naturally decomposes into parallelizable investigations
-- when specialized inspection can reduce context load or improve accuracy
-- when comparing multiple modules, files, or implementation paths
-- when verification, root-cause analysis, and change impact assessment can be separated cleanly
+Verification must match the classification.
 
-SubAgents should **not** be used mechanically or excessively.
+Avoid unrelated commands.
 
-Avoid using SubAgents when:
-
-- the task is narrow and can be completed faster directly
-- the overhead of delegation exceeds the likely benefit
-- the work requires tightly shared context that would be fragmented by delegation
-
-When using SubAgents:
-
-- assign them concrete, bounded objectives
-- keep their scope minimal and non-overlapping
-- consolidate their findings into the main plan
-- treat their output as input for judgment, not as unquestioned truth
-
-SubAgents are a force multiplier, not a default requirement.
+If unsure whether a change affects runtime, treat it as code.
 
 ---
 
@@ -91,9 +310,7 @@ SubAgents are a force multiplier, not a default requirement.
 
 ## Scope Detection
 
-Before making code changes, determine the minimal scope required.
-
-Classify the scope as one of:
+Before code changes, determine the minimal required scope:
 
 - single function
 - single file
@@ -102,121 +319,251 @@ Classify the scope as one of:
 
 Prefer the smallest scope that fully solves the task.
 
-If lint, build, or runtime verification reveals **directly connected breakage**, expand scope only as much as required to resolve it.
+Expand only when direct evidence requires it:
 
-Files required to resolve compile errors, type errors, import failures, or runtime integration problems are considered **related files**.
+- compile errors
+- type errors
+- import/export failures
+- failing focused tests
+- broken runtime integration
+- directly connected config/env mismatch
 
-Avoid modifying files that are clearly unrelated to the request.
+Do not modify unrelated files.
 
----
+## Patch Minimalism
+
+Every changed line must have a direct relationship to the request.
+
+Avoid:
+
+- unrelated refactors
+- unrelated renames
+- reformatting untouched code
+- architecture rewrites
+- speculative abstractions
+- style churn
+- dependency changes without need
+- broad cleanup while fixing a narrow bug
+
+Allowed:
+
+- formatting touched files
+- fixing directly connected breakage revealed by verification
+- updating docs/env examples required by the code change
+- adding focused tests for risky behavior
 
 ## Protected Configuration Files
 
-The following files are considered **locked configuration** and must never be intentionally modified unless explicitly instructed:
+These files are locked configuration:
 
 - `eslint.config.js`
 - `tsconfig.json`
 
-These files define project-wide linting and TypeScript behavior.
+Do not intentionally modify, rewrite, regenerate, or normalize them unless explicitly instructed.
 
-Agents must treat them as immutable and must not:
+Exception: if a legitimate formatting command causes incidental formatting-only changes to locked files, that is acceptable only when:
 
-- manually modify
-- rewrite
-- regenerate
+- the command was required for touched files
+- changes are formatting-only
+- the exception is not used to smuggle unrelated edits
+- repository-wide formatting was not run gratuitously
 
-them during normal tasks.
+## Directly Connected Files
 
-However, if running `npm run format` causes incidental formatting-only changes to locked files or documentation files, that is acceptable.
+A file is directly connected when the requested change cannot be correct without it.
 
-Rules for this exception:
+Examples:
 
-- formatting drift caused by Prettier is allowed
-- do not use this exception to justify intentional edits to locked files
-- do not trigger repository-wide formatting gratuitously
-- do not abuse formatting as a way to smuggle unrelated changes
+- code reads new env variable → `.env.example` is connected
+- exported function signature changes → call sites and tests are connected
+- route behavior changes → route tests and API docs may be connected
+- migration changes schema → model/types/query code may be connected
 
----
+Not connected:
 
-## Patch Minimalism
-
-Changes must remain strictly related to the requested task.
-
-Avoid:
-
-- refactoring unrelated code
-- renaming unrelated symbols
-- reformatting untouched code
-- architectural rewrites
-- introducing new abstractions without necessity
-
-Every changed line must have a clear relationship to the task.
-
-However, if verification reveals breakage in **directly connected code**, fix only what is required to restore correct behavior.
-
-Also, formatting-only diffs caused by `npm run format` are acceptable when they affect touched files, locked files, or documentation files incidentally, as long as they are not abused to widen scope.
+- nearby style issues
+- old TODOs
+- unrelated test failures
+- unrelated lint warnings outside affected scope
 
 ---
 
-## Defensive Code Policy
+# Defensive Code Policy
 
 Avoid speculative defensive programming.
 
-Do not introduce layered guards such as repeated `if` chains or excessive `try/catch` blocks unless they address a known failure mode.
+Do not add layered guards, broad try/catch, or silent fallback behavior unless tied to a known failure mode.
 
-However, a **single direct guard or error check is acceptable** when:
+Acceptable safeguards:
 
-- preventing a concrete bug
-- handling external input or API responses
-- matching patterns already used in the codebase
+- one direct guard for external input
+- explicit validation for API/env/config data
+- error check matching project patterns
+- boundary handling proven by bug or test
 
-The goal is to avoid defensive noise, not to prohibit legitimate safeguards.
+Bad:
+
+```ts
+try {
+  if (x) {
+    if (x.value) {
+      // speculative nested guard maze
+    }
+  }
+} catch {}
+```
+
+Good:
+
+```ts
+if (!session) return unauthorized();
+```
+
+Do not swallow errors unless the repository already treats that path as best-effort and the reason is documented.
 
 ---
 
-## Request Handling
+# Request Handling
 
-Do not refuse user requests unless the change would clearly:
+Implement technically feasible requests unless the change would clearly:
 
 - break the build
 - corrupt data
 - introduce a security vulnerability
 - violate repository rules
+- perform an irreversible action without explicit confirmation
 
-If the request is technically feasible and does not harm system stability, it should be implemented.
+If a request conflicts with repository rules, explain the conflict and apply the closest safe alternative.
+
+Do not refuse because the task is large.
+
+When the task is too broad for one safe patch:
+
+1. perform the minimal coherent slice
+2. document remaining work
+3. avoid pretending the whole task is complete
+
+---
+
+# SubAgents Usage
+
+Use SubAgents only when they provide clear leverage.
+
+If SubAgents are unavailable, perform the same bounded investigation directly.
+
+Use them for:
+
+- parallelizable investigation
+- comparing multiple modules
+- independent root-cause checks
+- large impact assessment
+- specialized verification review
+- separate security or migration review
+
+Do not use them for:
+
+- narrow single-file fixes
+- work where delegation overhead exceeds benefit
+- tasks needing tightly shared context
+- mechanical compliance
+
+When using SubAgents:
+
+- assign bounded objectives
+- avoid overlapping scopes
+- require file paths and evidence
+- consolidate findings into the main plan
+- treat output as input, not truth
+- verify important claims in the main context before editing
+
+SubAgent prompt should be compact:
+
+```md
+Inspect `src/billing/**` for invoice total calculation. Goal: find where tax applied twice. Return files, symbols, evidence, no fix.
+```
+
+---
+
+# Repository Inspection
+
+## Search First When Unknown
+
+Use `rg` to locate:
+
+- symbols
+- route names
+- env variables
+- feature flags
+- error strings
+- test names
+- config keys
+
+Examples:
+
+```sh
+rg "getUserProfile"
+rg "DATABASE_URL|POSTGRES"
+rg "InvoiceTotal"
+```
+
+## Read Before Edit
+
+Before editing a file, inspect enough surrounding context to understand:
+
+- imports/exports
+- local patterns
+- error handling style
+- tests or absence of tests
+- public API implications
+- data ownership
+
+Do not patch isolated lines without understanding their call path.
+
+## Prefer Existing Patterns
+
+Follow repository patterns for:
+
+- naming
+- validation
+- logging
+- errors
+- dependency injection
+- tests
+- folder layout
+- commit scopes
+
+Do not introduce a new pattern unless required by the task.
 
 ---
 
 # Testing & Verification
 
-There is currently no guaranteed universal `npm test` script in `package.json`.
+There is no guaranteed universal `npm test` script in `package.json`.
 
 Do not assume `npm test` exists.
 
-Validation must remain scoped to the files and behavior actually changed.
+Inspect `package.json` before using scripts.
 
----
+Validation must be scoped to the actual diff.
 
 ## Diff-aware Verification
 
-Verification should focus on the **actual diff**.
-
-Do not run commands unrelated to the modified code.
+Verification should focus on changed behavior.
 
 Examples:
 
-- documentation change → formatting only
+- documentation change → formatting only if needed
 - comment change → no build
-- small logic change → scoped lint or test
-- environment config change → env validation only
+- small logic change → format touched files, focused lint/test
+- env loader change → env parsing test + `.env.example` sync
+- import/export or TypeScript type change → build
+- cross-cutting change → full verification
 
-However, if unsure whether a change affects type-checking or runtime behavior, **assume that it does**.
+If unsure whether a code change affects type-checking or runtime behavior, run build.
 
----
+## Verification Command Order
 
-### Verification command order
-
-When verification commands are required, run them in this order:
+When verification commands are required, run in this order:
 
 1. `npm run format`
 2. `npm run lint`
@@ -224,81 +571,71 @@ When verification commands are required, run them in this order:
 
 Rules:
 
-- Stop execution if any earlier step fails.
-- Do not run later steps if earlier validation fails.
-- Prefer the smallest affected scope when tooling supports it.
+- stop if an earlier required step fails
+- do not run later steps after earlier failure unless fixing the failure requires more inspection
+- prefer smallest affected scope when tooling supports it
+- do not invent script names
+- if a script is absent, say it is absent and use the closest available scoped command
 
----
+## Minimum Required Verification by Change Type
 
-### Minimum required verification by change type
+### Documentation-only Changes
 
-#### Documentation-only changes (`*.md`, comments)
+For `*.md`, comments, docs prose:
 
-- Do not run `npm run build`
-- Run formatting only for modified files if needed
+- do not run `npm run build`
+- run formatting only if repository formatter applies to the modified file
+- skip verification if no project files/scripts are available and the Markdown is manually reviewed
 
-Note:
+Final report must say why build/lint were skipped.
 
-- if `npm run format` also changes nearby documentation formatting or other incidental Prettier-managed formatting, that is acceptable
-- avoid broad, unnecessary formatting runs when a narrower check is sufficient
-
----
-
-#### Config-only changes
+### Config-only Changes
 
 Examples:
 
 - CI configuration
-- example configs
-- formatter or lint configuration
+- formatter configuration
+- lint configuration
+- example config
+- package scripts
 
-Rules:
+Run only checks directly affected by that config.
 
-- Run only checks directly affected by that configuration
-- Do not run full builds unless the config affects the build pipeline
+Do not run full build unless the config affects build pipeline.
 
----
-
-#### Environment variable changes
+### Environment Variable Changes
 
 Examples:
 
-- `.env`
 - `.env.example`
+- env docs
 - env loader code
+- deployment config templates
 
 Rules:
 
-- Keep `.env.example` synchronized with code expectations
-- Use placeholder values only
-- Never commit real secrets
+- keep `.env.example` synchronized with code expectations
+- use placeholder values only
+- never commit real secrets
+- run env parsing/config loading tests if available
+- run build when env types/imports change
 
-Run only verification relevant to env parsing or config loading.
+### Application Code Changes
 
----
-
-#### Application code changes
-
-For code modifications:
+For runtime code:
 
 - format changed files
 - run lint for affected scope
-- run build when the change affects:
-    - TypeScript types
-    - imports/exports
-    - runtime behavior
-    - config wiring
+- run focused tests when available
+- run build when change affects TypeScript types, imports/exports, runtime behavior, or config wiring
 
-If uncertain whether a build is needed, **run the build**.
+For risky logic:
 
-For risky logic changes:
+- add focused tests when appropriate
+- place tests under existing test convention, commonly `src/**/__tests__`
+- document exact test command
 
-- add focused tests under `src/**/__tests__` when appropriate
-- document how to run them
-
----
-
-#### Large or cross-cutting changes
+### Large or Cross-cutting Changes
 
 Run full verification:
 
@@ -310,51 +647,125 @@ npm run build
 
 Run relevant focused tests if available.
 
+### Verification Failure
+
+If verification fails:
+
+1. stop later verification steps
+2. inspect failure
+3. determine whether it is caused by the diff
+4. fix directly connected breakage only
+5. rerun the failed command
+6. report unrelated pre-existing failures separately
+
+Do not hide failures.
+
+Do not claim success when commands failed or were not run.
+
+## Final Verification Report
+
+Final report format:
+
+```md
+Summary:
+- changed X to fix Y
+- added/updated Z
+
+Verification:
+- `npm run format` — passed
+- `npm run lint` — skipped; docs-only change
+- `npm run build` — skipped; docs-only change
+
+Notes:
+- any real caveat, or omit section
+```
+
+Keep it short.
+
 ---
 
-### Verification rules
+# Code Change Rules
 
-- Prefer the smallest verification capable of detecting regressions
-- Avoid unrelated test suites for narrow changes
-- Avoid repository-wide formatting for small diffs unless required
-- Incidental formatting-only changes from `npm run format` are acceptable, including on locked files or docs, but should remain minimal and non-abusive
+## Implementation Discipline
 
-In the final report, explain:
+Before changing code:
 
-- which verification commands were run
-- why they were required or skipped
+- know the owner module
+- know call sites for changed symbols
+- know expected behavior
+- know verification path
 
-If verification could not be run, explain why.
+During changes:
+
+- make the smallest complete patch
+- use existing abstractions
+- preserve public behavior not mentioned by the task
+- keep error messages stable unless the task requires changing them
+- avoid opportunistic cleanup
+
+After changes:
+
+- inspect diff
+- verify scoped behavior
+- report only relevant files and commands
+
+## Tests
+
+Add or update tests when:
+
+- fixing a bug with clear expected behavior
+- changing branching logic
+- changing parsing/validation
+- changing security-sensitive behavior
+- changing public API behavior
+- preventing regression is cheap and focused
+
+Do not add broad tests unrelated to the changed behavior.
+
+If no test framework exists, say so and use available verification.
+
+## Error Handling
+
+Errors should be:
+
+- explicit
+- actionable
+- consistent with project style
+- not overly verbose
+- not leaking secrets
+
+Never log:
+
+- raw credentials
+- API tokens
+- full connection strings
+- session cookies
+- private keys
+- customer secrets
 
 ---
 
-# PR / Commit Expectations
+# Documentation Rules
 
-Use Conventional Commits:
+Docs should be accurate, compact, and task-scoped.
 
-- `feat:`
-- `fix:`
-- `refactor:`
-- `docs:`
+When editing docs:
 
-Each commit should contain a single logical change.
+- keep headings meaningful
+- avoid marketing language
+- avoid repeating the same rule in multiple sections
+- preserve code blocks exactly unless changing them is the task
+- ensure commands are copy-pasteable
+- mark placeholders clearly
+- keep examples minimal but complete
 
-Avoid mixing unrelated changes.
-
-Commit after each task, and push when you're done.
-
-PR descriptions should include:
-
-- behavior change summary
-- migration or schema impact
-- manual verification steps
-- command output summary when applicable
+For generated docs, include only information verified from repository state or explicitly provided by the user.
 
 ---
 
 # Security & Config
 
-Secrets must remain in `.env` only:
+Secrets must remain in `.env` only.
 
 Examples:
 
@@ -362,32 +773,402 @@ Examples:
 - database credentials
 - storage credentials
 - monitoring DSN
+- private keys
+- session secrets
 
 Never commit real secrets.
 
-Do not log:
+Never place real secrets in:
 
-- raw credentials
-- full connection strings
+- `.env.example`
+- README
+- tests
+- logs
+- fixtures
+- screenshots
+- comments
 
----
-
-## Environment variable sync rules
+## Environment Variable Sync Rules
 
 `.env.example` is the source-of-truth template for environment variables.
 
-If code changes:
+If code changes any of these, update `.env.example` in the same change:
 
-- variable names
-- defaults
-- required flags
-- provider-specific variables
-- documented meanings
+- variable name
+- default
+- required/optional status
+- provider-specific variable
+- documented meaning
+- expected format
 
-`.env.example` must be updated in the same change.
+If code references a variable absent from `.env.example`, the task is incomplete.
 
-If code references a variable that does not appear in `.env.example`, the task is incomplete.
+Use comments for complex variables only.
 
-Use comments to explain complex variables when necessary.
+Use placeholder values only.
 
-Never include real secrets in `.env.example`.
+## Config Safety
+
+For config changes:
+
+- understand load order
+- check env overrides
+- avoid breaking local development
+- preserve default behavior unless requested
+- document migration impact if behavior changes
+
+---
+
+# Database & Migration Rules
+
+For schema or data changes:
+
+- inspect models, queries, migrations, and seed/test data
+- identify rollback path
+- check production safety
+- avoid destructive operations without explicit confirmation
+- update types and env/docs if required
+
+Destructive migration communication must be full clarity, not compressed.
+
+Before destructive SQL, state:
+
+- what data is affected
+- whether it is reversible
+- backup requirement
+- deployment order
+- verification query
+
+Never compress command order when data loss is possible.
+
+---
+
+# Frontend Rules
+
+When changing UI:
+
+- inspect component hierarchy and shared UI primitives
+- preserve existing design system patterns
+- avoid unrelated restyling
+- check loading, empty, error, and permission states when touched
+- keep accessibility attributes when existing patterns use them
+
+For React/Next.js:
+
+- avoid unnecessary client components
+- avoid unstable inline objects/functions in hot render paths when they cause rerenders
+- keep server/client boundary explicit
+- update types when props change
+- verify route/page build when imports or module boundaries change
+
+---
+
+# Backend Rules
+
+When changing backend logic:
+
+- inspect route registration
+- inspect middleware order
+- inspect request validation
+- inspect auth/session ownership
+- inspect database query behavior
+- avoid changing API shape unless requested
+
+For Go/Gin:
+
+- follow existing handler/service/repository split
+- return consistent status codes and error envelopes
+- avoid swallowing errors
+- validate external input at boundary
+- keep context propagation intact
+
+For TypeScript backend:
+
+- keep schema validation close to input boundary
+- avoid `any` unless project already uses it in that path and no better type is practical
+- preserve public types unless migration is intended
+
+---
+
+# Dependency Rules
+
+Do not add dependencies unless necessary.
+
+Before adding a dependency:
+
+- check existing packages
+- evaluate whether platform/library already provides feature
+- consider bundle/runtime impact
+- update lockfile through package manager only
+- verify license/security suitability when relevant
+
+Do not manually edit lockfiles.
+
+Do not switch package managers.
+
+---
+
+# Build, Scripts, and Tooling
+
+Before running scripts:
+
+- inspect `package.json`
+- use existing scripts
+- prefer scoped commands if supported
+- do not assume `npm test`
+
+Command reporting should be exact:
+
+```md
+- `npm run lint` — failed: pre-existing `no-explicit-any` in `src/legacy/foo.ts`
+```
+
+Do not summarize failed commands as "checks passed".
+
+---
+
+# Git, Commit, and PR Expectations
+
+Use Conventional Commits:
+
+- `feat:`
+- `fix:`
+- `refactor:`
+- `docs:`
+- `test:`
+- `chore:`
+- `build:`
+- `ci:`
+
+Each commit should contain one logical change.
+
+Avoid mixing unrelated changes.
+
+Commit and push only when explicitly requested or required by repository workflow.
+
+When committing, use one logical commit per task.
+
+## Commit Message Style
+
+Use compact Conventional Commit messages.
+
+Subject:
+
+- imperative mood: `fix`, `add`, `remove`, `update`
+- no trailing period
+- ideally ≤50 chars, hard cap 72
+- scope optional but useful
+
+Body only when needed:
+
+- non-obvious why
+- breaking changes
+- migrations
+- security fixes
+- revert context
+- linked issues
+
+Avoid:
+
+- "This commit..."
+- "I/we..."
+- AI attribution
+- restating file names when scope explains it
+- filler
+
+Examples:
+
+```txt
+fix(auth): reject tokens at exact expiry
+```
+
+```txt
+feat(api)!: rename /v1/orders to /v1/checkout
+
+BREAKING CHANGE: clients must migrate before 2026-06-01.
+Old route returns 410 after removal window.
+```
+
+## PR Description
+
+PR descriptions should include:
+
+- behavior change summary
+- migration/schema impact
+- verification commands and results
+- manual verification steps when relevant
+- known caveats
+
+Keep concise.
+
+---
+
+# Code Review Output
+
+When reviewing diffs, write comments as actionable one-liners when safe.
+
+Preferred format:
+
+```md
+`file.ts:L42`: bug: `user` can be null after lookup. Return 404 before reading `.email`.
+```
+
+Severity prefixes:
+
+- `bug:` broken behavior
+- `risk:` fragile or likely incident path
+- `security:` exploitable or sensitive issue
+- `nit:` style or micro-optimization
+- `q:` genuine question
+
+Drop:
+
+- "I noticed..."
+- "It seems..."
+- "You might want to consider..."
+- per-comment praise
+- restating the diff
+- hedging when evidence is clear
+
+Keep:
+
+- exact file and line
+- exact symbol names
+- concrete fix
+- why, when not obvious
+
+Use fuller paragraphs for:
+
+- security findings
+- architectural disagreements
+- migrations
+- onboarding explanations
+- issues where terse wording may sound misleading
+
+---
+
+# Final Answer Rules
+
+Final answers must be accurate, compact, and auditable.
+
+Include:
+
+- what changed
+- important files changed
+- verification run/skipped
+- unresolved caveats, if any
+
+Avoid:
+
+- long narrative of every step
+- unrelated recommendations
+- duplicate summaries
+- claiming verification that was not run
+- saying something is impossible without evidence
+
+Use this default shape:
+
+```md
+Summary:
+- ...
+
+Verification:
+- `command` — result or skipped reason
+```
+
+Add `Notes:` only for real caveats.
+
+---
+
+# Caveman-inspired Compression for Repository Memory
+
+This repository allows compact memory/rule-file style, inspired by Caveman token-saving principles.
+
+When compressing repository instructions or memory files:
+
+- preserve technical substance
+- preserve Markdown structure
+- preserve headings unless changing structure is requested
+- preserve code blocks exactly
+- preserve inline code exactly
+- preserve commands exactly
+- preserve paths and URLs exactly
+- preserve numbers, versions, dates, and names exactly
+- remove filler and redundant wording
+- merge duplicate bullets
+- keep one representative example when multiple examples say the same thing
+
+Allowed transformations:
+
+- "in order to" → "to"
+- "make sure to run" → "run"
+- "it is important that" → direct rule
+- "you should consider" → direct action or remove if speculative
+- "utilize" → "use"
+- "implement a solution for" → "fix"
+
+Do not compress:
+
+- source code files
+- JSON/YAML/TOML config
+- lockfiles
+- env files
+- SQL migrations
+- shell scripts
+- generated files
+
+If a file mixes prose and code, compress only prose outside code blocks.
+
+---
+
+# Conflict Resolution
+
+When rules conflict, priority order:
+
+1. safety/security/data integrity
+2. explicit user request
+3. repository correctness
+4. minimal diff
+5. scoped verification
+6. token economy
+
+Token economy never overrides correctness.
+
+Minimal diff never overrides required verification.
+
+User request never overrides security or data integrity.
+
+---
+
+# Quick Reference
+
+## Before Edit
+
+- classify task
+- inspect relevant files
+- search call sites
+- write concrete plan
+- choose minimal scope
+
+## During Edit
+
+- change only related lines
+- follow existing patterns
+- avoid speculative guards
+- keep config/env/docs synced
+
+## After Edit
+
+- inspect diff
+- run scoped verification in order
+- stop on failure
+- fix only connected breakage
+- final report: summary + verification + caveats
+
+## Communication
+
+- concise by default
+- exact where technical
+- full clarity for risky operations
+- no filler
+- no fake certainty
