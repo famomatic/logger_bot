@@ -2,6 +2,7 @@ import { config } from '../config/config.js';
 import { getMessageLocale, t } from '../i18n/index.js';
 import {
     NoAccessibleGuildChannelsError,
+    parseLegacyCommandArguments,
     runGuildMessageBackfill,
 } from '../services/logGuildMessagesService.js';
 import { logger } from '../utils/logger.js';
@@ -13,10 +14,12 @@ const command: LegacyCommand = {
     name: 'log-guild-messages',
     async execute(message: Message) {
         const locale = getMessageLocale(message);
-        const args = message.content.trim().split(/ +/).slice(2);
+        const args = parseLegacyCommandArguments(message.content, command.name);
         const targetGuildId = args[0];
         if (!targetGuildId) {
-            await message.reply(t(locale, 'backfill.usageGuild'));
+            await message.reply(
+                t(locale, 'backfill.usageGuild', { prefix: config.legacyCommandPrefix }),
+            );
             return;
         }
 
@@ -33,7 +36,7 @@ const command: LegacyCommand = {
             `Initiating bulk message logging for guild ${targetGuildId} by ${message.author.tag} (${message.author.id})`,
         );
 
-        const legacyCommandPrefixes = client.legacyCommands
+        const legacyCommandNames = client.legacyCommands
             ? Array.from(client.legacyCommands.keys())
             : [];
 
@@ -41,7 +44,7 @@ const command: LegacyCommand = {
             const guild = await client.guilds.fetch(targetGuildId);
             const result = await runGuildMessageBackfill({
                 guild,
-                legacyCommandPrefixes,
+                legacyCommandNames,
             });
 
             let finalReply = `${t(locale, 'backfill.completeTitle')}\n\n`;

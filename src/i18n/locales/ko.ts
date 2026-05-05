@@ -596,7 +596,7 @@ export const ko = {
         noReadableChannels:
             '오류: 이 서버에서 메시지 기록을 읽을 수 있는 채널을 찾을 수 없습니다. (봇 권한 확인 필요)',
         criticalError: '메시지 기록 확인/처리 중 심각한 오류가 발생했습니다: {error}',
-        usageGuild: '사용법: logger log-guild-messages <guild_id>',
+        usageGuild: '사용법: {prefix}log-guild-messages <guild_id>',
         startGuildLegacy: '길드 {guildId}의 모든 메시지를 기록합니다...',
         channelFetchFailed: '채널 ID {channelId}를 가져오는 중 오류가 발생했습니다.',
         channelReadDenied: '오류: 채널 #{channel}의 메시지를 읽을 권한이 없습니다.',

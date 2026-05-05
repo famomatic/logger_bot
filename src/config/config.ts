@@ -65,6 +65,7 @@ interface RuntimeConfig {
     sentryDsn: string | undefined;
     nodeEnv: string;
     superAdminIds: string[];
+    legacyCommandPrefix: string;
     storage: {
         type: 'webdav' | 's3' | 'smb' | 'local';
         local: {
@@ -128,6 +129,10 @@ const buildConfigTemplate = (): RuntimeConfig => {
         .split(',')
         .map((id) => id.trim())
         .filter((id) => id.length > 0);
+    const legacyCommandPrefix =
+        process.env.LEGACY_COMMAND_PREFIX && process.env.LEGACY_COMMAND_PREFIX.trim().length > 0
+            ? process.env.LEGACY_COMMAND_PREFIX
+            : 'logger ';
     const nodeEnv = process.env.NODE_ENV ?? 'development';
     const distributedMode = parseBoolean(process.env.DISTRIBUTED_MODE, false);
     const dbSsl = parseBoolean(process.env.PG_SSL, nodeEnv === 'production');
@@ -200,6 +205,7 @@ const buildConfigTemplate = (): RuntimeConfig => {
         sentryDsn: process.env.SENTRY_DSN,
         nodeEnv,
         superAdminIds,
+        legacyCommandPrefix,
 
         // 통합 스토리지 설정
         storage: {

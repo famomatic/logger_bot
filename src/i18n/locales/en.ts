@@ -595,7 +595,7 @@ export const en = {
         noReadableChannels:
             'Error: No channels where message history can be read in this server. (Check bot permissions)',
         criticalError: 'A critical error occurred while checking/logging messages: {error}',
-        usageGuild: 'Usage: logger log-guild-messages <guild_id>',
+        usageGuild: 'Usage: {prefix}log-guild-messages <guild_id>',
         startGuildLegacy: 'Logging all messages in guild {guildId}...',
         channelFetchFailed: 'An error occurred while fetching channel ID {channelId}.',
         channelReadDenied: 'Error: No permission to read messages in channel #{channel}.',

@@ -53,7 +53,7 @@ export const command: SlashCommand = {
         );
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const legacyCommandPrefixes = client.legacyCommands
+        const legacyCommandNames = client.legacyCommands
             ? Array.from(client.legacyCommands.keys())
             : [];
 
@@ -61,7 +61,7 @@ export const command: SlashCommand = {
             const guild = await client.guilds.fetch(targetGuildId);
             const result = await runGuildMessageBackfill({
                 guild,
-                legacyCommandPrefixes,
+                legacyCommandNames,
             });
 
             let finalReply = `${t(locale, 'backfill.completeTitle')}\n\n`;
