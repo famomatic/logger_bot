@@ -5,6 +5,7 @@ import { pool } from '../db/database.js';
 import {
     buildAttachmentData,
     buildMessageCreateLogData,
+    parseLegacyCommandName,
 } from '../services/logGuildMessagesService.js';
 import { logEventIfAuthorized as logEvent, shouldLogForGuild } from '../utils/eventLog.js';
 import { logger } from '../utils/logger.js';
@@ -20,8 +21,6 @@ import type {
     MessageWithForwarded,
 } from '../types/messageLog.js';
 import type { Message, Client, Collection, MessageReference } from 'discord.js';
-
-const BOT_PREFIX = 'logger '; // 고정 접두사 정의
 
 function serializeEmbedForStorage(embed: Message['embeds'][number]): Record<string, unknown> {
     return {
@@ -337,9 +336,11 @@ const event = {
 
         // --- 레거시 명령어 처리 ---
         const isSuperAdmin = config.superAdminIds.includes(message.author.id);
-        if (isSuperAdmin && message.content.startsWith(BOT_PREFIX) && legacyCommands.size > 0) {
-            const args = message.content.slice(BOT_PREFIX.length).trim().split(/ +/);
-            const commandName = args.shift()?.toLowerCase();
+        if (isSuperAdmin && legacyCommands.size > 0) {
+            const commandName = parseLegacyCommandName(
+                message.content,
+                Array.from(legacyCommands.keys()),
+            );
 
             if (commandName) {
                 const command = legacyCommands.get(commandName);

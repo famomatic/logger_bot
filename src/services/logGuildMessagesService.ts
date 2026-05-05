@@ -25,7 +25,7 @@ export class NoAccessibleGuildChannelsError extends Error {
 
 interface GuildBackfillParams {
     guild: Guild;
-    legacyCommandPrefixes: string[];
+    legacyCommandNames: string[];
 }
 
 interface MessageBackfillOutcome {
@@ -106,26 +106,46 @@ async function downloadWithRetry(url: string, maxRetries = 3): Promise<Buffer> {
     throw lastError;
 }
 
+export function parseLegacyCommandName(
+    content: string,
+    legacyCommandNames: string[],
+): string | null {
+    if (legacyCommandNames.length === 0 || !content.startsWith(config.legacyCommandPrefix)) {
+        return null;
+    }
+
+    const args = content.slice(config.legacyCommandPrefix.length).trim().split(/ +/);
+    const commandName = args.shift()?.toLowerCase();
+    if (!commandName || !legacyCommandNames.includes(commandName)) {
+        return null;
+    }
+
+    return commandName;
+}
+
+export function parseLegacyCommandArguments(content: string, commandName: string): string[] {
+    if (!content.startsWith(config.legacyCommandPrefix)) {
+        return [];
+    }
+
+    const args = content.slice(config.legacyCommandPrefix.length).trim().split(/ +/);
+    const parsedCommandName = args.shift()?.toLowerCase();
+    return parsedCommandName === commandName ? args : [];
+}
+
 /**
  * 개발자 레거시 명령어 메시지인지 판별합니다.
  * 백필/실시간 로깅 시 관리용 명령 메시지를 제외하는 데 사용됩니다.
  */
-export function isLegacyCommandByDev(message: Message, legacyCommandPrefixes: string[]): boolean {
-    if (legacyCommandPrefixes.length === 0) {
+export function isLegacyCommandByDev(message: Message, legacyCommandNames: string[]): boolean {
+    if (legacyCommandNames.length === 0) {
         return false;
     }
     if (!config.superAdminIds.includes(message.author.id)) {
         return false;
     }
 
-    const matchedPrefix = legacyCommandPrefixes.find((prefix) =>
-        message.content.startsWith(prefix),
-    );
-    if (!matchedPrefix) {
-        return false;
-    }
-
-    return message.content === matchedPrefix || message.content.startsWith(`${matchedPrefix} `);
+    return parseLegacyCommandName(message.content, legacyCommandNames) !== null;
 }
 
 /**
@@ -252,7 +272,7 @@ export async function processMessageCreateLog(
  */
 export async function runGuildMessageBackfill({
     guild,
-    legacyCommandPrefixes,
+    legacyCommandNames,
 }: GuildBackfillParams): Promise<GuildBackfillResult> {
     const startTime = Date.now();
     let processedCount = 0;
@@ -300,10 +320,7 @@ export async function runGuildMessageBackfill({
                 for (const message of messages.values()) {
                     channelUniqueUserIds.add(message.author.id);
 
-                    if (
-                        message.author.bot ||
-                        isLegacyCommandByDev(message, legacyCommandPrefixes)
-                    ) {
+                    if (message.author.bot || isLegacyCommandByDev(message, legacyCommandNames)) {
                         continue;
                     }
 

@@ -31,7 +31,7 @@ interface ChannelRecoverySummary {
  */
 async function recoverGuildMessages(
     guild: Guild,
-    legacyCommandPrefixes: string[],
+    legacyCommandNames: string[],
     maxPagesPerChannel: number,
 ): Promise<RecoverySummary> {
     logger.info(
@@ -83,10 +83,7 @@ async function recoverGuildMessages(
                         break;
                     }
 
-                    if (
-                        message.author.bot ||
-                        isLegacyCommandByDev(message, legacyCommandPrefixes)
-                    ) {
+                    if (message.author.bot || isLegacyCommandByDev(message, legacyCommandNames)) {
                         continue;
                     }
 
@@ -153,7 +150,7 @@ export async function recoverMissedMessagesOnStartup(client: Client): Promise<vo
     }
 
     const startedAt = Date.now();
-    const legacyCommandPrefixes = client.legacyCommands
+    const legacyCommandNames = client.legacyCommands
         ? Array.from(client.legacyCommands.keys())
         : [];
 
@@ -178,7 +175,7 @@ export async function recoverMissedMessagesOnStartup(client: Client): Promise<vo
             try {
                 const result = await recoverGuildMessages(
                     guild,
-                    legacyCommandPrefixes,
+                    legacyCommandNames,
                     config.messageRecovery.maxPagesPerChannel,
                 );
                 logger.info(
