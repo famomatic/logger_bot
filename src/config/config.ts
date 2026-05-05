@@ -13,6 +13,14 @@ function parseInteger(input: string | undefined, fallback: number): number {
 }
 
 /**
+ * 문자열 환경변수를 파싱하고 빈 값이면 기본값을 반환합니다.
+ */
+function parseString(input: string | undefined, fallback: string): string {
+    const trimmed = input?.trim();
+    return trimmed && trimmed.length > 0 ? trimmed : fallback;
+}
+
+/**
  * 불리언 환경변수를 파싱하고 값이 없으면 기본값을 반환합니다.
  */
 function parseBoolean(input: string | undefined, fallback: boolean): boolean {
@@ -137,10 +145,7 @@ const buildConfigTemplate = (): RuntimeConfig => {
     const distributedMode = parseBoolean(process.env.DISTRIBUTED_MODE, false);
     const dbSsl = parseBoolean(process.env.PG_SSL, nodeEnv === 'production');
     const dbSslRejectUnauthorized = parseBoolean(process.env.PG_SSL_REJECT_UNAUTHORIZED, true);
-    const clearOnStartupRequested = parseBoolean(
-        process.env.REDIS_CLEAR_ON_STARTUP,
-        distributedMode ? false : true,
-    );
+    const clearOnStartupRequested = parseBoolean(process.env.REDIS_CLEAR_ON_STARTUP, false);
     const clearOnStartupEffective = distributedMode ? false : clearOnStartupRequested;
 
     if (distributedMode && clearOnStartupRequested) {
@@ -158,8 +163,8 @@ const buildConfigTemplate = (): RuntimeConfig => {
         dbName: process.env.BOT_DB_NAME!,
         dbUser: process.env.BOT_DB_USER!,
         dbPassword: process.env.BOT_DB_PASSWORD!,
-        dbHost: process.env.PG_HOST ?? 'localhost',
-        dbPort: parseInt(process.env.PG_PORT ?? '5432', 10),
+        dbHost: parseString(process.env.PG_HOST, 'localhost'),
+        dbPort: parseInteger(process.env.PG_PORT, 5432),
         dbSsl,
         dbSslRejectUnauthorized,
         redis: {

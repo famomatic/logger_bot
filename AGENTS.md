@@ -177,7 +177,11 @@ Drop:
 
 Plans and investigation notes should be dense.
 
-Use this shape:
+Do not spend tokens narrating plans in chat when a structured planning mechanism is available.
+
+Use the environment's plan/state mechanism as the primary working memory for non-trivial tasks. Examples across agents include a plan tool, task ledger, todo state, workflow state API, checklist state, or equivalent.
+
+Only print a Markdown plan when no structured mechanism exists. If using Markdown fallback, keep it compact:
 
 ```md
 Plan:
@@ -239,6 +243,8 @@ Always start non-trivial work by creating and maintaining a detailed plan.
 
 The plan acts as working memory for the session. Keep it updated when evidence changes.
 
+For non-trivial tasks, a plain chat block is not enough when the environment provides structured planning. Use the available plan/state mechanism so progress is externally visible and enforceable.
+
 A valid plan must include:
 
 - task classification
@@ -255,19 +261,38 @@ Revise the plan immediately when inspection or verification disproves earlier as
 
 Do not begin editing until the plan is specific enough to execute without guesswork.
 
-## Plan Format
+## Structured Plan State
 
-Use compact format:
+Use a structured plan mechanism when available. This means any agent-native tool or state channel that tracks steps and statuses outside ordinary prose.
+
+Required behavior:
+
+- create the plan before the first edit for every non-trivial task
+- keep exactly one active step when the mechanism supports statuses
+- mark completed steps promptly
+- update the active step before switching phases
+- revise planned steps when inspection changes the hypothesis or scope
+- mark blocked steps with the concrete blocker and next possible action
+- do not leave stale `pending` or `in_progress` steps after final verification
+
+Recommended statuses, or nearest equivalent:
+
+- `pending`: known work not started
+- `in_progress`: current active work
+- `completed`: finished and no longer active
+- `blocked`: cannot proceed without missing permission, dependency, or user input
+
+Use Markdown plans only as fallback when no structured plan mechanism exists. When falling back, say so once and keep the plan compact.
+
+## Plan Content
+
+Each step should be executable without guessing. Use concrete targets and outcomes:
 
 ```md
-Plan:
-- Class: code | scope: single file/module/cross-module.
-- Inspect: `fileA`, `fileB`, call sites via `rg "symbol"`.
-- Hypothesis: concrete failure cause.
-- Change: exact intended edit.
-- Related: directly connected files only.
-- Verify: exact commands, in order.
-- Revise if: concrete condition.
+- Classify task and inspect `package.json`, `src/auth/session.ts`, and auth tests.
+- Trace `validateSession` call sites with `rg "validateSession"`.
+- Patch expiry comparison and add exact-boundary test.
+- Run formatter for touched files, then focused auth test, then build only if types/imports changed.
 ```
 
 ## Invalid Plans
