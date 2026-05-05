@@ -87,7 +87,7 @@ export const command: SlashCommand = {
                 });
                 return;
             }
-            targetChannel = fetchedChannel as GuildTextBasedChannel;
+            targetChannel = fetchedChannel;
             if (targetChannel.guildId !== interaction.guildId) {
                 await interaction.reply({
                     content: t(locale, 'common.commandNotAllowed'),

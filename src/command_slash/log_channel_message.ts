@@ -76,7 +76,7 @@ export const command: SlashCommand = {
                 );
                 return;
             }
-            channel = fetched as GuildTextBasedChannel;
+            channel = fetched;
         } catch (err) {
             logger.error(`${logPrefix} Failed to fetch channel`, err);
             await interaction.editReply(

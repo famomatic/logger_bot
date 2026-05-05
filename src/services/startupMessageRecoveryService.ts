@@ -193,7 +193,7 @@ export async function recoverMissedMessagesOnStartup(client: Client): Promise<vo
                     messagesChecked: 0,
                     messagesRecovered: 0,
                     errors: 1,
-                } as RecoverySummary;
+                };
             }
         },
     );

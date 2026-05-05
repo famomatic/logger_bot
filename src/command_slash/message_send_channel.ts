@@ -11,7 +11,7 @@ import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 import { logger } from '../utils/logger.js';
 
 import type { SlashCommand } from '../types/commands.js';
-import type { CommandInteraction, Client, GuildTextBasedChannel, Channel } from 'discord.js';
+import type { CommandInteraction, Client, Channel } from 'discord.js';
 
 /**
  * 슬래시 커맨드 모듈 계약(`export const command = { data, execute }`)입니다.
@@ -102,8 +102,7 @@ export const command: SlashCommand = {
         }
 
         // 봇 권한 확인 (채널 객체 직접 사용)
-        // GuildTextBasedChannel 타입으로 단언 (isTextBased, !isDMBased 통과했으므로)
-        const textChannel = targetChannel as GuildTextBasedChannel;
+        const textChannel = targetChannel;
         if (textChannel.guildId !== interaction.guildId) {
             await interaction.editReply({
                 content: t(locale, 'common.commandNotAllowed'),

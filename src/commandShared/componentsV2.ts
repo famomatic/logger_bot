@@ -62,7 +62,7 @@ export function buildContainerMessage(options: BuildContainerMessageOptions): {
 
     return {
         flags: MessageFlags.IsComponentsV2,
-        components: [container as TopLevelComponentData],
+        components: [container],
         allowedMentions: { parse: [] },
     };
 }
