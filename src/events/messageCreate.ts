@@ -349,7 +349,7 @@ const event = {
                         // await command.execute(message, args);
                         await command.execute(message);
                         logger.info(
-                            `Executed legacy command '${commandName}' by dev: ${message.content}`,
+                            `Executed legacy command '${commandName}' in guild ${message.guild.id}, channel ${message.channel.id}, by author ${message.author.id}`,
                         );
                     } catch (error) {
                         logger.error(`Error executing legacy command '${commandName}':`, error);
@@ -360,7 +360,7 @@ const event = {
                     return; // 레거시 명령어 실행 시 일반 로깅 건너뛰기
                 } else {
                     logger.debug(
-                        `Unknown legacy command '${commandName}' tried by dev: ${commandName} (full: ${message.content})`,
+                        `Unknown legacy command '${commandName}' tried in guild ${message.guild.id}, channel ${message.channel.id}, by author ${message.author.id}`,
                     );
                 }
             }

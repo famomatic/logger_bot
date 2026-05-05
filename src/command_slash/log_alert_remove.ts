@@ -5,7 +5,7 @@ import { defaultText, getInteractionLocale, t } from '../i18n/index.js';
 import { removeSubscription, categoryEventMap } from '../utils/alertManager.js';
 import { logger } from '../utils/logger.js';
 
-import type { ChatInputCommandInteraction, GuildTextBasedChannel } from 'discord.js';
+import type { ChatInputCommandInteraction } from 'discord.js';
 
 const choices = Object.keys(categoryEventMap)
     .map((cat) => ({ name: cat, value: cat }))
@@ -59,7 +59,7 @@ export const command = {
             });
             return;
         }
-        const channel = optionChannel as GuildTextBasedChannel;
+        const channel = optionChannel;
         const removed = removeSubscription(interaction.guildId, category, channel.id);
         if (!removed) {
             await interaction.reply({

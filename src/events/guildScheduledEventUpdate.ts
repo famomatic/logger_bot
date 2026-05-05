@@ -59,15 +59,11 @@ function formatScheduledEventChange(change: AuditLogChange): string {
         typeof change.new === 'object' ? JSON.stringify(change.new) : String(change.new ?? '없음');
 
     if (change.key === 'status') {
-        if (change.old != null)
-            oldValue = getStatusString(Number(change.old) as GuildScheduledEventStatus);
-        if (change.new != null)
-            newValue = getStatusString(Number(change.new) as GuildScheduledEventStatus);
+        if (change.old != null) oldValue = getStatusString(Number(change.old));
+        if (change.new != null) newValue = getStatusString(Number(change.new));
     } else if (change.key === 'entity_type') {
-        if (change.old != null)
-            oldValue = getEntityTypeString(Number(change.old) as GuildScheduledEventEntityType);
-        if (change.new != null)
-            newValue = getEntityTypeString(Number(change.new) as GuildScheduledEventEntityType);
+        if (change.old != null) oldValue = getEntityTypeString(Number(change.old));
+        if (change.new != null) newValue = getEntityTypeString(Number(change.new));
     } else if (change.key === 'channel_id') {
         oldValue = String(change.old ?? '없음');
         newValue = String(change.new ?? '없음');
